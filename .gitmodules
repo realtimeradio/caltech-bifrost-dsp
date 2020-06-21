@@ -1,3 +1,6 @@
 [submodule "bifrost"]
 	path = bifrost
 	url = https://github.com/realtimeradio/bifrost
+[submodule "xgpu"]
+	path = xgpu
+	url = https://github.com/realtimeradio/xgpu
