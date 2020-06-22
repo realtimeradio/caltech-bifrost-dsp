@@ -3,7 +3,7 @@ from bifrost.libbifrost import _bf
 import time
 import numpy as np
 
-NSTATION=352; NFREQUENCY=192; NTIME=512;
+NSTATION=352; NFREQUENCY=192; NTIME=480;
 DOSIM=False
 #NSTATION=32; NFREQUENCY=32; NTIME=32;
 MATLEN = 47849472
@@ -64,41 +64,51 @@ else:
     print("Not populating test vectors")
 
 print('allocating input')
-ibuf = bf.ndarray(invec, dtype='ci4', space=SPACE)
+ibuf = bf.ndarray(invec, dtype='i8', space=SPACE)
 print('allocating output')
 obuf = bf.ndarray(np.zeros([MATLEN], dtype=np.int32), dtype='ci32', space=SPACE)
 #obuf = bf.ndarray(np.zeros([NFREQUENCY, MATLEN//NFREQUENCY], dtype=np.int32), dtype='ci32', space=SPACE)
+#time.sleep(20)
 print(obuf[0:10])
 
 if SPACE == 'cuda':
     print('running kernel as_GPUarray')
     _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+    print('initialized')
+    #time.sleep(20)
     for i in range(4):
-        _bf.xgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+        print(i)
+        print(_bf.xgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 0))
+        #time.sleep(20)
     _bf.xgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
-    print(obuf[0:10])
 else:
     print('running kernel as_BFarray')
     _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
     for i in range(4):
         _bf.xgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
     _bf.xgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
-    print(obuf[0:10])
 
 obuf_cpu = obuf.copy(space='system')
 print('copied')
 #view as real/imag x chan x station
 o = obuf_cpu.view(dtype=np.int32).reshape(2, NFREQUENCY, MATLEN//NFREQUENCY)
 oc = o[0,0,:] + 1j*o[1,0,:]
+print('is all zero?', np.all(o==0))
+print(o[o!=0])
 
 acc_len = 5 * NTIME
+ibuf_c = ibuf.view(dtype='ci4')
 for s0 in range(5):
     for s1 in range(s0, 5):
-        ar = ibuf[0,0,s0,0].real[0]
-        ai = ibuf[0,0,s0,0].imag[0]
+        #ar = ibuf[0,0,s0,0].real[0]
+        #ai = ibuf[0,0,s0,0].imag[0]
+        ar = ibuf[0,0,s0,0] >> 4
+        ai = ibuf[0,0,s0,0] & 0b1111
         a = ar + 1j*ai
-        br = ibuf[0,0,s1,0].real[0]
-        bi = ibuf[0,0,s1,0].imag[0]
+        #br = ibuf[0,0,s1,0].real[0]
+        #bi = ibuf[0,0,s1,0].imag[0]
+        br = ibuf[0,0,s1,0] >> 4
+        bi = ibuf[0,0,s1,0] & 0b1111
         b = br + 1j*bi
         v = a * np.conj(b)
         v *= acc_len
