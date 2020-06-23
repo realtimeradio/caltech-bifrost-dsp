@@ -6,7 +6,7 @@ from bifrost.ring import WriteSpan
 from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
-from bifrost.device import stream_synchronize
+from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
 import simplejson as json
@@ -17,14 +17,18 @@ class CorrSubSel(object):
     Grab arbitrary entries from a GPU buffer and copy them to the CPU
     """
     def __init__(self, log, iring, oring,
-            guarantee=True, core=-1, nchans=192):
+            guarantee=True, core=-1, nchans=192, gpu=-1):
         self.log = log
         self.iring = iring
         self.oring = oring
         self.guarantee = guarantee
         self.core = core
         self.nchans = nchans
-        
+        self.gpu = gpu
+
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
+
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
         self.out_proclog  = ProcLog(type(self).__name__+"/out")
@@ -43,6 +47,8 @@ class CorrSubSel(object):
 
     def main(self):
         cpu_affinity.set_core(self.core)
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 

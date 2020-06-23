@@ -6,7 +6,7 @@ from bifrost.ring import WriteSpan
 from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
-from bifrost.device import stream_synchronize
+from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
 import simplejson as json
@@ -17,14 +17,18 @@ class Copy(object):
     Copy data from one buffer to another.
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704):
+                 guarantee=True, core=-1, nchans=192, npols=704, gpu=-1):
         self.log = log
         self.iring = iring
         self.oring = oring
         self.ntime_gulp = ntime_gulp
         self.guarantee = guarantee
         self.core = core
-        
+        self.gpu = gpu
+
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
+
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
         self.out_proclog  = ProcLog(type(self).__name__+"/out")
@@ -39,6 +43,8 @@ class Copy(object):
 
     def main(self):
         cpu_affinity.set_core(self.core)
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 

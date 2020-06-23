@@ -45,6 +45,8 @@ def main(argv):
     parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
     parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
     parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
+    parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
+    parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     args = parser.parse_args()
     
@@ -119,7 +121,7 @@ def main(argv):
     npol = 2
     nchans = 192
 
-    cores = list(range(8))
+    cores = list(map(int, args.cores.split(',')))
     
     nroach = 11
     nfreqblocks = 2
@@ -143,25 +145,25 @@ def main(argv):
 
     if not args.nogpu:
         ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, nbeam_max=1, nstand=nstand, npol=npol,
-                          core=cores.pop(0), guarantee=True))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     ## gpu_input_ring -> beamformer
     ## beamformer -> UDP
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, acc_len=2400))
+                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu))
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=24000))
+                          core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
     #
     ## corr_slow_output -> UDP
     ## corr_fast_output -> UDP

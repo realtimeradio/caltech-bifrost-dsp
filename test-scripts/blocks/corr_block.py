@@ -5,6 +5,7 @@ from bifrost.proclog import ProcLog
 from bifrost.libbifrost import _bf
 import bifrost.affinity as cpu_affinity
 from bifrost.ring import WriteSpan
+from bifrost.device import set_device as BFSetGPU
 
 import time
 import simplejson as json
@@ -15,7 +16,7 @@ class Corr(object):
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400):
+                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
@@ -26,13 +27,17 @@ class Corr(object):
         self.guarantee = guarantee
         self.core = core
         self.acc_len = acc_len
-        
+        self.gpu = gpu
+
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
         self.out_proclog  = ProcLog(type(self).__name__+"/out")
         self.size_proclog = ProcLog(type(self).__name__+"/size")
         self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
         self.perf_proclog = ProcLog(type(self).__name__+"/perf")
+
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
         
         self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
@@ -44,13 +49,15 @@ class Corr(object):
         # but we need to pass something
         ibuf = BFArray(0, dtype='i8', space='cuda')
         obuf = BFArray(0, dtype='i64', space='cuda')
-        rv = _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+        rv = _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), self.gpu)
         if (rv != _bf.BF_STATUS_SUCCESS):
             self.log.error("xgpuIntialize returned %d" % rv)
             raise RuntimeError
 
     def main(self):
         cpu_affinity.set_core(self.core)
+        if self.gpu != -1:
+            BFSetGPU(self.gpu)
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
