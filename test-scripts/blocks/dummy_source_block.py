@@ -1,4 +1,5 @@
 from bifrost.proclog import ProcLog
+import bifrost.ndarray as BFArray
 import bifrost.affinity as cpu_affinity
 
 import time
@@ -12,7 +13,7 @@ class DummySource(object):
     but mark input buffers ready for consumption.
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchans=192, nstands=352, npols=2):
+                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
@@ -20,6 +21,7 @@ class DummySource(object):
         self.nchans = nchans
         self.npols = npols
         self.nstands = 352
+        self.skip_write = skip_write
         
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -32,7 +34,7 @@ class DummySource(object):
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
 
-        self.test_data = 1*np.ones(self.gulp_size, dtype=np.uint8)
+        self.test_data = BFArray(1*np.ones(self.gulp_size), dtype='u8', space='system')
         self.shutdown_event = threading.Event()
 
     def shutdown(self):
@@ -59,7 +61,8 @@ class DummySource(object):
                 ohdr_str = json.dumps(hdr)
                 with oring.begin_sequence(time_tag=time_tag, header=ohdr_str) as oseq:
                     with oseq.reserve(self.gulp_size) as ospan:
-                        ospan.data[...] = self.test_data
+                        if not self.skip_write:
+                            ospan.data[...] = self.test_data
                         time_tag += 1
                         hdr['seq0'] += self.ntime_gulp
                 if time_tag % REPORT_PERIOD == 0:
