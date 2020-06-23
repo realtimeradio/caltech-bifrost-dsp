@@ -41,6 +41,10 @@ def main(argv):
     parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
+    parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
+    parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
+    parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
+    parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     args = parser.parse_args()
     
@@ -133,28 +137,31 @@ def main(argv):
                            utc_start=datetime.datetime.now()))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0)))
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata))
 
     ## capture_ring -> triggered buffer
 
-    ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
-                      core=cores.pop(0), guarantee=True))
+    if not args.nogpu:
+        ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
+                          core=cores.pop(0), guarantee=True))
 
-    ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
-                      nchan_max=nchans, nbeam_max=1, nstand=nstand, npol=npol,
-                      core=cores.pop(0), guarantee=True))
+    if not (args.nobeamform or args.nogpu):
+        ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, nbeam_max=1, nstand=nstand, npol=npol,
+                          core=cores.pop(0), guarantee=True))
 
     ## gpu_input_ring -> beamformer
     ## beamformer -> UDP
 
-    ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
-                      core=cores.pop(0), guarantee=True, acc_len=2400))
+    if not (args.nocorr or args.nogpu):
+        ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
+                          core=cores.pop(0), guarantee=True, acc_len=2400))
 
-    ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                      core=cores.pop(0), guarantee=True))
+        ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
+                          core=cores.pop(0), guarantee=True))
 
-    ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                      core=cores.pop(0), guarantee=True, acc_len=24000))
+        ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
+                          core=cores.pop(0), guarantee=True, acc_len=24000))
     #
     ## corr_slow_output -> UDP
     ## corr_fast_output -> UDP
