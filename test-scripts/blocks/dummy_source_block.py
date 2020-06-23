@@ -12,13 +12,14 @@ class DummySource(object):
     but mark input buffers ready for consumption.
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchans=192, npols=704):
+                 core=-1, nchans=192, nstands=352, npols=2):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
         self.core = core
         self.nchans = nchans
         self.npols = npols
+        self.nstands = 352
         
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -29,7 +30,7 @@ class DummySource(object):
         
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.gulp_size = self.ntime_gulp*nchans*npols*1        # complex8
+        self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
 
         self.test_data = 1*np.ones(self.gulp_size, dtype=np.uint8)
         self.shutdown_event = threading.Event()
@@ -45,8 +46,9 @@ class DummySource(object):
         time.sleep(0.1)
         self.oring.resize(self.gulp_size)
         hdr = {}
-        hdr['nchans'] = self.nchans
-        hdr['npols'] = self.npols
+        hdr['nchan'] = self.nchans
+        hdr['nstand'] = self.nstands
+        hdr['npol'] = self.npols
         hdr['seq0'] = 0
         time_tag = 0
         REPORT_PERIOD = 100

@@ -19,6 +19,7 @@ from blocks.corr_acc_block import CorrAcc
 from blocks.corr_subsel_block import CorrSubSel
 from blocks.copy_block import Copy
 from blocks.capture_block import Capture
+from blocks.beamform_block import Beamform
 
 ACTIVE_COR_CONFIG = threading.Event()
 
@@ -102,13 +103,17 @@ def main(argv):
     
     capture_ring = Ring(name="capture", space='cuda_host')
     gpu_input_ring = Ring(name="gpu-input", space='cuda')
+    bf_output_ring = Ring(name="bf-output", space='cuda')
     corr_output_ring = Ring(name="corr-output", space='cuda')
     corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
     corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
     GSIZE = 480#1200
-    SLOT_NTIME = 2*GSIZE
+    SLOT_NTIME = 2*GSIZE # What does this do? JD says maybe nothing :)
+    nstand = 352
+    npol = 2
+    nchans = 192
 
     cores = list(range(8))
     
@@ -133,6 +138,10 @@ def main(argv):
     ## capture_ring -> triggered buffer
 
     ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
+                      core=cores.pop(0), guarantee=True))
+
+    ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
+                      nchan_max=nchans, nbeam_max=1, nstand=nstand, npol=npol,
                       core=cores.pop(0), guarantee=True))
 
     ## gpu_input_ring -> beamformer
