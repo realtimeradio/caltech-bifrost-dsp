@@ -10,7 +10,7 @@ from bifrost.device import set_device as BFSetGPU, get_device as BFGetGPU, strea
 from bifrost.unpack import unpack
 
 import time
-import json
+import simplejson as json
 import numpy as np
 from collections import deque
 

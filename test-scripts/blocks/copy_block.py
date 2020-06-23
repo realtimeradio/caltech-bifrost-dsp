@@ -9,7 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize
 
 import time
-import json
+import simplejson as json
 import numpy as np
 
 class Copy(object):

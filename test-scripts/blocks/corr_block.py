@@ -7,7 +7,7 @@ import bifrost.affinity as cpu_affinity
 from bifrost.ring import WriteSpan
 
 import time
-import json
+import simplejson as json
 import numpy as np
 
 class Corr(object):

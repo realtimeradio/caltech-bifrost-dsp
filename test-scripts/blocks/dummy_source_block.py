@@ -2,7 +2,7 @@ from bifrost.proclog import ProcLog
 import bifrost.affinity as cpu_affinity
 
 import time
-import json
+import simplejson as json
 import threading
 import numpy as np
 
