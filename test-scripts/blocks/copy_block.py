@@ -6,6 +6,7 @@ from bifrost.ring import WriteSpan
 from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
+from bifrost.device import stream_synchronize
 
 import time
 import json
@@ -54,3 +55,6 @@ class Copy(object):
                             #self.log.debug("Copying output")
                             #odata = ospan.data_view('ci4')
                             copy_array(ospan.data, ispan.data)
+                            # The copy is asynchronous, so we must wait for it to finish
+                            # before committing this span
+                            stream_synchronize()

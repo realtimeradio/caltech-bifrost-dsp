@@ -5,6 +5,8 @@ import bifrost.affinity as cpu_affinity
 from bifrost.ring import WriteSpan
 from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
+from bifrost.ndarray import copy_array
+from bifrost.device import stream_synchronize
 
 import time
 import json
@@ -73,9 +75,10 @@ class CorrAcc(object):
                             print("Skipping output because oseq isn't open")
                         else:
                             # copy to CPU
-                            odata = ospan.data_view('i32')
-                            odata = self.accdata
-                            print(odata[0:10])
+                            odata = ospan.data_view('i32').reshape(self.accdata.shape)
+                            copy_array(odata, self.accdata)
+                            # Wait for copy to complete before committing span
+                            stream_synchronize()
                             ospan.close()
                             oseq.end()
             # If upstream process stops producing, close things gracefully

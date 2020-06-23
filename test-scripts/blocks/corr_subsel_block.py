@@ -6,6 +6,7 @@ from bifrost.ring import WriteSpan
 from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
+from bifrost.device import stream_synchronize
 
 import time
 import json
@@ -64,3 +65,5 @@ class CorrSubSel(object):
                                 raise RuntimeError
                             odata = ospan.data_view(dtype='i64').reshape([self.nchans, self.nvis_out])
                             copy_array(odata, self.obuf_gpu)
+                            # Wait for copy to complete before committing span
+                            stream_synchronize()
