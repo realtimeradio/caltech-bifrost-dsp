@@ -149,7 +149,7 @@ def main(argv):
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, nbeam_max=1, nstand=nstand, npol=npol,
+                          nchan_max=nchans, nbeam_max=32, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     ## gpu_input_ring -> beamformer

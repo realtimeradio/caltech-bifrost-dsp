@@ -22,7 +22,7 @@ CHAN_BW          = FREQS[1] - FREQS[0]
 
 class Beamform(object):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
-    def __init__(self, log, iring, oring, tuning=0, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, guarantee=True, core=-1, gpu=-1):
+    def __init__(self, log, iring, oring, tuning=0, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1):
         self.log   = log
         self.iring = iring
         self.oring = oring
@@ -31,6 +31,9 @@ class Beamform(object):
         self.guarantee = guarantee
         self.core = core
         self.gpu = gpu
+        self.ntime_sum = ntime_sum
+        assert ntime_gulp % ntime_sum == 0
+        self.ntime_blocks = ntime_gulp // ntime_sum
         
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -47,6 +50,7 @@ class Beamform(object):
         self.nbeam_max = nbeam_max
         self.nstand = nstand
         self.npol = npol
+        self.ninputs = nstand*npol
 
         # TODO self.configMessage = ISC.BAMConfigurationClient(addr=('adp',5832))
         self._pending = deque()
@@ -56,17 +60,13 @@ class Beamform(object):
             BFSetGPU(self.gpu)
         ## Metadata
         nchan = self.nchan_max
-        ## Object
-        self.bfbf = LinAlg()
         ## Delays and gains
         self.delays = np.zeros((self.nbeam_max*2,nstand*npol), dtype=np.float64)
         self.gains = np.zeros((self.nbeam_max*2,nstand*npol), dtype=np.float64)
-        self.cgains = BFArray(shape=(self.nbeam_max*2,nchan,nstand*npol), dtype=np.complex64, space='cuda')
-        ## Intermidiate arrays
-        #self.tdata = BFArray(shape=(self.ntime_gulp,nchan,nstand*npol), dtype='ci8', native=False, space='cuda')
-        self.tdata = BFArray(shape=(self.ntime_gulp,nchan,nstand*npol), dtype=np.complex64, space='cuda')
-        self.bdata = BFArray(shape=(nchan,self.nbeam_max*2,self.ntime_gulp), dtype=np.complex64, space='cuda')
-        self.ldata = BFArray(shape=self.bdata.shape, dtype=self.bdata.dtype, space='cuda_host')
+        self.cgains = BFArray(shape=(self.nbeam_max,nchan,nstand*npol), dtype=np.complex64, space='cuda')
+
+        # Initialize beamforming library
+        _bf.beamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
 
     def configMessage(self):
         return None
@@ -181,6 +181,9 @@ class Beamform(object):
                                   'ngpu': 1,
                                   'gpu0': BFGetGPU(),})
         
+        igulp_size = self.ntime_gulp * self.nchan_max * self.ninputs         # 4+4
+        ogulp_size = self.ntime_blocks * self.nchan_max * self.nbeam_max * 8 #complex 64
+
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
@@ -193,8 +196,6 @@ class Beamform(object):
                 
                 status = self.updateConfig( self.configMessage(), ihdr, iseq.time_tag, forceUpdate=True )
                 
-                igulp_size = self.ntime_gulp*nchan*nstand*npol              # 4+4 complex
-                ogulp_size = self.ntime_gulp*nchan*self.nbeam_max*npol*8    # complex64
                 ishape = (self.ntime_gulp,nchan,nstand*npol)
                 oshape = (self.ntime_gulp,nchan,self.nbeam_max*2)
                 
@@ -224,26 +225,11 @@ class Beamform(object):
                             prev_time = curr_time
                             
                             ## Setup and load
-                            idata = ispan.data_view('ci4').reshape(ishape)
+                            idata = ispan.data_view('i8')
                             odata = ospan.data_view(np.complex64)#.reshape(oshape)
                             
-                            ## Copy
-                            #print(idata.shape)
-                            #print(self.tdata.shape)
-                            #copy_array(self.tdata, idata)
-                            #unpack(idata.reshape(704*480*192), self.tdata.reshape(704*480*192))
-                            ##
-                            ## Beamform
-                            #print(self.cgains.dtype, self.tdata.dtype, self.bdata.dtype)
-                            self.bdata = self.bfbf.matmul(1.0, self.cgains.transpose(1,0,2), self.tdata.transpose(1,2,0), 0.0, self.bdata)
-                            ##
-                            #### Transpose, save and cleanup
-                            ##copy_array(self.ldata, self.bdata)
-                            ##print(odata.shape)
-                            ##print(self.ldata.shape)
-                            ##print(self.ldata.transpose(2,0,1).shape)
-                            #odata[...] = self.ldata.transpose(2,0,1)
-                            #copy_array(odata, self.ldata.transpose(2,0,1).reshape(odata.shape))
+                            _bf.beamformRun(idata.as_BFarray(), odata.as_BFarray(), self.cgains.as_BFarray())
+                            BFSync()
                             
                         ## Update the base time tag
                         base_time_tag += self.ntime_gulp*ticksPerTime
