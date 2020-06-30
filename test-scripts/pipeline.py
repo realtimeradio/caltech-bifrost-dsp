@@ -109,7 +109,7 @@ def main(argv):
     
     capture_ring = Ring(name="capture", space='cuda_host')
     gpu_input_ring = Ring(name="gpu-input", space='cuda')
-    bf_output_ring = Ring(name="bf-output", space='cuda')
+    bf_output_ring = Ring(name="bf-output", space='cuda_host')
     corr_output_ring = Ring(name="corr-output", space='cuda')
     corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
     corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')

@@ -64,6 +64,8 @@ class Beamform(object):
         self.delays = np.zeros((self.nbeam_max*2,nstand*npol), dtype=np.float64)
         self.gains = np.zeros((self.nbeam_max*2,nstand*npol), dtype=np.float64)
         self.cgains = BFArray(shape=(self.nbeam_max,nchan,nstand*npol), dtype=np.complex64, space='cuda')
+        # Block output
+        self.bf_output = BFArray(shape=(self.nbeam_max, self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Initialize beamforming library
         _bf.beamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
@@ -226,9 +228,10 @@ class Beamform(object):
                             
                             ## Setup and load
                             idata = ispan.data_view('i8')
-                            odata = ospan.data_view(np.complex64)#.reshape(oshape)
+                            odata = ospan.data_view(np.float32)#.reshape(oshape)
                             
-                            _bf.beamformRun(idata.as_BFarray(), odata.as_BFarray(), self.cgains.as_BFarray())
+                            _bf.beamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
+                            odata = self.bf_output.data
                             BFSync()
                             
                         ## Update the base time tag
