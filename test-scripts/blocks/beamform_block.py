@@ -68,7 +68,7 @@ class Beamform(object):
         self.bf_output = BFArray(shape=(self.nbeam_max, self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Initialize beamforming library
-        _bf.beamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
+        _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
 
     def configMessage(self):
         return None
@@ -230,7 +230,7 @@ class Beamform(object):
                             idata = ispan.data_view('i8')
                             odata = ospan.data_view(np.float32)#.reshape(oshape)
                             
-                            _bf.beamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
+                            _bf.bfBeamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
                             odata = self.bf_output.data
                             BFSync()
                             

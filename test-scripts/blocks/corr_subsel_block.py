@@ -65,7 +65,7 @@ class CorrSubSel(object):
                     idata = ispan.data_view('i64').reshape(47849472)
                     with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                         with oseq.reserve(self.ogulp_size) as ospan:
-                            rv = _bf.xgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self.subsel.as_BFarray())
+                            rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self.subsel.as_BFarray())
                             if (rv != _bf.BF_STATUS_SUCCESS):
                                 self.log.error("xgpuIntialize returned %d" % rv)
                                 raise RuntimeError

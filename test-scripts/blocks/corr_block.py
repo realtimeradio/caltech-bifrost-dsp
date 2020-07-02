@@ -49,7 +49,7 @@ class Corr(object):
         # but we need to pass something
         ibuf = BFArray(0, dtype='i8', space='cuda')
         obuf = BFArray(0, dtype='i64', space='cuda')
-        rv = _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), self.gpu)
+        rv = _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), self.gpu)
         if (rv != _bf.BF_STATUS_SUCCESS):
             self.log.error("xgpuIntialize returned %d" % rv)
             raise RuntimeError
@@ -63,6 +63,7 @@ class Corr(object):
 
         self.oring.resize(self.ogulp_size)
         oseq = None
+        ospan = None
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
                 self.log.debug("Correlating output")
@@ -77,7 +78,8 @@ class Corr(object):
                     if first:
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
-                    _bf.xgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
+                    if ospan:
+                        _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
                     if last:
                         if oseq is None:
                             print("CORR >> Skipping output because oseq isn't open")

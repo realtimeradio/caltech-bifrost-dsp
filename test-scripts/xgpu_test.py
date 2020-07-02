@@ -73,20 +73,20 @@ print(obuf[0:10])
 
 if SPACE == 'cuda':
     print('running kernel as_GPUarray')
-    _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+    _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
     print('initialized')
     #time.sleep(20)
     for i in range(4):
         print(i)
-        print(_bf.xgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 0))
+        print(_bf.bfXgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 0))
         #time.sleep(20)
-    _bf.xgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
+    _bf.bfXgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
 else:
     print('running kernel as_BFarray')
-    _bf.xgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+    _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
     for i in range(4):
-        _bf.xgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
-    _bf.xgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
+        _bf.bfXgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+    _bf.bfXgpuCorrelate(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
 
 obuf_cpu = obuf.copy(space='system')
 print('copied')
