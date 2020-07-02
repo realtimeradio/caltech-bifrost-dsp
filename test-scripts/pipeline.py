@@ -45,6 +45,7 @@ def main(argv):
     parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
     parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
     parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
+    parser.add_argument('--ibverbs',          action='store_true',       help='Use IB verbs for packet capture')
     parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
     parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
@@ -136,7 +137,7 @@ def main(argv):
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
                            nsrc=nroach*nfreqblocks, src0=0, max_payload_size=9000,
                            buffer_ntime=GSIZE, slot_ntime=SLOT_NTIME, core=cores.pop(0),
-                           utc_start=datetime.datetime.now()))
+                           utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
         ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata))
