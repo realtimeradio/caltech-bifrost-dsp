@@ -35,6 +35,10 @@ nwords = npol * nchan
 
 payload = struct.pack('>%dB' % nwords, *[0 for _ in range(nwords)])
 
+port = 10000
+if len(sys.argv) > 2:
+    port = int(sys.argv[2])
+
 seq_stat_period = 3e3
 tick = 0
 while(True):
@@ -42,7 +46,7 @@ while(True):
        for pol in range(npol_blocks):
            header = struct.pack('>QLHHHHLLL', seq, magic, npol, npol_total, nchan, nchan_total, chan_block_id, chan_block_id*nchan, pol)
            data = header + payload
-           sock.sendto(data, (sys.argv[1], 10000))
+           sock.sendto(data, (sys.argv[1], port))
            #time.sleep(0.00001)
     seq += 1
     if seq % seq_stat_period == 0:
