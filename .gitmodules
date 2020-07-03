@@ -4,3 +4,6 @@
 [submodule "xgpu"]
 	path = xgpu
 	url = https://github.com/realtimeradio/xgpu
+[submodule "hashpipe"]
+	path = hashpipe
+	url = https://github.com/realtimeradio/hashpipe
