@@ -15,8 +15,8 @@
 
 #define PORT (10000)
 
-#define SERVERADDRESS "127.0.0.1"
-//#define SERVERADDRESS "100.100.100.101"
+//#define SERVERADDRESS "127.0.0.1"
+#define SERVERADDRESS "100.100.100.101"
 
 
 #define NCHAN 96
