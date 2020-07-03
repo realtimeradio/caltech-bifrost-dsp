@@ -59,7 +59,7 @@ int create_sockets(int source_port) {
     int sockfd;
     struct sockaddr_in client;
 
-    printf("Configure socketi (sending to port %d)...\n", source_port);
+    printf("Configure socketi (sending from port %d)...\n", source_port);
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)
     {
