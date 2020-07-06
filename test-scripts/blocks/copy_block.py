@@ -55,12 +55,26 @@ class Copy(object):
                 ohdr = ihdr.copy()
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)
+                prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                     for ispan in iseq.read(self.igulp_size):
+                        curr_time = time.time()
+                        acquire_time = curr_time - prev_time
+                        prev_time = curr_time
                         with oseq.reserve(self.igulp_size) as ospan:
+                            curr_time = time.time()
+                            reserve_time = curr_time - prev_time
+                            prev_time = curr_time
                             #self.log.debug("Copying output")
                             #odata = ospan.data_view('ci4')
                             copy_array(ospan.data, ispan.data)
                             # The copy is asynchronous, so we must wait for it to finish
                             # before committing this span
                             stream_synchronize()
+                        curr_time = time.time()
+                        process_time = curr_time - prev_time
+                        prev_time = curr_time
+                        self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                  'reserve_time': reserve_time, 
+                                                  'process_time': process_time,
+                                                  'gbps': 8*self.igulp_size / process_time / 1e9})

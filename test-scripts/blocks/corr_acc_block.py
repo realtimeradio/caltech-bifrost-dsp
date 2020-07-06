@@ -57,7 +57,9 @@ class CorrAcc(object):
 
         self.oring.resize(self.ogulp_size)
         oseq = None
+        process_time = 0
         with self.oring.begin_writing() as oring:
+            prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
                 subacc_id = ihdr['seq0'] % self.acc_len
@@ -67,15 +69,24 @@ class CorrAcc(object):
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)
                 for ispan in iseq.read(self.igulp_size):
+                    curr_time = time.time()
+                    acquire_time = curr_time - prev_time
+                    prev_time = curr_time
                     self.log.debug("Accumulating correlation")
                     idata = ispan.data_view('i32')
                     if first:
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
+                        curr_time = time.time()
+                        reserve_time = curr_time - prev_time
+                        prev_time = curr_time
                         # TODO: surely there are more sensible ways to implement a vacc
                         BFMap("a = b", data={'a': self.accdata, 'b': idata})
                     else:
                         BFMap("a += b", data={'a': self.accdata, 'b': idata})
+                    curr_time = time.time()
+                    process_time += curr_time - prev_time
+                    prev_time = curr_time
                     if last:
                         if oseq is None:
                             print("Skipping output because oseq isn't open")
@@ -87,6 +98,13 @@ class CorrAcc(object):
                             stream_synchronize()
                             ospan.close()
                             oseq.end()
+                            curr_time = time.time()
+                            process_time += curr_time - prev_time
+                            prev_time = curr_time
+                            self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                      'reserve_time': reserve_time, 
+                                                      'process_time': process_time,})
+                            process_time = 0
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
             if oseq:

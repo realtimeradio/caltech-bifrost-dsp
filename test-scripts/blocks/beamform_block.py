@@ -245,4 +245,5 @@ class Beamform(object):
                         prev_time = curr_time
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
-                                                  'process_time': process_time,})
+                                                  'process_time': process_time,
+                                                  'gbps': 8*igulp_size / process_time / 1e9})

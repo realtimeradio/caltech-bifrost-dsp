@@ -65,6 +65,7 @@ class Corr(object):
         oseq = None
         ospan = None
         with self.oring.begin_writing() as oring:
+            prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
@@ -74,18 +75,37 @@ class Corr(object):
                 ohdr = ihdr.copy()
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)
+                #print(ihdr)
                 for ispan in iseq.read(self.igulp_size):
+                    curr_time = time.time()
+                    acquire_time = curr_time - prev_time
+                    prev_time = curr_time
                     if first:
+                        #print("CORR >> FIRST!!!!")
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
+                        curr_time = time.time()
+                        reserve_time = curr_time - prev_time
+                        prev_time = curr_time
                     if ospan:
+                        #print("CORR >> Correlating: subbacc_id: %d" % subacc_id)
                         _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
+                        curr_time = time.time()
+                        process_time = curr_time - prev_time
+                        prev_time = curr_time
                     if last:
+                        #print("CORR >> LAST!!!!")
                         if oseq is None:
-                            print("CORR >> Skipping output because oseq isn't open")
+                            print("CORR >> Skipping output because oseq isn't open: subbacc_id: %d" % subacc_id)
                         else:
                             ospan.close()
                             oseq.end()
+                            self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                      'reserve_time': reserve_time, 
+                                                      'process_time': process_time,
+                                                      'gbps': 8*self.igulp_size / process_time / 1e9})
+                            process_time = 0
+                            
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
             if oseq:

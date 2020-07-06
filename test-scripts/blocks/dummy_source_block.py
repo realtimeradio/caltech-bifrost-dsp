@@ -55,18 +55,32 @@ class DummySource(object):
         time_tag = 0
         REPORT_PERIOD = 100
         bytes_per_report = REPORT_PERIOD * self.gulp_size
+        acquire_time = 0 # this block doesn't have an input ring
+        gbps = 0
         with self.oring.begin_writing() as oring:
             tick = time.time()
             while not self.shutdown_event.is_set():
                 ohdr_str = json.dumps(hdr)
+                prev_time = time.time()
                 with oring.begin_sequence(time_tag=time_tag, header=ohdr_str) as oseq:
                     with oseq.reserve(self.gulp_size) as ospan:
+                        curr_time = time.time()
+                        reserve_time = curr_time - prev_time
+                        prev_time = curr_time
                         if not self.skip_write:
                             ospan.data[...] = self.test_data
                         time_tag += 1
                         hdr['seq0'] += self.ntime_gulp
+                    curr_time = time.time()
+                    process_time = curr_time - prev_time
+                    prev_time = curr_time
+                    self.perf_proclog.update({'acquire_time': acquire_time, 
+                                              'reserve_time': reserve_time, 
+                                              'process_time': process_time,
+                                              'gbps' : gbps})
                 if time_tag % REPORT_PERIOD == 0:
                     tock = time.time()
                     dt = tock - tick
-                    print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, (8*bytes_per_report / dt / 1e9)))
+                    gbps = 8*bytes_per_report / dt / 1e9
+                    print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, gbps))
                     tick = tock
