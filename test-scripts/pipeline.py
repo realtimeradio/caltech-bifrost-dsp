@@ -49,6 +49,7 @@ def main(argv):
     parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
     parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
+    parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
     args = parser.parse_args()
     
     # Fork, if requested
@@ -158,7 +159,7 @@ def main(argv):
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu))
+                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr))
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))

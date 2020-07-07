@@ -7,6 +7,8 @@ import simplejson as json
 import threading
 import numpy as np
 
+NTEST_BLOCKS = 2
+
 class DummySource(object):
     """
     A dummy source block for throughput testing. Does nothing
@@ -34,8 +36,20 @@ class DummySource(object):
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
 
-        self.test_data = BFArray(1*np.ones(self.gulp_size), dtype='u8', space='system')
+        if skip_write:
+            self.test_data = BFArray(shape=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols], dtype='i8', space='system')
+        else:
+            print("initializing random numbers")
+            #TODO Can't get 'ci4' type to behave
+            self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
+                                dtype='u8', space='system') 
+
         self.shutdown_event = threading.Event()
+
+    def get_test_data(self):
+        r = self.test_data >> 4
+        i = self.test_data & 0xf
+        return r + 1j*i
 
     def shutdown(self):
         self.shutdown_event.set()
@@ -68,7 +82,8 @@ class DummySource(object):
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
                         if not self.skip_write:
-                            ospan.data[...] = self.test_data
+                            odata = ospan.data_view(shape=self.test_data.shape[1:], dtype=self.test_data.dtype)
+                            odata[...] = self.test_data[time_tag % NTEST_BLOCKS]
                         time_tag += 1
                         hdr['seq0'] += self.ntime_gulp
                     curr_time = time.time()
