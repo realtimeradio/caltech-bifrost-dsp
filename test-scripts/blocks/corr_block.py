@@ -100,16 +100,26 @@ class Corr(object):
 
     def _test(self, din, nchan, nstand, npol):
         din_cpu = din.copy(space='system')
-        #d = din_cpu.view(shape=[self.ntime_gulp, nchan, nstand*npol], dtype='u8')
-        d = din_cpu.view(dtype=np.uint8).reshape([self.ntime_gulp, nchan, nstand*npol])
-        r = d >> 4
-        i = d & 0xf
-        dc = r + 1j*i
-        out = np.zeros([nchan, npol*nstand, nstand*npol], dtype=np.complex)
-        for t in range(1):#self.ntime_gulp):
-            print("Computing time step %d" % t)
-            for chan in range(1):#nchan):
-                out[chan] += np.outer(dc[t,chan], np.conj(dc[t,chan]))
+        # TODO all this casting seems like it is superfluous, but
+        # instructions like `dr[dr>7] -= 16` don't behave as [JH] expected
+        # when called against raw views.
+        d = np.array(din_cpu.view(dtype=np.uint8).reshape([self.ntime_gulp, nchan, nstand, npol]))
+        dr = np.array(d >> 4, dtype=np.int8)
+        dr[dr>7] -= 16
+        di = np.array(d & 0xf, dtype=np.int8)
+        di[di>7] -= 16
+        dc = dr + 1j*di
+        out = np.zeros([nchan, nstand, nstand, npol*npol], dtype=np.complex)
+        print("Computing correlation on CPU")
+        tick = time.time()
+        for t in range(self.ntime_gulp):
+            for chan in range(nchan):
+                out[chan, :, :, 0] += np.outer(np.conj(dc[t,chan,:,0]), dc[t,chan,:,0])
+                out[chan, :, :, 1] += np.outer(np.conj(dc[t,chan,:,0]), dc[t,chan,:,1])
+                out[chan, :, :, 2] += np.outer(np.conj(dc[t,chan,:,1]), dc[t,chan,:,0])
+                out[chan, :, :, 3] += np.outer(np.conj(dc[t,chan,:,1]), dc[t,chan,:,1])
+        tock = time.time()
+        print("CPU correlation took %d seconds" % (tock - tick))
         return out
 
     def _compare(self, din, dout, nchan, nstand, npol):
@@ -117,23 +127,28 @@ class Corr(object):
         dout_cpu = dout.copy(space='system')
         dout_cpu_reshape = dout_cpu.view(dtype='i32').reshape([2, nchan, 47849472//nchan])
         dout_c = dout_cpu_reshape[0,:,:] + 1j*dout_cpu_reshape[1,:,:]
-        print(din[0,0,0:5])
-        print(dout_cpu_reshape[0,0:5])
-        return
         # Generate a more logically ordered output
         print("Reordering GPU results")
-        gpu_reorder = np.zeros([nchan, npol*nstand, nstand*npol], dtype=np.complex)
+        tick = time.time()
+        gpu_reorder = np.zeros([nchan, nstand, nstand, npol*npol], dtype=np.complex)
         for chan in range(nchan):
-            print("Reordering channel %d" % chan)
-            for i0 in range(nstand*npol):
-                for i1 in range(i0, nstand*npol):
-                    v = dout_c[chan, regtile_index(i0, i1, nstand)] # only valuid for i1>i0
-                    gpu_reorder[chan, i0, i1] = v
-                    gpu_reorder[chan, i1, i0] = np.conj(v)
+            for i0 in range(nstand):
+                for i1 in range(i0, nstand):
+                    for p in range(4):
+                        p0 = p // 2
+                        p1 = p % 2
+                        v = dout_c[chan, regtile_index(2*i0+p0, 2*i1+p1, nstand)] # only valuid for i1>=i0
+                        gpu_reorder[chan, i0, i1, p] = v
+        tock = time.time()
+        print("Reordering took %d seconds" % (tock - tick))
         
-        print(gpu_reorder[0,0:4], din[0,0:4])
-        print("Comparing with CPU calculation")
-        print(np.all(gpu_reorder == din.imag))
+        print("Comparing with CPU calculation.")
+        ok = True
+        for chan in range(nchan):
+            for i0 in range(nstand):
+                for i1 in range(i0, nstand):
+                    ok = ok and np.all(din[0,i0,i1,:]==gpu_reorder[0,i0,i1,:])
+        print("MATCH?", ok)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -163,7 +178,7 @@ class Corr(object):
                     prev_time = curr_time
                     if first:
                         if self.test:
-                            test_out = np.zeros([ihdr['nchan'], ihdr['nstand']*ihdr['npol'], ihdr['nstand']*ihdr['npol']], dtype=np.complex)
+                            test_out = np.zeros([ihdr['nchan'], ihdr['nstand'], ihdr['nstand'], ihdr['npol']**2], dtype=np.complex)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
                         curr_time = time.time()

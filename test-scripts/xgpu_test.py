@@ -3,7 +3,7 @@ from bifrost.libbifrost import _bf
 import time
 import numpy as np
 
-NSTATION=352; NFREQUENCY=192; NTIME=480;
+NSTATION=352; NFREQUENCY=192; NTIME=480; NPOL=2
 DOSIM=False
 #NSTATION=32; NFREQUENCY=32; NTIME=32;
 MATLEN = 47849472
@@ -54,7 +54,7 @@ def regtile_index(in0, in1):
 
 SPACE='cuda'
 
-invec = np.ones([NTIME, NFREQUENCY, NSTATION, 2])
+invec = np.random.randint(-128,127,size=[5,NTIME, NFREQUENCY, NSTATION, 2])
 if DOSIM:
     print("Polulating test vectors")
     for t in range(NTIME):
@@ -73,14 +73,14 @@ print(obuf[0:10])
 
 if SPACE == 'cuda':
     print('running kernel as_GPUarray')
-    _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
+    _bf.bfXgpuInitialize(ibuf[0,:,:,:,:].as_BFarray(), obuf.as_BFarray(), 0)
     print('initialized')
     #time.sleep(20)
     for i in range(4):
         print(i)
-        print(_bf.bfXgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 0))
+        print(_bf.bfXgpuKernel(ibuf[i,:,:,:,:].as_BFarray(), obuf.as_BFarray(), 0))
         #time.sleep(20)
-    _bf.bfXgpuKernel(ibuf.as_BFarray(), obuf.as_BFarray(), 1)
+    _bf.bfXgpuKernel(ibuf[4,:,:,:,:].as_BFarray(), obuf.as_BFarray(), 1)
 else:
     print('running kernel as_BFarray')
     _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), 0)
@@ -98,21 +98,43 @@ print(o[o!=0])
 
 acc_len = 5 * NTIME
 ibuf_c = ibuf.view(dtype='ci4')
-for s0 in range(5):
-    for s1 in range(s0, 5):
-        #ar = ibuf[0,0,s0,0].real[0]
-        #ai = ibuf[0,0,s0,0].imag[0]
-        ar = ibuf[0,0,s0,0] >> 4
-        ai = ibuf[0,0,s0,0] & 0b1111
-        a = ar + 1j*ai
-        #br = ibuf[0,0,s1,0].real[0]
-        #bi = ibuf[0,0,s1,0].imag[0]
-        br = ibuf[0,0,s1,0] >> 4
-        bi = ibuf[0,0,s1,0] & 0b1111
-        b = br + 1j*bi
-        v = a * np.conj(b)
-        v *= acc_len
-        print(s0, s1, v, oc[regtile_index(2*s0,2*s1)])
+
+obuf_outer = np.zeros([NSTATION, NSTATION, NPOL**2], dtype=np.complex)
+din = invec[:,:,0,:,:]
+dinr = din >> 4
+dinr[dinr>7] -= 16
+dini = din & 0b1111
+dini[dini>7] -= 16
+dinc = dinr + 1j*dini
+for a in range(5):
+    for t in range(NTIME):
+        obuf_outer[:,:,0] += np.outer(np.conj(dinc[a,t,:,0]), dinc[a,t,:,0])
+        obuf_outer[:,:,1] += np.outer(np.conj(dinc[a,t,:,0]), dinc[a,t,:,1])
+        obuf_outer[:,:,2] += np.outer(np.conj(dinc[a,t,:,1]), dinc[a,t,:,0])
+        obuf_outer[:,:,3] += np.outer(np.conj(dinc[a,t,:,1]), dinc[a,t,:,1])
+
+ok = True
+for s0 in range(NSTATION):
+    print("Testing correlations for station %d" % s0)
+    for s1 in range(s0, NSTATION):
+        # XGPU seems to do A*B rather than AB*
+        xx = obuf_outer[s0,s1,0]
+        xy = obuf_outer[s0,s1,1]
+        yx = obuf_outer[s0,s1,2]
+        yy = obuf_outer[s0,s1,3]
+        v = [xx, xy, yx, yy]
+        
+        for i in range(4):
+            # Test pols in order xx, xy, yx, yy
+            pol0 = i // 2
+            pol1 = i % 2
+            gpu_v = oc[regtile_index(2*s0 + pol0, 2*s1 + pol1)]
+            #print(s0, s1, v[i], gpu_v, v[i]==gpu_v)
+            ok = ok and v[i]==gpu_v
+
+print("#######")
+print("PASSED?", ok)
+
 
 #from matplotlib import pyplot as plt
 #plt.plot(o[0,0,:])
