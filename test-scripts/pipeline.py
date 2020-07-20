@@ -21,6 +21,9 @@ from blocks.copy_block import Copy
 from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 
+import etcd3 as etcd
+etcd_client = etcd.client()
+
 ACTIVE_COR_CONFIG = threading.Event()
 
 __version__    = "0.2"
@@ -163,6 +166,7 @@ def main(argv):
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        ops[-1].add_etcd_controller(etcd_client)
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
