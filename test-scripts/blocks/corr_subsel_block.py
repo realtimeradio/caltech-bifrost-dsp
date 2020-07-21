@@ -53,7 +53,7 @@ class CorrSubSel(Block):
         """
         self.etcd_watch_id = client.add_watch_callback('/foo/subsel', self._etcd_update_subsel)
 
-    def _etcd_update_subsel(self, watchresponse):
+    def _etcd_callback(self, watchresponse):
         """
         A callback to run when the etcd baseline order key is updated.
         Json-decodes the value of the etcd key, and calls update_subsel with
@@ -81,8 +81,8 @@ class CorrSubSel(Block):
             self.release_control_lock()
 
     def _etcd_register_subsel(self, subsel):
-        v = {'update_time': time.time(), 'order': subsel}
-        self.etcd_client.put(key, json.dumps(v))
+        v = {'update_time': time.time(), 'order': subsel.tolist()}
+        self.etcd_client.put(self.monitor_key, json.dumps(v))
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -109,7 +109,7 @@ class CorrSubSel(Block):
                         self.log.info("Updating baseline subselection indices")
                         self._subsel[...] = self._subsel_next
                         if self.etcd_client:
-                            self._etcd_register_new_subsel(subsel)
+                            self._etcd_register_subsel(self._subsel_next)
                         ohdr['subsel'] = self._subsel_next.tolist()
                     self._subsel_pending = False
                     self.release_control_lock()

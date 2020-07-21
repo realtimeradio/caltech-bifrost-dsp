@@ -41,12 +41,27 @@ class Block(object):
 
         # optional etcd client
         self.etcd_client = etcd_client
-        self.command_key = command_keyroot + '/' + socket.gethostname() + '/' + str(self.pipeline_id)
-        self.monitor_key = monitor_keyroot + '/' + socket.gethostname() + '/' + str(self.pipeline_id)
+        self.command_key = '{cmdroot}/{host}/{pid}/{block}'.format(
+                                cmdroot=command_keyroot,
+                                host=socket.gethostname(),
+                                pid=self.pipeline_id,
+                                block=type(self).__name__)
+        self.monitor_key = '{monroot}/{host}/{pid}/{block}'.format(
+                                monroot=monitor_keyroot,
+                                host=socket.gethostname(),
+                                pid=self.pipeline_id,
+                                block=type(self).__name__)
 
         self.etcd_watch_id = None
 
         self.control_lock = Lock()
+
+        if self.etcd_client:
+            self.log.info("Adding watch callback to %s" % self.command_key)
+            self.etcd_watch_id = self.etcd_client.add_watch_prefix_callback(self.command_key, self._etcd_callback)
+
+    def _etcd_callback(self, watchresponse):
+        pass
 
     def acquire_control_lock(self):
         self.control_lock.acquire()

@@ -11,6 +11,8 @@ import time
 import simplejson as json
 import numpy as np
 
+from blocks.block_base import Block
+
 ## Computes the triangular index of an (i,j) pair as shown here...
 ## NB: Output is valid only if i >= j.
 ##
@@ -54,40 +56,31 @@ def regtile_index(in0, in1, nstation):
     index = (cell_index * num_words_per_cell) + pol_offset;
     return index;
 
-class Corr(object):
+class Corr(Block):
     """
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1, test=False):
+                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1, test=False, etcd_client=None):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
+        super(Corr, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
-        self.log = log
-        self.iring = iring
-        self.oring = oring
         self.ntime_gulp = ntime_gulp
-        self.guarantee = guarantee
-        self.core = core
-        self.acc_len = acc_len
         self.gpu = gpu
 
-        self.bind_proclog = ProcLog(type(self).__name__+"/bind")
-        self.in_proclog   = ProcLog(type(self).__name__+"/in")
-        self.out_proclog  = ProcLog(type(self).__name__+"/out")
-        self.size_proclog = ProcLog(type(self).__name__+"/size")
-        self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
-        self.perf_proclog = ProcLog(type(self).__name__+"/perf")
         self.test = test
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         
-        self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
-        self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = self.ntime_gulp*nchans*npols*1        # complex8
         self.ogulp_size = 47849472 * 8 # complex64
+
+        self.new_start_time = -1
+        self.new_acc_len = 2400
+        self.update_pending=True
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
@@ -150,6 +143,31 @@ class Corr(object):
                     ok = ok and np.all(din[0,i0,i1,:]==gpu_reorder[0,i0,i1,:])
         print("MATCH?", ok)
 
+    def _etcd_callback(self, watchresponse):
+        """
+        A callback to run whenever this block's command key is updated.
+        Decodes integration start time and accumulation length and
+        preps to update the pipeline at the end of the next integration.
+        """
+        v = json.loads(watchresponse.events[0].value)
+        if 'acc_len' not in v or not isinstance(v['acc_len'], int):
+            self.log.error("CORR: Incorrect or missing acc_len")
+            return
+        if 'start_time' not in v or not isinstance(v['start_time'], int):
+            self.log.error("CORR: Incorrect or missing start_time")
+            return
+        if v['acc_len'] % self.ntime_gulp != 0:
+            self.log.error("CORR: Acc length must be a multiple of %d" % self.ntime_gulp)
+            return
+        if v['start_time'] % self.ntime_gulp != 0:
+            self.log.error("CORR: Start time must be a multiple of %d" % self.ntime_gulp)
+            return
+        self.acquire_control_lock()
+        self.new_start_time = v['start_time']
+        self.new_acc_len = v['acc_len']
+        self.update_pending = True
+        self.release_control_lock()
+        
     def main(self):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
@@ -160,14 +178,29 @@ class Corr(object):
         self.oring.resize(self.ogulp_size)
         oseq = None
         ospan = None
+        start = False
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
-                subacc_id = ihdr['seq0'] % self.acc_len
+                if self.update_pending:
+                    self.acquire_control_lock()
+                    start_time = self.new_start_time
+                    acc_len = self.new_acc_len
+                    start = False
+                    self.log.info("CORR >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
+                    self.update_pending = False
+                    self.release_control_lock()
+                # If this is the start time, update the first flag, and compute where the last flag should be
+                if ihdr['seq0'] == start_time:
+                    start = True
+                self.sequence_proclog.update(ihdr)
+                if not start:
+                    continue
+                subacc_id = (ihdr['seq0'] - start_time) % acc_len
                 first = subacc_id == 0
-                last = subacc_id == self.acc_len - self.ntime_gulp
+                last = subacc_id == acc_len - self.ntime_gulp
                 ohdr = ihdr.copy()
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)

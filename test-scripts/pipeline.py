@@ -58,6 +58,9 @@ def main(argv):
     
     if args.useetcd:
         etcd_client = etcd.client(args.etcdhost)
+    else:
+        etcd_client = None
+
     # Fork, if requested
     tuning = 0
     if args.fork:
@@ -165,12 +168,10 @@ def main(argv):
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr))
+                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client))
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        if args.useetcd:
-            ops[-1].add_etcd_controller(etcd_client)
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
