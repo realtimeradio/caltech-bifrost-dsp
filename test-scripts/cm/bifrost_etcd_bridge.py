@@ -67,6 +67,13 @@ def poll(base_dir):
 
             blockList['%i-%s' % (pipeline_id, block)] = {'pid': pid, 'name':block, 'cmd': cmd, 'core': cr, 'acquire': ac, 'process': pr, 'reserve': re, 'total':ac+pr+re, 'gbps':gb, 'time':time.time()}
 
+            try:
+                log = contents[block]['sequence0']
+                blockList['%i-%s' % (pipeline_id, block)].update(log)
+            except:
+                pass
+
+
             # Get UDP stats if appropriate
             if block[:3] == 'udp':
                 try:
@@ -101,7 +108,6 @@ def main(args):
                           pipeline_id=pipeline_id,
                           block=block
                       )
-               print('Logging %s' % ekey)
                ec.put(ekey, json.dumps(v))
            
        except KeyboardInterrupt:

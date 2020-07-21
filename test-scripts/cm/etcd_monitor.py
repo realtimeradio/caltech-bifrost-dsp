@@ -19,7 +19,6 @@ def _add_line(screen, y, x, string, *args):
     Helper function for curses to add a line, clear the line to the end of 
     the screen, and update the line number counter.
     """
-
     screen.addstr(y, x, string, *args)
     screen.clrtoeol()
     return y + 1
@@ -37,6 +36,9 @@ def add_indented_lines(d, indent_level, blacklist):
     for k, v in sorted(d.items()):
        if k in blacklist:
            continue
+       # don't store lists (usually coefficients rather than monitoring data)
+       if isinstance(v, list):
+           continue
        if isinstance(v, dict):
            s += "%s%s:\n" % (indent, k)
            s += add_indented_lines(v, indent_level + 1, blacklist)
@@ -52,6 +54,9 @@ def gen_indented_list(d, indent_level, blacklist):
     out = []
     for k, v in sorted(d.items()):
        if k in blacklist:
+           continue
+       # don't store lists (usually coefficients rather than monitoring data)
+       if isinstance(v, list):
            continue
        if isinstance(v, dict):
            out += [{'indent':indent_level, 'key':k}]
