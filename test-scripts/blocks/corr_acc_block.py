@@ -12,19 +12,17 @@ import time
 import simplejson as json
 import numpy as np
 
-class CorrAcc(object):
+from blocks.block_base import Block
+
+class CorrAcc(Block):
     """
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2400,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=24000, gpu=-1):
+                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=24000, gpu=-1, etcd_client=None):
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
-        self.log = log
-        self.iring = iring
-        self.oring = oring
-        self.guarantee = guarantee
-        self.core = core
+        super(CorrAcc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         self.ntime_gulp = ntime_gulp
         self.acc_len = acc_len
         self.gpu = gpu
@@ -32,15 +30,6 @@ class CorrAcc(object):
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         
-        self.bind_proclog = ProcLog(type(self).__name__+"/bind")
-        self.in_proclog   = ProcLog(type(self).__name__+"/in")
-        self.out_proclog  = ProcLog(type(self).__name__+"/out")
-        self.size_proclog = ProcLog(type(self).__name__+"/size")
-        self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
-        self.perf_proclog = ProcLog(type(self).__name__+"/perf")
-        
-        self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
-        self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = 47849472 * 8 # complex64
         self.ogulp_size = self.igulp_size

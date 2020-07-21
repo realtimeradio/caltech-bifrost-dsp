@@ -11,35 +11,25 @@ from bifrost.device import stream_synchronize, set_device as BFSetGPU
 import time
 import simplejson as json
 import numpy as np
-from threading import Lock
 
-class CorrSubSel(object):
+from blocks.block_base import Block
+
+class CorrSubSel(Block):
     """
     Grab arbitrary entries from a GPU buffer and copy them to the CPU
     """
     nvis_out = 4656
-    def __init__(self, log, iring, oring,
-            guarantee=True, core=-1, nchans=192, gpu=-1):
-        self.log = log
-        self.iring = iring
-        self.oring = oring
-        self.guarantee = guarantee
-        self.core = core
+    def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
+                 nchans=192, gpu=-1):
+
+        super(CorrSubSel, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+
         self.nchans = nchans
         self.gpu = gpu
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
 
-        self.bind_proclog = ProcLog(type(self).__name__+"/bind")
-        self.in_proclog   = ProcLog(type(self).__name__+"/in")
-        self.out_proclog  = ProcLog(type(self).__name__+"/out")
-        self.size_proclog = ProcLog(type(self).__name__+"/size")
-        self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
-        self.perf_proclog = ProcLog(type(self).__name__+"/perf")
-        
-        self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
-        self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.igulp_size = 47849472 * 8 # complex64
 
         # Create an array of subselection indices on the GPU, and one on the CPU.
@@ -50,14 +40,25 @@ class CorrSubSel(object):
         self._subsel = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
         self._subsel_next = BFArray(np.array(list(range(self.nvis_out)), dtype=np.int32), dtype='i32', space='cuda_host')
         self._subsel_pending = True
-        self._subsel_lock = Lock()
         self.obuf_gpu = BFArray(shape=[self.nchans, self.nvis_out], dtype='i64', space='cuda')
         self.ogulp_size = self.nchans * self.nvis_out * 8
+        
+    def add_etcd_controller(self, client, key):
+        """
+        Add an etcd controller to change the baseline subselection indices.
 
-    def add_etcd_controller(self, client):
-        etcd_id = client.add_watch_callback('/foo/subsel', self._etcd_update_subsel)
+        Inputs:
+            client : etcd3.client.Etcd3Client instance
+            key    : etcd key which contains baseline orders
+        """
+        self.etcd_watch_id = client.add_watch_callback('/foo/subsel', self._etcd_update_subsel)
 
     def _etcd_update_subsel(self, watchresponse):
+        """
+        A callback to run when the etcd baseline order key is updated.
+        Json-decodes the value of the etcd key, and calls update_subsel with
+        this list of baseline indices.
+        """
         v = json.loads(watchresponse.events[0].value)
         if isinstance(v, list):
             self.update_subsel(v)
@@ -67,15 +68,21 @@ class CorrSubSel(object):
     def update_subsel(self, subsel):
         """
         Update the baseline index list which should be subselected.
+        Updates are not applied immediately, but are transferred to the
+        GPU at the end of the current data block.
         """
         if len(subsel) != self.nvis_out:
             self.log.error("Tried to update baseline subselection with an array of length %d" % len(subsel))
             return
         else:
-            self._subsel_lock.acquire()
+            self.acquire_control_lock()
             self._subsel_next[...] = subsel
             self._subsel_pending = True
-            self._subsel_lock.release()
+            self.release_control_lock()
+
+    def _etcd_register_subsel(self, subsel):
+        v = {'update_time': time.time(), 'order': subsel}
+        self.etcd_client.put(key, json.dumps(v))
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -97,13 +104,15 @@ class CorrSubSel(object):
                     prev_time = curr_time
                     self.log.debug("Grabbing subselection")
                     idata = ispan.data_view('i64').reshape(47849472)
-                    self._subsel_lock.acquire()
+                    self.acquire_control_lock()
                     if self._subsel_pending:
                         self.log.info("Updating baseline subselection indices")
                         self._subsel[...] = self._subsel_next
+                        if self.etcd_client:
+                            self._etcd_register_new_subsel(subsel)
                         ohdr['subsel'] = self._subsel_next.tolist()
                     self._subsel_pending = False
-                    self._subsel_lock.release()
+                    self.release_control_lock()
                     ohdr_str = json.dumps(ohdr)
                     with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                         with oseq.reserve(self.ogulp_size) as ospan:

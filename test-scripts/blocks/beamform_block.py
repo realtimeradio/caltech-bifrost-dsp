@@ -14,37 +14,26 @@ import simplejson as json
 import numpy as np
 from collections import deque
 
+from blocks.block_base import Block
+
 FS=200.0e6 # sampling rate
 CLOCK            = 204.8e6 #???
 NCHAN            = 4096
 FREQS            = np.around(np.fft.fftfreq(2*NCHAN, 1./CLOCK)[:NCHAN][:-1], 3)
 CHAN_BW          = FREQS[1] - FREQS[0]
 
-class Beamform(object):
+class Beamform(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
-    def __init__(self, log, iring, oring, tuning=0, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1):
-        self.log   = log
-        self.iring = iring
-        self.oring = oring
+    def __init__(self, log, iring, oring, tuning=0, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1, etcd_client=None):
+
+        super(Beamform, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+
         self.tuning = tuning
         self.ntime_gulp = ntime_gulp
-        self.guarantee = guarantee
-        self.core = core
         self.gpu = gpu
         self.ntime_sum = ntime_sum
         assert ntime_gulp % ntime_sum == 0
         self.ntime_blocks = ntime_gulp // ntime_sum
-        
-        self.bind_proclog = ProcLog(type(self).__name__+"/bind")
-        self.in_proclog   = ProcLog(type(self).__name__+"/in")
-        self.out_proclog  = ProcLog(type(self).__name__+"/out")
-        self.size_proclog = ProcLog(type(self).__name__+"/size")
-        self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
-        self.perf_proclog = ProcLog(type(self).__name__+"/perf")
-        
-        self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
-        self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
-        self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         
         self.nchan_max = nchan_max
         self.nbeam_max = nbeam_max
