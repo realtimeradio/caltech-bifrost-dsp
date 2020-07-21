@@ -22,7 +22,6 @@ from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 
 import etcd3 as etcd
-etcd_client = etcd.client()
 
 ACTIVE_COR_CONFIG = threading.Event()
 
@@ -53,8 +52,12 @@ def main(argv):
     parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
+    parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
+    parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
     args = parser.parse_args()
     
+    if args.useetcd:
+        etcd_client = etcd.client(args.etcdhost)
     # Fork, if requested
     tuning = 0
     if args.fork:
@@ -166,7 +169,8 @@ def main(argv):
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        ops[-1].add_etcd_controller(etcd_client)
+        if args.useetcd:
+            ops[-1].add_etcd_controller(etcd_client)
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
