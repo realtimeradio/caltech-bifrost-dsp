@@ -61,7 +61,7 @@ class Corr(Block):
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1, test=False, etcd_client=None):
+                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
         super(Corr, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         # TODO: Other things we could check:
@@ -78,7 +78,7 @@ class Corr(Block):
         self.igulp_size = self.ntime_gulp*nchans*npols*1        # complex8
         self.ogulp_size = 47849472 * 8 # complex64
 
-        self.new_start_time = -1
+        self.new_start_time = autostartat
         self.new_acc_len = 2400
         self.update_pending=True
 

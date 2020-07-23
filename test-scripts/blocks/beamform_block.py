@@ -32,8 +32,11 @@ class Beamform(Block):
         self.ntime_gulp = ntime_gulp
         self.gpu = gpu
         self.ntime_sum = ntime_sum
-        assert ntime_gulp % ntime_sum == 0
-        self.ntime_blocks = ntime_gulp // ntime_sum
+        if ntime_sum is not None:
+            assert ntime_gulp % ntime_sum == 0
+            self.ntime_blocks = ntime_gulp // ntime_sum
+        else:
+            self.ntime_blocks = ntime_gulp
         
         self.nchan_max = nchan_max
         self.nbeam_max = nbeam_max
@@ -57,7 +60,10 @@ class Beamform(Block):
         self.bf_output = BFArray(shape=(self.nbeam_max, self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Initialize beamforming library
-        _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
+        if ntime_sum is not None:
+            _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
+        else:
+            _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, 0)
 
     def configMessage(self):
         return None
@@ -219,8 +225,9 @@ class Beamform(Block):
                             idata = ispan.data_view('i8')
                             odata = ospan.data_view(np.float32)#.reshape(oshape)
                             
-                            _bf.bfBeamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
-                            odata = self.bf_output.data
+                            #_bf.bfBeamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
+                            _bf.bfBeamformRun(idata.as_BFarray(), odata.as_BFarray(), self.cgains.as_BFarray())
+                            #odata = self.bf_output.data
                             BFSync()
                             
                         ## Update the base time tag

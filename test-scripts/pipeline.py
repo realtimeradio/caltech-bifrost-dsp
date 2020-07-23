@@ -20,6 +20,8 @@ from blocks.corr_subsel_block import CorrSubSel
 from blocks.copy_block import Copy
 from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
+from blocks.beamform_sum_block import BeamformSum
+from blocks.beamform_vlbi_block import BeamformVlbi
 
 import etcd3 as etcd
 
@@ -120,7 +122,9 @@ def main(argv):
     
     capture_ring = Ring(name="capture", space='cuda_host')
     gpu_input_ring = Ring(name="gpu-input", space='cuda')
-    bf_output_ring = Ring(name="bf-output", space='cuda_host')
+    bf_output_ring = Ring(name="bf-output", space='cuda')
+    bf_power_output_ring = Ring(name="bf-output", space='cuda_host')
+    bf_vlbi_output_ring = Ring(name="bf-output", space='cuda_host')
     corr_output_ring = Ring(name="corr-output", space='cuda')
     corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
     corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
@@ -161,6 +165,12 @@ def main(argv):
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, nbeam_max=32, nstand=nstand, npol=npol,
+                          core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=None))
+        ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, nbeam_max=32, nstand=nstand, npol=npol,
+                          core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
+        ops.append(BeamformVlbi(log, iring=bf_output_ring, oring=bf_vlbi_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, ninput_beam=16, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     ## gpu_input_ring -> beamformer
