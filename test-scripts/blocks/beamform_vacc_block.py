@@ -15,14 +15,14 @@ import socket
 
 from blocks.block_base import Block
 
-class Vacc(Block):
+class BeamVacc(Block):
     """
     Copy data from one buffer to another.
     """
     def __init__(self, log, iring, oring, ninput_beam=16, beam_id=0,
                  guarantee=True, core=-1, nchans=192, nint=16, etcd_client=None):
 
-        super(Vacc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+        super(BeamVacc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         self.ntime_gulp = nint
         self.ninput_beam = ninput_beam
         self.nchans = nchans
@@ -61,6 +61,7 @@ class Vacc(Block):
                             #self.log.debug("Copying output")
                             odata = ospan.data_view(np.float32)
                             idata = ispan.data_view(np.float32).reshape([self.ninput_beam, self.ntime_gulp, self.nchans, 4])
+                            #self.vacc[0] += idata[self.beam_id].sum(axis=0)
                             for i in range(self.ninput_beam):
                                  self.vacc[i] += idata[i].sum(axis=0)
                                  #    self.s.sendto(idata[i,:,:,:].sum(axis=0).tobytes(), ('127.0.0.1', 10001))

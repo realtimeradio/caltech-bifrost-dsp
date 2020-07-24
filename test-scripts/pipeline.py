@@ -22,7 +22,7 @@ from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
 from blocks.beamform_vlbi_block import BeamformVlbi
-from blocks.vacc_block import Vacc
+from blocks.beamform_vacc_block import BeamVacc
 
 import etcd3 as etcd
 
@@ -39,7 +39,8 @@ __email__      = "jdowell at unm"
 __status__     = "Development"
 
 def main(argv):
-    parser = argparse.ArgumentParser(description='LWA-SV ADP DRX Service')
+    parser = argparse.ArgumentParser(description='LWA-SV ADP DRX Service',
+                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-f', '--fork',       action='store_true',       help='Fork and run in the background')
     parser.add_argument('-c', '--configfile', default='adp_config.json', help='Specify config file')
     parser.add_argument('-d', '--dryrun',     action='store_true',       help='Test without acting')
@@ -165,24 +166,6 @@ def main(argv):
         ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
-    if not (args.nobeamform or args.nogpu):
-        ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None))
-        ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
-        ops.append(BeamformVlbi(log, iring=bf_output_ring, oring=bf_vlbi_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, ninput_beam=NBEAM, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        for i in range(1):
-            ops.append(Vacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
-                          nchans=nchans, ninput_beam=NBEAM,
-                          core=cores[0], guarantee=True))
-
-    ## gpu_input_ring -> beamformer
-    ## beamformer -> UDP
-
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
                           core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client))
@@ -192,6 +175,25 @@ def main(argv):
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
+
+    if not (args.nobeamform or args.nogpu):
+        ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
+                          core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=None))
+        ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
+        ops.append(BeamformVlbi(log, iring=bf_output_ring, oring=bf_vlbi_output_ring, ntime_gulp=GSIZE,
+                          nchan_max=nchans, ninput_beam=NBEAM, npol=npol,
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        for i in range(1):
+            ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
+                          nchans=nchans, ninput_beam=NBEAM,
+                          core=cores[0], guarantee=True))
+
+    ## gpu_input_ring -> beamformer
+    ## beamformer -> UDP
+
     #
     ## corr_slow_output -> UDP
     ## corr_fast_output -> UDP
