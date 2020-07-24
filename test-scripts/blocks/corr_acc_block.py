@@ -46,26 +46,28 @@ class CorrAcc(Block):
 
         self.oring.resize(self.ogulp_size)
         oseq = None
+        ospan = None
         process_time = 0
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
-                subacc_id = ihdr['seq0'] % self.acc_len
-                first = subacc_id == 0
-                last = subacc_id == self.acc_len - self.ntime_gulp
                 ohdr = ihdr.copy()
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)
+                this_gulp_time = ihdr['seq0']
+
+                first = this_gulp_time
+                last  = first + self.acc_len - self.ntime_gulp
+                if oseq: oseq.end()
+                oseq = oring.begin_sequence(time_tag=first, header=ohdr_str, nringlet=iseq.nringlet)
                 for ispan in iseq.read(self.igulp_size):
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
                     self.log.debug("Accumulating correlation")
                     idata = ispan.data_view('i32')
-                    if first:
-                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
-                        ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
+                    if this_gulp_time == first:
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
@@ -76,26 +78,23 @@ class CorrAcc(Block):
                     curr_time = time.time()
                     process_time += curr_time - prev_time
                     prev_time = curr_time
-                    if last:
-                        if oseq is None:
-                            print("Skipping output because oseq isn't open")
-                        else:
-                            # copy to CPU
-                            odata = ospan.data_view('i32').reshape(self.accdata.shape)
-                            copy_array(odata, self.accdata)
-                            # Wait for copy to complete before committing span
-                            stream_synchronize()
-                            ospan.close()
-                            oseq.end()
-                            curr_time = time.time()
-                            process_time += curr_time - prev_time
-                            prev_time = curr_time
-                            self.perf_proclog.update({'acquire_time': acquire_time, 
-                                                      'reserve_time': reserve_time, 
-                                                      'process_time': process_time,})
-                            process_time = 0
+                    if this_gulp_time == last:
+                        # copy to CPU
+                        ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
+                        odata = ospan.data_view('i32').reshape(self.accdata.shape)
+                        copy_array(odata, self.accdata)
+                        # Wait for copy to complete before committing span
+                        stream_synchronize()
+                        ospan.close()
+                        ospan = None
+                        curr_time = time.time()
+                        process_time += curr_time - prev_time
+                        prev_time = curr_time
+                        self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                  'reserve_time': reserve_time, 
+                                                  'process_time': process_time,})
+                        process_time = 0
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
-            if oseq:
-                ospan.close()
-                oseq.end()
+            if ospan: ospan.close()
+            if oseq: oseq.end()
