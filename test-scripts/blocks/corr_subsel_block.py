@@ -98,6 +98,14 @@ class CorrSubSel(Block):
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
                 ohdr = ihdr.copy()
+                if self._subsel_pending:
+                    self.log.info("Updating baseline subselection indices")
+                    self._subsel[...] = self._subsel_next
+                    if self.etcd_client:
+                        self._etcd_register_subsel(self._subsel_next)
+                    ohdr['subsel'] = self._subsel_next.tolist()
+                ohdr_str = json.dumps(ohdr)
+                oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                 for ispan in iseq.read(self.igulp_size):
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
@@ -105,31 +113,37 @@ class CorrSubSel(Block):
                     self.log.debug("Grabbing subselection")
                     idata = ispan.data_view('i64').reshape(47849472)
                     self.acquire_control_lock()
+                    self._subsel_pending = False
+                    self.release_control_lock()
+                    with oseq.reserve(self.ogulp_size) as ospan:
+                        curr_time = time.time()
+                        reserve_time = curr_time - prev_time
+                        prev_time = curr_time
+                        rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray())
+                        if (rv != _bf.BF_STATUS_SUCCESS):
+                            self.log.error("xgpuIntialize returned %d" % rv)
+                            raise RuntimeError
+                        odata = ospan.data_view(dtype='i64').reshape([self.nchans, self.nvis_out])
+                        copy_array(odata, self.obuf_gpu)
+                        # Wait for copy to complete before committing span
+                        stream_synchronize()
+                        curr_time = time.time()
+                        process_time = curr_time - prev_time
+                        prev_time = curr_time
+                    self.perf_proclog.update({'acquire_time': acquire_time, 
+                                              'reserve_time': reserve_time, 
+                                              'process_time': process_time,})
+                    # If a new baseline selection is pending, close this oseq and generate a new one
+                    # with an updated header
                     if self._subsel_pending:
+                        oseq.end()
                         self.log.info("Updating baseline subselection indices")
                         self._subsel[...] = self._subsel_next
                         if self.etcd_client:
                             self._etcd_register_subsel(self._subsel_next)
                         ohdr['subsel'] = self._subsel_next.tolist()
-                    self._subsel_pending = False
-                    self.release_control_lock()
-                    ohdr_str = json.dumps(ohdr)
-                    with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
-                        with oseq.reserve(self.ogulp_size) as ospan:
-                            curr_time = time.time()
-                            reserve_time = curr_time - prev_time
-                            prev_time = curr_time
-                            rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray())
-                            if (rv != _bf.BF_STATUS_SUCCESS):
-                                self.log.error("xgpuIntialize returned %d" % rv)
-                                raise RuntimeError
-                            odata = ospan.data_view(dtype='i64').reshape([self.nchans, self.nvis_out])
-                            copy_array(odata, self.obuf_gpu)
-                            # Wait for copy to complete before committing span
-                            stream_synchronize()
-                            curr_time = time.time()
-                            process_time = curr_time - prev_time
-                            prev_time = curr_time
-                        self.perf_proclog.update({'acquire_time': acquire_time, 
-                                                  'reserve_time': reserve_time, 
-                                                  'process_time': process_time,})
+                        #TODO update time tag based on what has already been processed
+                        ohdr_str = json.dumps(ohdr)
+                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                # if the iseq ends
+                oseq.end()

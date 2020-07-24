@@ -190,8 +190,8 @@ def main(argv):
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client))
 
-        ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
+        #ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
+        #                  core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
     #
     ## corr_slow_output -> UDP
     ## corr_fast_output -> UDP

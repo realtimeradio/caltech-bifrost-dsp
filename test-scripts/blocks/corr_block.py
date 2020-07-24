@@ -184,60 +184,70 @@ class Corr(Block):
             for iseq in self.iring.read(guarantee=self.guarantee):
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
-                if self.update_pending:
-                    self.acquire_control_lock()
-                    start_time = self.new_start_time
-                    acc_len = self.new_acc_len
-                    start = False
-                    self.log.info("CORR >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
-                    self.update_pending = False
-                    self.release_control_lock()
-                # If this is the start time, update the first flag, and compute where the last flag should be
-                if ihdr['seq0'] == start_time:
-                    start = True
+                this_gulp_time = ihdr['seq0']
                 self.sequence_proclog.update(ihdr)
-                if not start:
-                    continue
-                subacc_id = (ihdr['seq0'] - start_time) % acc_len
-                first = subacc_id == 0
-                last = subacc_id == acc_len - self.ntime_gulp
                 ohdr = ihdr.copy()
                 # Mash header in here if you want
                 ohdr_str = json.dumps(ohdr)
-                #print(ihdr)
                 for ispan in iseq.read(self.igulp_size):
+                    if self.update_pending:
+                        self.acquire_control_lock()
+                        start_time = self.new_start_time
+                        acc_len = self.new_acc_len
+                        start = False
+                        self.log.info("CORR >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
+                        self.update_pending = False
+                        self.release_control_lock()
+                    # If this is the start time, update the first flag, and compute where the last flag should be
+                    if this_gulp_time == start_time:
+                        start = True
+                        first = start_time
+                        last  = first + acc_len - self.ntime_gulp
+                        # on a new accumulation start, if a current oseq is open, close it, and start afresh
+                        if oseq: oseq.end()
+                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                    if not start:
+                        continue
+                    # Use start_time -1 as a special stop condition
+                    if start_time == -1:
+                        if oseq: oseq.end()
+                        start = False
+
+                    self.sequence_proclog.update({'curr_gulp_time':this_gulp_time})
+
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
-                    if first:
+                    if this_gulp_time == first:
+                        # reserve an output span
+                        ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
                         if self.test:
                             test_out = np.zeros([ihdr['nchan'], ihdr['nstand'], ihdr['nstand'], ihdr['npol']**2], dtype=np.complex)
-                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
-                        ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
-                    if ospan:
+                    if not ospan:
+                        self.log.error("CORR: trying to write to not-yet-opened ospan")
+                    if self.test:
+                        test_out += self._test(ispan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
+                    _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
+                    curr_time = time.time()
+                    process_time = curr_time - prev_time
+                    prev_time = curr_time
+                    if this_gulp_time == last:
                         if self.test:
-                            test_out += self._test(ispan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
-                        _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
-                        curr_time = time.time()
-                        process_time = curr_time - prev_time
-                        prev_time = curr_time
-                    if last:
-                        #print("CORR >> LAST!!!!")
-                        if oseq is None:
-                            print("CORR >> Skipping output because oseq isn't open: subbacc_id: %d" % subacc_id)
-                        else:
-                            if self.test:
-                                self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
-                            ospan.close()
-                            oseq.end()
-                            self.perf_proclog.update({'acquire_time': acquire_time, 
-                                                      'reserve_time': reserve_time, 
-                                                      'process_time': process_time,
-                                                      'gbps': 8*self.igulp_size / process_time / 1e9})
-                            process_time = 0
+                            self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
+                        ospan.close()
+                        self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                  'reserve_time': reserve_time, 
+                                                  'process_time': process_time,
+                                                  'gbps': 8*self.igulp_size / process_time / 1e9})
+                        process_time = 0
+                        # Update integration boundary markers
+                        first = last + self.ntime_gulp
+                        last = first + acc_len - self.ntime_gulp
+                    # And, update overall time counter
+                    this_gulp_time += self.ntime_gulp
                             
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
