@@ -1,6 +1,6 @@
 from bifrost.proclog import ProcLog
 import bifrost.affinity as cpu_affinity
-from bifrost.packet_capture import PacketCaptureCallback, UDPCapture
+from bifrost.packet_capture import PacketCaptureCallback, UDPCapture, UDPVerbsCapture
 
 import time
 import simplejson as json
@@ -15,6 +15,15 @@ class Capture(object):
         self.args   = args
         self.kwargs = kwargs
         self.utc_start = self.kwargs['utc_start']
+        if 'ibverbs' in self.kwargs:
+            if self.kwargs['ibverbs']:
+                self.CaptureClass = UDPVerbsCapture
+            else:
+                self.CaptureClass = UDPCapture
+            del self.kwargs['ibverbs']
+        else:
+            self.CaptureClass = UDPCapture
+
         del self.kwargs['utc_start']
         self.shutdown_event = threading.Event()
         ## HACK TESTING
@@ -52,7 +61,7 @@ class Capture(object):
     def main(self):
         seq_callback = PacketCaptureCallback()
         seq_callback.set_snap2(self.seq_callback)
-        with UDPCapture(*self.args,
+        with self.CaptureClass(*self.args,
                         sequence_callback=seq_callback,
                         **self.kwargs) as capture:
             while not self.shutdown_event.is_set():
