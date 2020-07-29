@@ -63,7 +63,7 @@ class DummySource(object):
                                   'core0': cpu_affinity.get_core(),})
 
         time.sleep(0.1)
-        self.oring.resize(self.gulp_size)
+        self.oring.resize(self.gulp_size, self.gulp_size*4)
         hdr = {}
         hdr['nchan'] = self.nchans
         hdr['nstand'] = self.nstands
@@ -76,10 +76,10 @@ class DummySource(object):
         gbps = 0
         with self.oring.begin_writing() as oring:
             tick = time.time()
-            while not self.shutdown_event.is_set():
-                ohdr_str = json.dumps(hdr)
-                prev_time = time.time()
-                with oring.begin_sequence(time_tag=time_tag, header=ohdr_str) as oseq:
+            ohdr_str = json.dumps(hdr)
+            prev_time = time.time()
+            with oring.begin_sequence(time_tag=time_tag, header=ohdr_str) as oseq:
+    	        while not self.shutdown_event.is_set():
                     with oseq.reserve(self.gulp_size) as ospan:
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
@@ -88,7 +88,6 @@ class DummySource(object):
                             odata = ospan.data_view(shape=self.test_data.shape[1:], dtype=self.test_data.dtype)
                             odata[...] = self.test_data[time_tag % NTEST_BLOCKS]
                         time_tag += 1
-                        hdr['seq0'] += self.ntime_gulp
                     curr_time = time.time()
                     process_time = curr_time - prev_time
                     prev_time = curr_time
@@ -96,9 +95,9 @@ class DummySource(object):
                                               'reserve_time': reserve_time, 
                                               'process_time': process_time,
                                               'gbps' : gbps})
-                if time_tag % REPORT_PERIOD == 0:
-                    tock = time.time()
-                    dt = tock - tick
-                    gbps = 8*bytes_per_report / dt / 1e9
-                    print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, gbps))
-                    tick = tock
+                    if time_tag % REPORT_PERIOD == 0:
+                        tock = time.time()
+                        dt = tock - tick
+                        gbps = 8*bytes_per_report / dt / 1e9
+                        print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, gbps))
+                        tick = tock
