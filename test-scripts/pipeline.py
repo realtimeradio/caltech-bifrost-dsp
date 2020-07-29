@@ -58,6 +58,7 @@ def main(argv):
     parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
     parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
+    parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
     
     if args.useetcd:
@@ -158,7 +159,7 @@ def main(argv):
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata))
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput))
 
     ## capture_ring -> triggered buffer
 
@@ -179,7 +180,7 @@ def main(argv):
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
-                          core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=None))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None))
         ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
@@ -189,7 +190,7 @@ def main(argv):
         for i in range(1):
             ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
                           nchans=nchans, ninput_beam=NBEAM,
-                          core=cores[0], guarantee=True))
+                          core=cores.pop(0), guarantee=True))
 
     ## gpu_input_ring -> beamformer
     ## beamformer -> UDP

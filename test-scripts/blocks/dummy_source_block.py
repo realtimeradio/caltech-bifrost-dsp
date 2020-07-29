@@ -15,7 +15,7 @@ class DummySource(object):
     but mark input buffers ready for consumption.
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False):
+                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False, target_throughput=22.0):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
@@ -24,6 +24,7 @@ class DummySource(object):
         self.npols = npols
         self.nstands = 352
         self.skip_write = skip_write
+        self.target_throughput = target_throughput
         
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -74,6 +75,7 @@ class DummySource(object):
         bytes_per_report = REPORT_PERIOD * self.gulp_size
         acquire_time = 0 # this block doesn't have an input ring
         gbps = 0
+        extra_delay = 0
         with self.oring.begin_writing() as oring:
             tick = time.time()
             ohdr_str = json.dumps(hdr)
@@ -95,9 +97,12 @@ class DummySource(object):
                                               'reserve_time': reserve_time, 
                                               'process_time': process_time,
                                               'gbps' : gbps})
+                    time.sleep(max(0, extra_delay / REPORT_PERIOD))
                     if time_tag % REPORT_PERIOD == 0:
                         tock = time.time()
                         dt = tock - tick
                         gbps = 8*bytes_per_report / dt / 1e9
                         print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, gbps))
+                        target_time = 8*bytes_per_report / self.target_throughput / 1e9
+                        extra_delay = target_time - dt + extra_delay
                         tick = tock
