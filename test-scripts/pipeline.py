@@ -125,15 +125,18 @@ def main(argv):
     log.info("Server index: %i", server_idx)
     
     NBEAM = 16
-    capture_ring = Ring(name="capture", space='cuda_host')
-    gpu_input_ring = Ring(name="gpu-input", space='cuda')
-    bf_output_ring = Ring(name="bf-output", space='cuda')
-    bf_power_output_ring = Ring(name="bf-output", space='cuda_host')
-    bf_vlbi_output_ring = Ring(name="bf-output", space='cuda_host')
-    bf_acc_output_ring = [Ring(name="bf-output", space='system') for _ in range(NBEAM)]
-    corr_output_ring = Ring(name="corr-output", space='cuda')
-    corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
-    corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
+    if not args.nogpu:
+        capture_ring = Ring(name="capture", space='cuda_host')
+        gpu_input_ring = Ring(name="gpu-input", space='cuda')
+        bf_output_ring = Ring(name="bf-output", space='cuda')
+        bf_power_output_ring = Ring(name="bf-output", space='cuda_host')
+        bf_vlbi_output_ring = Ring(name="bf-output", space='cuda_host')
+        bf_acc_output_ring = [Ring(name="bf-output", space='system') for _ in range(NBEAM)]
+        corr_output_ring = Ring(name="corr-output", space='cuda')
+        corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
+        corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
+    else:
+        capture_ring = Ring(name="capture", space='system')
     
     # TODO:  Figure out what to do with this resize
     GSIZE = 480#1200
