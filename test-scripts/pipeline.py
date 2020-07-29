@@ -58,6 +58,7 @@ def main(argv):
     parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
     parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
+    parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
     
@@ -147,9 +148,8 @@ def main(argv):
     nfreqblocks = 2
     roach0 = 0
     if not args.fakesource:
-        ip_str = '100.100.100.101'
-        print("binding input to", ip_str)
-        iaddr = Address(ip_str, 10000)
+        print("binding input to", args.ip)
+        iaddr = Address(args.ip, 10000)
         isock = UDPSocket()
         isock.bind(iaddr)
         isock.timeout = 0.5
