@@ -36,8 +36,8 @@ class Capture(object):
         time_tag0  = 0
         self.time_tag += 1
         time_tag   = self.time_tag
-        #print("++++++++++++++++ seq0     =", seq0)
-        #print("                 time_tag =", time_tag)
+        print("++++++++++++++++ seq0     =", seq0)
+        print("                 time_tag =", time_tag)
         time_tag_ptr[0] = time_tag
         hdr = {'time_tag': time_tag,
                'seq0':     seq0, 
