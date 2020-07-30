@@ -140,7 +140,7 @@ def main(argv):
     
     # TODO:  Figure out what to do with this resize
     GSIZE = 480#1200
-    SLOT_NTIME = 2*GSIZE # What does this do? JD says maybe nothing :)
+    SLOT_NTIME = GSIZE # What does this do? JD says maybe nothing :)
     nstand = 352
     npol = 2
     nchans = 192
