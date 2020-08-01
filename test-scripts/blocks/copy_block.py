@@ -48,6 +48,8 @@ class Copy(Block):
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                     for ispan in iseq.read(self.igulp_size):
+                        if ispan.size < self.igulp_size:
+                            continue # Ignore final gulp
                         curr_time = time.time()
                         acquire_time = curr_time - prev_time
                         prev_time = curr_time

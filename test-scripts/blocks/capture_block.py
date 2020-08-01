@@ -32,8 +32,6 @@ class Capture(object):
         self.shutdown_event.set()
     def seq_callback(self, seq0, chan0, nchan, nsrc,
                      time_tag_ptr, hdr_ptr, hdr_size_ptr):
-        timestamp0 = 0
-        time_tag0  = 0
         self.time_tag += 1
         time_tag   = self.time_tag
         print("++++++++++++++++ seq0     =", seq0)
