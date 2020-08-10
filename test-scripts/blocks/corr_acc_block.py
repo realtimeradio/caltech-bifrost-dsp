@@ -18,24 +18,48 @@ class CorrAcc(Block):
     """
     Perform GPU side accumulation and then transfer to CPU
     """
-    def __init__(self, log, iring, oring, ntime_gulp=2400,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=24000, gpu=-1, etcd_client=None):
+    def __init__(self, log, iring, oring,
+                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
         super(CorrAcc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
-        self.ntime_gulp = ntime_gulp
-        self.acc_len = acc_len
+        self.nchans = nchans
+        self.npols = npols
+        self.nstands = nstands
+        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
         self.gpu = gpu
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         
-        self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = 47849472 * 8 # complex64
+        self.igulp_size = self.matlen * 8 # complex64
         self.ogulp_size = self.igulp_size
         # integration buffer
         self.accdata = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda')
         self.bfbf = LinAlg()
+
+        self.new_start_time = autostartat
+        self.new_acc_len = acc_len
+        self.update_pending=True
+
+    def _etcd_callback(self, watchresponse):
+        """
+        A callback to run whenever this block's command key is updated.
+        Decodes integration start time and accumulation length and
+        preps to update the pipeline at the end of the next integration.
+        """
+        v = json.loads(watchresponse.events[0].value)
+        if 'acc_len' not in v or not isinstance(v['acc_len'], int):
+            self.log.error("CORR: Incorrect or missing acc_len")
+            return
+        if 'start_time' not in v or not isinstance(v['start_time'], int):
+            self.log.error("CORR: Incorrect or missing start_time")
+            return
+        self.acquire_control_lock()
+        self.new_start_time = v['start_time']
+        self.new_acc_len = v['acc_len']
+        self.update_pending = True
+        self.release_control_lock()
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -47,21 +71,44 @@ class CorrAcc(Block):
         self.oring.resize(self.ogulp_size)
         oseq = None
         ospan = None
+        start = False
         process_time = 0
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
                 ohdr = ihdr.copy()
-                # Mash header in here if you want
-                ohdr_str = json.dumps(ohdr)
                 this_gulp_time = ihdr['seq0']
-
-                first = this_gulp_time
-                last  = first + self.acc_len - self.ntime_gulp
-                if oseq: oseq.end()
-                oseq = oring.begin_sequence(time_tag=first, header=ohdr_str, nringlet=iseq.nringlet)
                 for ispan in iseq.read(self.igulp_size):
+                    if self.update_pending:
+                        self.acquire_control_lock()
+                        start_time = self.new_start_time
+                        acc_len = self.new_acc_len
+                        start = False
+                        self.log.info("CORRACC >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
+                        self.update_pending = False
+                        self.release_control_lock()
+                        ohdr['acc_len'] = ihdr['acc_len'] * acc_len
+                    # If this is the start time, update the first flag, and compute where the last flag should be
+                    if this_gulp_time == start_time:
+                        start = True
+                        first = start_time
+                        last  = first + acc_len - 1
+                        # on a new accumulation start, if a current oseq is open, close it, and start afresh
+                        if oseq: oseq.end()
+                        ohdr_str = json.dumps(ohdr)
+                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                    # If we're waiting for a start, spin the wheels
+                    if not start:
+                        this_gulp_time += 1
+                        continue
+                    # Use start_time -1 as a special stop condition
+                    if start_time == -1:
+                        if oseq: oseq.end()
+                        start = False
+
+                    self.sequence_proclog.update({'curr_gulp_time':this_gulp_time})
+
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
@@ -94,6 +141,11 @@ class CorrAcc(Block):
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,})
                         process_time = 0
+                        # Update integration boundary markers
+                        first = last + 1
+                        last = first + acc_len - 1
+                    # And, update overall time counter
+                    this_gulp_time += 1
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
             if ospan: ospan.close()
