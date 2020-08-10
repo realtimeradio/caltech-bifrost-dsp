@@ -20,17 +20,20 @@ class CorrSubSel(Block):
     """
     nvis_out = 4656
     def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
-                 nchans=192, gpu=-1):
+                 nchans=192, npols=2, nstands=352, gpu=-1):
 
         super(CorrSubSel, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
         self.nchans = nchans
+        self.npols = npols
+        self.nstands = nstands
         self.gpu = gpu
+        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
 
-        self.igulp_size = 47849472 * 8 # complex64
+        self.igulp_size = self.matlen * 8 # complex64
 
         # Create an array of subselection indices on the GPU, and one on the CPU.
         # The user can update the CPU-side array, and the main processing thread
