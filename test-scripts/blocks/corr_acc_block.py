@@ -41,6 +41,10 @@ class CorrAcc(Block):
         self.new_start_time = autostartat
         self.new_acc_len = acc_len
         self.update_pending=True
+        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
+                                   'new_start_sample': self.new_start_time,
+                                   'update_pending': self.update_pending,
+                                   'last_cmd_time': time.time())
 
     def _etcd_callback(self, watchresponse):
         """
@@ -59,6 +63,10 @@ class CorrAcc(Block):
         self.new_start_time = v['start_time']
         self.new_acc_len = v['acc_len']
         self.update_pending = True
+        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
+                                   'new_start_sample': self.new_start_time,
+                                   'update_pending': self.update_pending,
+                                   'last_cmd_time': time.time())
         self.release_control_lock()
 
     def main(self):
@@ -79,6 +87,8 @@ class CorrAcc(Block):
                 ihdr = json.loads(iseq.header.tostring())
                 ohdr = ihdr.copy()
                 this_gulp_time = ihdr['seq0']
+                upstream_acc_len = ihdr['acc_len']
+                upstream_start_time = ihdr['start_time']
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
@@ -87,27 +97,35 @@ class CorrAcc(Block):
                         start = False
                         self.log.info("CORRACC >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
                         self.update_pending = False
+                        self.stats_proclog.update({'acc_len': acc_len,
+                                                   'start_sample': start_time,
+                                                   'curr_sample': this_gulp_time,
+                                                   'update_pending': self.update_pending,
+                                                   'last_update_time': time.time()})
                         self.release_control_lock()
+                        if acc_len % upstream_acc_len != 0:
+                            self.log.error("CORRACC >> Requested acc_len %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
+                        if (start_time - upstream_start_time) % upstream_acc_len != 0:
+                            self.log.error("CORRACC >> Requested start_time %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
                         ohdr['acc_len'] = ihdr['acc_len'] * acc_len
+                    self.stats_proclog.update({'curr_sample': this_gulp_time})
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
                         start = True
                         first = start_time
-                        last  = first + acc_len - 1
+                        last  = first + acc_len - upstream_acc_len
                         # on a new accumulation start, if a current oseq is open, close it, and start afresh
                         if oseq: oseq.end()
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                     # If we're waiting for a start, spin the wheels
                     if not start:
-                        this_gulp_time += 1
+                        this_gulp_time += upstream_acc_len
                         continue
-                    # Use start_time -1 as a special stop condition
-                    if start_time == -1:
+                    # Use acc_len = 0 as a special stop condition
+                    if acc_len == 0:
                         if oseq: oseq.end()
                         start = False
-
-                    self.sequence_proclog.update({'curr_gulp_time':this_gulp_time})
 
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
@@ -140,10 +158,11 @@ class CorrAcc(Block):
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,})
+                        self.stats_proclog.update({'last_end_sample': this_gulp_time})
                         process_time = 0
                         # Update integration boundary markers
-                        first = last + 1
-                        last = first + acc_len - 1
+                        first = last + upstream_acc_len
+                        last = first + acc_len - upstream_acc_len
                     # And, update overall time counter
                     this_gulp_time += 1
             # If upstream process stops producing, close things gracefully
