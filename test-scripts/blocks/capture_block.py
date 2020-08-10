@@ -25,6 +25,9 @@ class Capture(object):
             self.CaptureClass = UDPCapture
 
         del self.kwargs['utc_start']
+        # Add gulp size = slot_ntime requirement which is special
+        # for the LWA352 receiver
+        self.kwargs['slot_ntime'] = buffer_ntime
         self.shutdown_event = threading.Event()
         ## HACK TESTING
         #self.seq_callback = None

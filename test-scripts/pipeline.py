@@ -140,7 +140,6 @@ def main(argv):
     
     # TODO:  Figure out what to do with this resize
     GSIZE = 480#1200
-    SLOT_NTIME = GSIZE # What does this do? JD says maybe nothing :)
     nstand = 352
     npol = 2
     nchans = 192
@@ -158,7 +157,7 @@ def main(argv):
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
                            nsrc=nroach*nfreqblocks, src0=0, max_payload_size=9000,
-                           buffer_ntime=GSIZE, slot_ntime=SLOT_NTIME, core=cores.pop(0),
+                           buffer_ntime=GSIZE, core=cores.pop(0),
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
