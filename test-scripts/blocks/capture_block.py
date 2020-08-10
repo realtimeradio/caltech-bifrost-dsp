@@ -10,8 +10,10 @@ import numpy as np
 
 class Capture(object):
     time_tag = 0
-    def __init__(self, log, *args, **kwargs):
+    def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125, *args, **kwargs):
         self.log    = log
+        self.fs_hz  = fs_hz # sampling frequency in Hz
+        self.chan_bw_hz = chan_bw_hz # Channel bandwidth in Hz
         self.args   = args
         self.kwargs = kwargs
         self.utc_start = self.kwargs['utc_start']
@@ -44,8 +46,9 @@ class Capture(object):
                'seq0':     seq0, 
                'chan0':    chan0,
                'nchan':    nchan,
-               'cfreq':    (chan0 + 0.5*(nchan-1))*1,
-               'bw':       nchan*1,
+               'fs_hz':    self.fs_hz,
+               'sfreq':    chan0*self.chan_bw_hz
+               'bw_hz':    nchan*self.chan_bw_hz
                'nstand':   nsrc*32,
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
                'npol':     2,
