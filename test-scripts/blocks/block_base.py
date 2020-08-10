@@ -41,19 +41,20 @@ class Block(object):
 
         # optional etcd client
         self.etcd_client = etcd_client
-        self.command_key = '{cmdroot}/{host}/{pid}/{block}'.format(
+        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}'.format(
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=type(self).__name__)
-        self.monitor_key = '{monroot}/{host}/{pid}/{block}'.format(
+                                block=type(self).__name__.lower())
+        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}'.format(
                                 monroot=monitor_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=type(self).__name__)
+                                block=type(self).__name__.lower())
 
         self.etcd_watch_id = None
 
+        # A lock to protect actions occuring in the etcd callback
         self.control_lock = Lock()
 
         if self.etcd_client:
@@ -61,6 +62,11 @@ class Block(object):
             self.etcd_watch_id = self.etcd_client.add_watch_prefix_callback(self.command_key, self._etcd_callback)
 
     def _etcd_callback(self, watchresponse):
+        """
+        A callback executed whenever this block's command key is written to.
+        parameters:
+            watchresponse: A WatchResponse object used by the etcd `add_watch_prefix_callback` as the calling argument.
+        """
         pass
 
     def acquire_control_lock(self):
