@@ -85,6 +85,10 @@ class Corr(Block):
         self.new_start_time = autostartat
         self.new_acc_len = 2400
         self.update_pending=True
+        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
+                                   'new_start_sample': self.new_start_time,
+                                   'update_pending': self.update_pending,
+                                   'last_cmd_time': time.time())
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
@@ -170,6 +174,10 @@ class Corr(Block):
         self.new_start_time = v['start_time']
         self.new_acc_len = v['acc_len']
         self.update_pending = True
+        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
+                                   'new_start_sample': self.new_start_time,
+                                   'update_pending': self.update_pending,
+                                   'last_cmd_time': time.time()})
         self.release_control_lock()
         
     def main(self):
@@ -202,6 +210,12 @@ class Corr(Block):
                         self.release_control_lock()
                         ohdr['acc_len'] = acc_len
                         ohdr['start_time'] = start_time
+                        self.stats_proclog.update({'acc_len': acc_len,
+                                                   'start_sample': start_time,
+                                                   'curr_sample': this_gulp_time,
+                                                   'update_pending': self.update_pending,
+                                                   'last_update_time': time.time()})
+                    self.stats_proclog.update({'curr_sample': this_gulp_time})
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
                         start = True
@@ -214,12 +228,10 @@ class Corr(Block):
                     if not start:
                         this_gulp_time += self.ntime_gulp
                         continue
-                    # Use start_time -1 as a special stop condition
-                    if start_time == -1:
+                    # Use acc_len = 0 as a special stop condition
+                    if acc_len == 0:
                         if oseq: oseq.end()
                         start = False
-
-                    self.sequence_proclog.update({'curr_gulp_time':this_gulp_time})
 
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
@@ -248,6 +260,7 @@ class Corr(Block):
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
                                                   'gbps': 8*self.igulp_size / process_time / 1e9})
+                        self.stats_proclog.update({'last_end_sample': this_gulp_time})
                         process_time = 0
                         # Update integration boundary markers
                         first = last + self.ntime_gulp
