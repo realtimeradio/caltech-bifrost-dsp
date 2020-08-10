@@ -44,7 +44,7 @@ class CorrAcc(Block):
         self.stats_proclog.update({'new_acc_len': self.new_acc_len,
                                    'new_start_sample': self.new_start_time,
                                    'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time())
+                                   'last_cmd_time': time.time()})
 
     def _etcd_callback(self, watchresponse):
         """
@@ -66,7 +66,7 @@ class CorrAcc(Block):
         self.stats_proclog.update({'new_acc_len': self.new_acc_len,
                                    'new_start_sample': self.new_start_time,
                                    'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time())
+                                   'last_cmd_time': time.time()})
         self.release_control_lock()
 
     def main(self):

@@ -88,7 +88,7 @@ class Corr(Block):
         self.stats_proclog.update({'new_acc_len': self.new_acc_len,
                                    'new_start_sample': self.new_start_time,
                                    'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time())
+                                   'last_cmd_time': time.time()})
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
