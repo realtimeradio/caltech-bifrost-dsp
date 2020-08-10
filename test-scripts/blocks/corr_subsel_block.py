@@ -45,17 +45,10 @@ class CorrSubSel(Block):
         self._subsel_pending = True
         self.obuf_gpu = BFArray(shape=[self.nchans, self.nvis_out], dtype='i64', space='cuda')
         self.ogulp_size = self.nchans * self.nvis_out * 8
+        self.stats_proclog.update({'new_subsel': self._subsel_next,
+                                   'update_pending': self._subsel_pending,
+                                   'last_cmd_time': time.time()})
         
-    def add_etcd_controller(self, client, key):
-        """
-        Add an etcd controller to change the baseline subselection indices.
-
-        Inputs:
-            client : etcd3.client.Etcd3Client instance
-            key    : etcd key which contains baseline orders
-        """
-        self.etcd_watch_id = client.add_watch_callback('/foo/subsel', self._etcd_update_subsel)
-
     def _etcd_callback(self, watchresponse):
         """
         A callback to run when the etcd baseline order key is updated.
@@ -63,10 +56,10 @@ class CorrSubSel(Block):
         this list of baseline indices.
         """
         v = json.loads(watchresponse.events[0].value)
-        if isinstance(v, list):
-            self.update_subsel(v)
+        if 'subsel' not in v or not isinstance(v, list):
+            self.log.error("Incorrect or missing subsel")
         else:
-            self.log.error("Tried to update subselection with a non-list")
+            self.update_subsel(v)
 
     def update_subsel(self, subsel):
         """
@@ -81,11 +74,10 @@ class CorrSubSel(Block):
             self.acquire_control_lock()
             self._subsel_next[...] = subsel
             self._subsel_pending = True
+            self.stats_proclog.update({'new_subsel': self._subsel_next,
+                                       'update_pending': self._subsel_pending,
+                                       'last_cmd_time': time.time()})
             self.release_control_lock()
-
-    def _etcd_register_subsel(self, subsel):
-        v = {'update_time': time.time(), 'order': subsel.tolist()}
-        self.etcd_client.put(self.monitor_key, json.dumps(v))
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -104,8 +96,9 @@ class CorrSubSel(Block):
                 if self._subsel_pending:
                     self.log.info("Updating baseline subselection indices")
                     self._subsel[...] = self._subsel_next
-                    if self.etcd_client:
-                        self._etcd_register_subsel(self._subsel_next)
+                    self.stats_proclog.update({'subsel': self._subsel,
+                                               'update_pending': False,
+                                               'last_update_time': time.time()})
                     ohdr['subsel'] = self._subsel_next.tolist()
                 ohdr_str = json.dumps(ohdr)
                 oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
@@ -142,9 +135,10 @@ class CorrSubSel(Block):
                         oseq.end()
                         self.log.info("Updating baseline subselection indices")
                         self._subsel[...] = self._subsel_next
-                        if self.etcd_client:
-                            self._etcd_register_subsel(self._subsel_next)
                         ohdr['subsel'] = self._subsel_next.tolist()
+                        self.stats_proclog.update({'subsel': self._subsel,
+                                                   'update_pending': False,
+                                                   'last_update_time': time.time()})
                         #TODO update time tag based on what has already been processed
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
