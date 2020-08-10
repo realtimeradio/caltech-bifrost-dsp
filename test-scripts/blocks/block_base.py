@@ -35,6 +35,8 @@ class Block(object):
         self.size_proclog = ProcLog(type(self).__name__+"/size")
         self.sequence_proclog = ProcLog(type(self).__name__+"/sequence0")
         self.perf_proclog = ProcLog(type(self).__name__+"/perf")
+
+        self.stats_proclog = Proclog(type(self).__name__+"/stats")
         
         self.in_proclog.update(  {'nring':1, 'ring0':self.iring.name})
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
