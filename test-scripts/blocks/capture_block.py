@@ -46,7 +46,7 @@ class Capture(object):
                'nchan':    nchan,
                'cfreq':    (chan0 + 0.5*(nchan-1))*1,
                'bw':       nchan*1,
-               'nstand':   nsrc*16,
+               'nstand':   nsrc*32,
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
                'npol':     2,
                'complex':  True,
