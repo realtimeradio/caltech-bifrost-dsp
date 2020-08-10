@@ -61,12 +61,16 @@ class Corr(Block):
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0):
+                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
         super(Corr, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
         self.ntime_gulp = ntime_gulp
+        self.nchans = nchans
+        self.npols = npols
+        self.nstands = nstands
+        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
         self.gpu = gpu
 
         self.test = test
@@ -75,8 +79,8 @@ class Corr(Block):
             BFSetGPU(self.gpu)
         
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*nchans*npols*1        # complex8
-        self.ogulp_size = 47849472 * 8 # complex64
+        self.igulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
+        self.ogulp_size = self.matlen * 8 # complex64
 
         self.new_start_time = autostartat
         self.new_acc_len = 2400
@@ -187,8 +191,6 @@ class Corr(Block):
                 this_gulp_time = ihdr['seq0']
                 self.sequence_proclog.update(ihdr)
                 ohdr = ihdr.copy()
-                # Mash header in here if you want
-                ohdr_str = json.dumps(ohdr)
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
@@ -198,6 +200,8 @@ class Corr(Block):
                         self.log.info("CORR >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
                         self.update_pending = False
                         self.release_control_lock()
+                        ohdr['acc_len'] = acc_len
+                        ohdr['start_time'] = start_time
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
                         start = True
@@ -205,8 +209,10 @@ class Corr(Block):
                         last  = first + acc_len - self.ntime_gulp
                         # on a new accumulation start, if a current oseq is open, close it, and start afresh
                         if oseq: oseq.end()
+                        ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                     if not start:
+                        this_gulp_time += self.ntime_gulp
                         continue
                     # Use start_time -1 as a special stop condition
                     if start_time == -1:
