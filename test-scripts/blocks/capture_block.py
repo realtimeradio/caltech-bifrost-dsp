@@ -27,7 +27,7 @@ class Capture(object):
         del self.kwargs['utc_start']
         # Add gulp size = slot_ntime requirement which is special
         # for the LWA352 receiver
-        self.kwargs['slot_ntime'] = buffer_ntime
+        self.kwargs['slot_ntime'] = kwargs['buffer_ntime']
         self.shutdown_event = threading.Event()
         ## HACK TESTING
         #self.seq_callback = None
@@ -35,10 +35,10 @@ class Capture(object):
         self.shutdown_event.set()
     def seq_callback(self, seq0, chan0, nchan, nsrc,
                      time_tag_ptr, hdr_ptr, hdr_size_ptr):
-        self.time_tag += 1
-        time_tag   = self.time_tag
+        time_tag = time_tag_ptr[0]
         print("++++++++++++++++ seq0     =", seq0)
         print("                 time_tag =", time_tag)
+        print("                 time_tag =", time.ctime(time_tag))
         time_tag_ptr[0] = time_tag
         hdr = {'time_tag': time_tag,
                'seq0':     seq0, 
