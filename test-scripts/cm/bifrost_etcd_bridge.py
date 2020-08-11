@@ -102,7 +102,7 @@ def main(args):
            last_poll, d = poll(BIFROST_STATS_BASE_DIR)
            for k, v in d.items():
                pipeline_id, block = k.split('-')
-               ekey = '{keybase}/{hostbase}/{pipeline_id}/{block}'.format(
+               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}'.format(
                           keybase=args.keybase,
                           hostbase=args.hostbase,
                           pipeline_id=pipeline_id,
@@ -122,9 +122,9 @@ if __name__ == "__main__":
     parser.add_argument('--etcdhost', default='localhost',
                         help='etcd host to which stats should be published')
     parser.add_argument('--keybase', default='/mon/corr',
-                        help='Key to which stats should be published: <keybase>/<hostbase>/<pipeline-id>/blockname/...')
+                        help='Key to which stats should be published: <keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
     parser.add_argument('--hostbase', default=socket.gethostname(),
-                        help='Key to which stats should be published: <keybase>/<hostbase>/<pipeline-id>/blockname/...')
+                        help='Key to which stats should be published: <keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
     parser.add_argument('-t', '--polltime', type=int, default=10,
                         help='How often to poll stats, in seconds')
     args = parser.parse_args()

@@ -13,6 +13,7 @@ import socket
 import datetime
 
 # Blocks
+from blocks.block_base import Block
 from blocks.corr_block import Corr
 from blocks.dummy_source_block import DummySource
 from blocks.corr_acc_block import CorrAcc
@@ -53,6 +54,7 @@ def main(argv):
     parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
     parser.add_argument('--ibverbs',          action='store_true',       help='Use IB verbs for packet capture')
     parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
+    parser.add_argument('-P', '--pipelineid', type=int, default=0,       help='Pipeline ID. Useful if you are running multiple pipelines on a single machine')
     parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
@@ -66,6 +68,9 @@ def main(argv):
         etcd_client = etcd.client(args.etcdhost)
     else:
         etcd_client = None
+
+    # Set the pipeline ID
+    Block.set_id(args.pipelineid)
 
     # Fork, if requested
     tuning = 0

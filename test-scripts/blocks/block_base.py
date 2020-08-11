@@ -19,6 +19,11 @@ class Block(object):
     The base class for a bifrost LWA352 processing block
     """
     pipeline_id = 0
+
+    @classmethod
+    def set_id(cls, x):
+       cls.pipeline_id = x
+
     def __init__(self, log, iring, oring,
             guarantee, core, etcd_client=None,
             command_keyroot='/cmd/corr',

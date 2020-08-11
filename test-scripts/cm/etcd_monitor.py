@@ -13,6 +13,8 @@ from io import StringIO
 import simplejson as json
 import etcd3 as etcd
 
+COL_WIDTH = 40
+
 
 def _add_line(screen, y, x, string, *args):
     """
@@ -74,7 +76,7 @@ def make_hier_dict(din):
     """
     def add_to_dict(d, x):
         for k,v in x.items():
-            levels = k.split('/')
+            levels = k.lstrip('/').split('/')
             if len(levels) == 1:
                 d[levels[0]] = v
             else:
@@ -118,14 +120,16 @@ def main(args):
     tLastPoll = 0.0
 
     def highlight_warnings(x):
-        if x['key'] == 'timestamp':
-            if x['val'] < time.time() - 3: return RED
+        if x['key'] == 'time':
+            if x['val'] < time.time() - 10: return ORANGE
+            elif x['val'] < time.time() - 60: return RED
         elif x['key'] == 'gbps':
             if x['val'] < 17.0: return RED
             elif x['val'] < 25.0: return ORANGE
         return std
     
     hn = 0
+    n_hosts = 0
     try:
         while True:
             update = (time.time() - tLastPoll > poll_interval)
@@ -144,18 +148,29 @@ def main(args):
                 hn -= 1
                 update = True
 
+            rows, cols = scr.getmaxyx()
+
             ## Do we need to poll the system again?
             # Get all the valid keys
             # Decode JSON and recast list of keys into a hierarchical dictionary
-            if update:
+            if update or n_hosts==0:
+                scr.clear()
                 tLastPoll = time.time()
                 # Generate a list of hosts (assuming keys have format keyroot/<host>/...)
                 hosts = [_[1].key.decode()[len(args.keyroot):].lstrip('/').split('/')[0] for _ in ec.get_prefix(args.keyroot, keys_only=True)]
                 n_hosts = len(hosts)
+                if n_hosts == 0:
+                    _add_line(scr, 0, 0, "No hosts detected", std)
+                    scr.clrtobot()
+                    ### Refresh
+                    scr.refresh()
+                    ## Sleep
+                    time.sleep(_REDRAW_INTERVAL_SEC)
+                    continue
                 # Use the updateable host-number value to decide which stats to show
                 host = hosts[hn % n_hosts]
                 d = {}
-                for (s, meta) in ec.get_prefix(args.keyroot + '/' + host + '/'):
+                for (s, meta) in ec.get_prefix(args.keyroot + '/' + host + '/pipeline'):
                     k = meta.key.decode()[len(args.keyroot):]
                     try:
                         d[k] = json.loads(s)
@@ -165,22 +180,47 @@ def main(args):
 
             ## Display
             k = 0
+            col = 0
             ### General - load average
-            for key, v in sorted(data.items()):
-                #output = add_indented_lines(v, 0, args.keyblacklist.split(','))
-                #_add_line(scr, k, 0, output, std)
-                #k += len(output.split('\n'))
-                output = gen_indented_list(v, 0, args.keyblacklist.split(','))
-                for line in output:
-                    s = line['key']+':'
-                    if 'val' in line:
-                        s += ' %s' % line['val']
-                        mode = highlight_warnings(line)
+            #for key, v in sorted(data.items()):
+            #curses.endwin()
+            #print(data)
+            #exit()
+            for host, vhost in sorted(data.items()):
+                k = _add_line(scr, k, 0*2, "%s:"%host, curses.A_BOLD)
+                for stat, vstat in sorted(vhost.items()):
+                    k = _add_line(scr, k, 1*2, "%s:"%stat, std)
+                    if isinstance(vstat, dict):
+                        col = 0
+                        for pipeline, vpipeline in sorted(vstat.items()):
+                            overflow = False # flag indicating more lines than are available
+                            _add_line(scr, k, COL_WIDTH*col + 2*2, "%s:"%pipeline, std)
+                            kk = k+1
+                            for block, vblock in sorted(vpipeline.items()):
+                                if overflow:
+                                    break
+                                kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "%s:"%block, std)
+                                for key, val in sorted(vblock.items()):
+                                    if key in args.keyignorelist.split(','):
+                                        continue
+                                    if kk > (rows-10):
+                                        kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
+                                        overflow = True
+                                        break
+                                    s = "%s:" % key
+                                    if key == 'time':
+                                        s += ' %s' % time.ctime(val)
+                                    elif isinstance(val, float):
+                                        s += ' %.3f' % val
+                                    else:
+                                        s += ' %s' % val
+                                    mode = highlight_warnings({'key':key, 'val':val})
+                                    kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, s, mode)
+                            col += 1
                     else:
-                        mode = std
-                    k = _add_line(scr, k, 2*line['indent'], s, mode)
+                        k = _add_line(scr, k, 4*2, "argh", mode)
 
-            k += 4
+            k = kk + 4
             k = _add_line(scr, k, 0, time.ctime(), std)
             _add_line(scr, k, 0, '%d'%hn, std)
             ### Clear to the bottom
@@ -194,23 +234,19 @@ def main(args):
     except KeyboardInterrupt:
         pass
 
-    except Exception as err:
-        error = err
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        fileObject = StringIO()
-        traceback.print_tb(exc_traceback, file=fileObject)
-        tbString = fileObject.getvalue()
-        fileObject.close()
+    except:
+        curses.endwin()
+        raise
 
-    # Save the window contents
-    contents = ''
-    y,x = scr.getmaxyx()
-    for i in range(y-1):
-        for j in range(x):
-            d = scr.inch(i,j)
-            c = d&0xFF
-            a = (d>>8)&0xFF
-            contents += chr(c)
+    ## Save the window contents
+    #contents = ''
+    #y,x = scr.getmaxyx()
+    #for i in range(y-1):
+    #    for j in range(x):
+    #        d = scr.inch(i,j)
+    #        c = d&0xFF
+    #        a = (d>>8)&0xFF
+    #        contents += chr(c)
 
     # Tear down curses
     scr.keypad(0)
@@ -218,15 +254,15 @@ def main(args):
     curses.nocbreak()
     curses.endwin()
     
-    # Final reporting
-    try:
-        ## Error
-        print("%s: failed with %s" % (os.path.basename(__file__), str(error)))
-        for line in tbString.split('\n'):
-            print(line)
-    except NameError:
-        ## Last window contents sans attributes
-        print(contents)
+    ## Final reporting
+    #try:
+    #    ## Error
+    #    print("%s: failed with %s" % (os.path.basename(__file__), str(error)))
+    #    for line in tbString.split('\n'):
+    #        print(line)
+    #except NameError:
+    #    ## Last window contents sans attributes
+    #    print(contents)
 
 
 if __name__ == "__main__":
@@ -236,9 +272,9 @@ if __name__ == "__main__":
         )
     parser.add_argument('--etcdhost', default='localhost',
                         help='etcd host to which stats should be published')
-    parser.add_argument('--keyroot', default='/mon/corr',
+    parser.add_argument('--keyroot', default='/mon/corr/x',
                         help='Base key directory to watch.')
-    parser.add_argument('--keyblacklist', default='cmd,name,pid',
+    parser.add_argument('--keyignorelist', default='cmd,name,pid,acquire,npol,nstand,nchan,process,reserve,total',
                         help='Comma separated list of keys to ignore')
     args = parser.parse_args()
     main(args)
