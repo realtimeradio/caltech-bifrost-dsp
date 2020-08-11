@@ -47,8 +47,8 @@ class Capture(object):
                'chan0':    chan0,
                'nchan':    nchan,
                'fs_hz':    self.fs_hz,
-               'sfreq':    chan0*self.chan_bw_hz
-               'bw_hz':    nchan*self.chan_bw_hz
+               'sfreq':    chan0*self.chan_bw_hz,
+               'bw_hz':    nchan*self.chan_bw_hz,
                'nstand':   nsrc*32,
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
                'npol':     2,
