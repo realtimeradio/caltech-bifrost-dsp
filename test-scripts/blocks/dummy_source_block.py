@@ -23,6 +23,7 @@ class DummySource(object):
         self.nchans = nchans
         self.npols = npols
         self.nstands = 352
+        self.ninputs = nstands * npols
         self.skip_write = skip_write
         self.target_throughput = target_throughput
         
@@ -36,6 +37,19 @@ class DummySource(object):
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
+
+        # make an array ninputs-elements long with [station, pol] IDs.
+        # e.g. if input_order[12] = [27, 1], then the 13th input is stand 27, pol 1
+        self.input_order = np.zeros([self.ninputs, 2], dtype=np.int32)
+        for s in range(self.nstands):
+            for p in range(self.npols):
+                self.input_order[self.npols*s + p] = [s, p]
+
+        self.ant_map = np.zeros([self.nstands, self.npols], dtype=np.int32)
+        for i, inp in enumerate(self.input_order):
+            stand = inp[0]
+            pol = inp[1]
+            self.ant_map[stand, pol] = i
 
         if skip_write:
             self.test_data = BFArray(shape=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols], dtype='i8', space='system')
@@ -70,6 +84,8 @@ class DummySource(object):
         hdr['nstand'] = self.nstands
         hdr['npol'] = self.npols
         hdr['seq0'] = 0
+        hdr['input_order'] = self.input_order.tolist()
+        hdr['ant_map'] = self.ant_map.tolist()
         time_tag = 0
         REPORT_PERIOD = 100
         bytes_per_report = REPORT_PERIOD * self.gulp_size

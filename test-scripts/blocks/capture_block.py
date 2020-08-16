@@ -10,7 +10,9 @@ import numpy as np
 
 class Capture(object):
     time_tag = 0
-    def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125, *args, **kwargs):
+    def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125,
+                     input_order=None, nstands=352, npols=2,
+                     *args, **kwargs):
         self.log    = log
         self.fs_hz  = fs_hz # sampling frequency in Hz
         self.chan_bw_hz = chan_bw_hz # Channel bandwidth in Hz
@@ -31,6 +33,23 @@ class Capture(object):
         # for the LWA352 receiver
         self.kwargs['slot_ntime'] = kwargs['buffer_ntime']
         self.shutdown_event = threading.Event()
+
+        # make an array ninputs-elements long with [station, pol] IDs.
+        # e.g. if input_order[12] = [27, 1], then the 13th input is stand 27, pol 1
+        if input_order is not None:
+            self.input_order = input_order
+        else:
+            self.input_order = np.zeros([nstands*npols, 2], dtype=np.int32)
+            for s in range(nstands):
+                for p in range(npols):
+                    self.input_order[npols*s + p] = [s, p]
+
+        self.ant_map = np.zeros([nstands, npols], dtype=np.int32)
+        for i, inp in enumerate(self.input_order):
+            stand = inp[0]
+            pol = inp[1]
+            self.ant_map[stand, pol] = i
+           
         ## HACK TESTING
         #self.seq_callback = None
     def shutdown(self):
@@ -42,6 +61,8 @@ class Capture(object):
         print("                 time_tag =", time_tag)
         print("                 time_tag =", time.ctime(time_tag))
         time_tag_ptr[0] = time_tag
+        npol = 2
+        nstand = nsrc*32
         hdr = {'time_tag': time_tag,
                'seq0':     seq0, 
                'chan0':    chan0,
@@ -49,11 +70,16 @@ class Capture(object):
                'fs_hz':    self.fs_hz,
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
-               'nstand':   nsrc*32,
+               'nstand':   nstand,
+               'input_order': self.input_order.tolist(),
+               'ant_map': self.ant_map.tolist(),
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
-               'npol':     2,
+               'npol':     npol,
                'complex':  True,
                'nbit':     4}
+        if self.input_order.shape != [nstand, npol]:
+            self.log.error("Input order shape %s does not match data stream (%d, %d)" %
+                            (self.input_order.shape, nstand, npol))
         hdr_str = json.dumps(hdr).encode()
         # TODO: Can't pad with NULL because returned as C-string
         #hdr_str = json.dumps(hdr).ljust(4096, '\0')

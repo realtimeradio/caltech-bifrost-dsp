@@ -148,6 +148,7 @@ def main(argv):
     nstand = 352
     npol = 2
     nchans = 192
+    CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
     cores = list(map(int, args.cores.split(',')))
     
@@ -179,7 +180,7 @@ def main(argv):
                           core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client))
 
         ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
