@@ -34,7 +34,8 @@ def tri_index(i, j):
 ## and pol_idx are also 0 based).  Return value is valid if in1 >= in0.  The
 ## corresponding imaginary component is located xgpu_info.matLength words after
 ## the real component.
-def regtile_index(in0, in1, nstation):
+def regtile_index(in0, in1, nstand):
+    nstation = nstand
     a0 = in0 >> 1;
     a1 = in1 >> 1;
     p0 = in0 & 1;
@@ -98,6 +99,11 @@ class Corr(Block):
         if (rv != _bf.BF_STATUS_SUCCESS):
             self.log.error("xgpuIntialize returned %d" % rv)
             raise RuntimeError
+
+        # generate xGPU order map
+        self.antpol_to_input = BFArray(np.zeros([nstands, npols], dtype=np.int32), space='system')
+        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
 
     def _test(self, din, nchan, nstand, npol):
         din_cpu = din.copy(space='system')
@@ -179,6 +185,26 @@ class Corr(Block):
                                    'update_pending': self.update_pending,
                                    'last_cmd_time': time.time()})
         self.release_control_lock()
+
+    def update_baseline_indices(self, ant_to_input):
+        """
+        Using a map of stand,pol -> correlator ID, create an array mapping
+        stand0,pol0 * stand1,pol1 -> baseline ID
+        Inputs:
+            ant_to_input : [nstand x npol] list of input IDs
+        Outputs:
+            [nstand x nstand x npol x npol] list of [baseline_index, is_conjugated]
+
+            where baseline_index is the index within an xGPU buffer, and is_conjugated
+            is 1 if the data should be conjugated, or 0 otherwise.
+        """
+        self.antpol_to_input[...] = ant_to_input
+        _bf.bfXgpuGetOrder(self.antpol_to_input.as_BFarray(),
+                           self.antpol_to_bl.as_BFarray(),
+                           self.bl_is_conj.as_BFarray(),
+                           self.nstands, self.npols)
+        return self.antpol_to_bl.tolist(), self.bl_is_conj.tolist()
+        
         
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -199,6 +225,8 @@ class Corr(Block):
                 this_gulp_time = ihdr['seq0']
                 self.sequence_proclog.update(ihdr)
                 ohdr = ihdr.copy()
+                antpol_to_bl_id, bl_is_conj = self.update_baseline_indices(ihdr['ant_to_input'])
+                ohdr.update({'ant_to_bl_id': antpol_to_bl_id, 'bl_is_conj': bl_is_conj})
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
