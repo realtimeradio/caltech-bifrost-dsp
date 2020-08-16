@@ -20,15 +20,17 @@ class CorrSubSel(Block):
     """
     nvis_out = 4656
     def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
-                 nchans=192, npols=2, nstands=352, gpu=-1):
+                 nchans=192, npols=2, nstands=352, nchan_sum=4, gpu=-1):
 
         super(CorrSubSel, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
-        self.nchans = nchans
+        self.nchans_in = nchans
+        self.nchans_out = nchans // nchan_sum
+        self.nchan_sum = nchan_sum
         self.npols = npols
         self.nstands = nstands
         self.gpu = gpu
-        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
+        self.matlen = self.nchans_in * (nstands//2+1)*(nstands//4)*npols*npols*4 # xGPU defined
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
@@ -43,8 +45,8 @@ class CorrSubSel(Block):
         self._subsel = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
         self._subsel_next = BFArray(np.array(list(range(self.nvis_out)), dtype=np.int32), dtype='i32', space='cuda_host')
         self._subsel_pending = True
-        self.obuf_gpu = BFArray(shape=[self.nchans, self.nvis_out], dtype='i64', space='cuda')
-        self.ogulp_size = self.nchans * self.nvis_out * 8
+        self.obuf_gpu = BFArray(shape=[self.nchans_out, self.nvis_out], dtype='i64', space='cuda')
+        self.ogulp_size = self.nchans_out * self.nvis_out * 8
         self.stats_proclog.update({'new_subsel': self._subsel_next,
                                    'update_pending': self._subsel_pending,
                                    'last_cmd_time': time.time()})
@@ -115,11 +117,11 @@ class CorrSubSel(Block):
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
-                        rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray())
+                        rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray(), self.nchan_sum)
                         if (rv != _bf.BF_STATUS_SUCCESS):
                             self.log.error("xgpuIntialize returned %d" % rv)
                             raise RuntimeError
-                        odata = ospan.data_view(dtype='i64').reshape([self.nchans, self.nvis_out])
+                        odata = ospan.data_view(dtype='i64').reshape([self.nchans_out, self.nvis_out])
                         copy_array(odata, self.obuf_gpu)
                         # Wait for copy to complete before committing span
                         stream_synchronize()
