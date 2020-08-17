@@ -118,7 +118,7 @@ class DummySource(object):
                         tock = time.time()
                         dt = tock - tick
                         gbps = 8*bytes_per_report / dt / 1e9
-                        print('Send %d bytes in %.2f seconds (%.2f Gb/s)' % (bytes_per_report, dt, gbps))
+                        print('%d: Sent %d bytes in %.2f seconds (%.2f Gb/s)' % (time_tag // REPORT_PERIOD, bytes_per_report, dt, gbps))
                         target_time = 8*bytes_per_report / self.target_throughput / 1e9
                         extra_delay = target_time - dt + extra_delay
                         tick = tock
