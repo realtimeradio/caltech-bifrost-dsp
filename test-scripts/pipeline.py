@@ -190,7 +190,7 @@ def main(argv):
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=24000, gpu=args.gpu))
+                          core=cores.pop(0), guarantee=True, acc_len=240000, gpu=args.gpu))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,

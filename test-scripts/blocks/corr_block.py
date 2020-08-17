@@ -201,8 +201,7 @@ class Corr(Block):
         self.antpol_to_input[...] = ant_to_input
         _bf.bfXgpuGetOrder(self.antpol_to_input.as_BFarray(),
                            self.antpol_to_bl.as_BFarray(),
-                           self.bl_is_conj.as_BFarray(),
-                           self.nstands, self.npols)
+                           self.bl_is_conj.as_BFarray())
         return self.antpol_to_bl.tolist(), self.bl_is_conj.tolist()
         
         

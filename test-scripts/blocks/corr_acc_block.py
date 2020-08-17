@@ -33,9 +33,10 @@ class CorrAcc(Block):
             BFSetGPU(self.gpu)
         
         self.igulp_size = self.matlen * 8 # complex64
-        self.ogulp_size = self.igulp_size
+        self.ogulp_size = nchans * nstands * nstands * npols * npols * 8 # complex64
         # integration buffer
         self.accdata = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda')
+        self.accdata_h = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda_host')
         self.bfbf = LinAlg()
 
         self.new_start_time = autostartat
@@ -45,6 +46,12 @@ class CorrAcc(Block):
                                    'new_start_sample': self.new_start_time,
                                    'update_pending': self.update_pending,
                                    'last_cmd_time': time.time()})
+
+        # Arrays to hold the conjugation and bl indices of data coming from xGPU
+        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        
+        self.reordered_data = BFArray(np.zeros([nchans, nstands, nstands, npols, npols, 2], dtype=np.int32), space='system')
 
     def _etcd_callback(self, watchresponse):
         """
@@ -89,6 +96,8 @@ class CorrAcc(Block):
                 this_gulp_time = ihdr['seq0']
                 upstream_acc_len = ihdr['acc_len']
                 upstream_start_time = ihdr['start_time']
+                self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
+                self.bl_is_conj[...] = ihdr['bl_is_conj']
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
@@ -118,6 +127,7 @@ class CorrAcc(Block):
                         if oseq: oseq.end()
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                        self.log.info("CORRACC >> Start time %d reached. Accumulating to %d (upstream accumulation: %d)" % (start_time, last, upstream_acc_len))
                     # If we're waiting for a start, spin the wheels
                     if not start:
                         this_gulp_time += upstream_acc_len
@@ -144,12 +154,15 @@ class CorrAcc(Block):
                     process_time += curr_time - prev_time
                     prev_time = curr_time
                     if this_gulp_time == last:
+                        print("Reordering output! Time: %d" % this_gulp_time)
                         # copy to CPU
+                        copy_array(self.accdata_h, self.accdata)
+                        # Reorder the data into a saner form
+                        _bf.bfXgpuReorder(self.accdata_h.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
+                        # And throw into the output buffer
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
-                        odata = ospan.data_view('i32').reshape(self.accdata.shape)
-                        copy_array(odata, self.accdata)
-                        # Wait for copy to complete before committing span
-                        stream_synchronize()
+                        odata = ospan.data_view('i32').reshape(self.reordered_data.shape)
+                        odata[...] = self.reordered_data
                         ospan.close()
                         ospan = None
                         curr_time = time.time()
@@ -164,7 +177,7 @@ class CorrAcc(Block):
                         first = last + upstream_acc_len
                         last = first + acc_len - upstream_acc_len
                     # And, update overall time counter
-                    this_gulp_time += 1
+                    this_gulp_time += upstream_acc_len
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
             if ospan: ospan.close()
