@@ -62,6 +62,7 @@ def main(argv):
     parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
+    parser.add_argument('--bufgbytes',        default=4,                 help='Number of GBytes to buffer for transient buffering')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
     
@@ -174,7 +175,7 @@ def main(argv):
 
     ## capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
-                      core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=16))
+                      core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
     ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
                       core=cores.pop(0), guarantee=True))
 
