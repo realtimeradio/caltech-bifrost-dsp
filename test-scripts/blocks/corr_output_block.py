@@ -30,15 +30,13 @@ class CorrOutput(Block):
 
         self.igulp_size = self.matlen * 8 # complex64
 
-        ## Arrays to hold the conjugation and bl indices of data coming from xGPU
-        #self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        #self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        #self.reordered_data = BFArray(np.zeros([nchans, nstands, nstands, npols, npols, 2], dtype=np.int32), space='system')
+        # Arrays to hold the conjugation and bl indices of data coming from xGPU
+        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.reordered_data = BFArray(np.zeros([nchans, nstands, nstands, npols, npols, 2], dtype=np.int32), space='system')
 
 
     def main(self):
-        while(True):
-            continue
         cpu_affinity.set_core(self.core)
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
@@ -55,9 +53,9 @@ class CorrOutput(Block):
                 print('CORR OUTPUT >> reordering')
                 self.stats_proclog.update({'curr_sample': this_gulp_time})
                 curr_time = time.time()
-                reserve_time = curr_time - prev_time
+                acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                _bf.bfXgpuReorder(self.accdata_h.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
+                _bf.bfXgpuReorder(ispan.data.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time
