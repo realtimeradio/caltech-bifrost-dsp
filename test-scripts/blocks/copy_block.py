@@ -19,7 +19,8 @@ class Copy(Block):
     Copy data from one buffer to another.
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, gpu=-1, etcd_client=None):
+                 guarantee=True, core=-1, nchans=192, npols=704, gpu=-1, etcd_client=None,
+                 buf_size_gbytes=None):
 
         super(Copy, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         self.ntime_gulp = ntime_gulp
@@ -30,6 +31,12 @@ class Copy(Block):
 
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = self.ntime_gulp*nchans*npols*1        # complex8
+        # round down buffer size to an integer gulps
+        if buf_size_gbytes is None:
+            self.buf_size = 4 * self.igulp_size
+        else:
+            self.buf_size = (int(1e9 * buf_size_gbytes) // self.igulp_size) * self.igulp_size
+        print(self.igulp_size, self.buf_size)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -38,7 +45,9 @@ class Copy(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        self.oring.resize(self.igulp_size)
+        self.oring.resize(self.igulp_size, total_span=self.buf_size)
+        print("resizing buffer to %d" % self.buf_size)
+
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
@@ -59,10 +68,15 @@ class Copy(Block):
                             prev_time = curr_time
                             #self.log.debug("Copying output")
                             #odata = ospan.data_view('ci4')
-                            copy_array(ospan.data, ispan.data)
                             # The copy is asynchronous, so we must wait for it to finish
                             # before committing this span
-                            stream_synchronize()
+                            if self.gpu != -1:
+                                copy_array(ospan.data, ispan.data)
+                                stream_synchronize()
+                            else:
+                                odata = ospan.data_view()
+                                odata = ispan.data
+
                         curr_time = time.time()
                         process_time = curr_time - prev_time
                         prev_time = curr_time

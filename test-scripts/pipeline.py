@@ -24,6 +24,7 @@ from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
 from blocks.beamform_vlbi_block import BeamformVlbi
 from blocks.beamform_vacc_block import BeamVacc
+from blocks.triggered_dump_block import TriggeredDump
 
 import etcd3 as etcd
 
@@ -142,6 +143,8 @@ def main(argv):
         corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
     else:
         capture_ring = Ring(name="capture", space='system')
+
+    trigger_capture_ring = Ring(name="capture", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
     GSIZE = 480#1200
@@ -170,6 +173,10 @@ def main(argv):
         ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput))
 
     ## capture_ring -> triggered buffer
+    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
+                      core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=16))
+    ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
+                      core=cores.pop(0), guarantee=True))
 
     if not args.nogpu:
         ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
