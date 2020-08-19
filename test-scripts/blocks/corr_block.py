@@ -193,7 +193,7 @@ class Corr(Block):
         Inputs:
             ant_to_input : [nstand x npol] list of input IDs
         Outputs:
-            [nstand x nstand x npol x npol] list of [baseline_index, is_conjugated]
+            [nstand x nstand x npol x npol] list of baseline_index, is_conjugated
 
             where baseline_index is the index within an xGPU buffer, and is_conjugated
             is 1 if the data should be conjugated, or 0 otherwise.
