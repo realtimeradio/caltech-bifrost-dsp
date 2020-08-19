@@ -213,7 +213,10 @@ def main(args):
                                     elif isinstance(val, float):
                                         s += ' %.3f' % val
                                     else:
-                                        s += ' %s' % val
+                                        val_s = str(val)
+                                        if len(val_s) > 15:
+                                            val_s = val_s[0:15]+"..."
+                                        s += ' %s' % val_s
                                     mode = highlight_warnings({'key':key, 'val':val})
                                     kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, s, mode)
                             col += 1

@@ -222,8 +222,10 @@ class Corr(Block):
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
                 this_gulp_time = ihdr['seq0']
-                self.sequence_proclog.update(ihdr)
                 ohdr = ihdr.copy()
+                ohdr.pop('ant_to_input')
+                ohdr.pop('input_to_ant')
+                self.sequence_proclog.update(ohdr)
                 antpol_to_bl_id, bl_is_conj = self.update_baseline_indices(ihdr['ant_to_input'])
                 ohdr.update({'ant_to_bl_id': antpol_to_bl_id, 'bl_is_conj': bl_is_conj})
                 for ispan in iseq.read(self.igulp_size):

@@ -81,6 +81,7 @@ class DummySource(object):
         self.oring.resize(self.gulp_size, self.gulp_size*4)
         hdr = {}
         hdr['nchan'] = self.nchans
+        hdr['chan0'] = 0
         hdr['nstand'] = self.nstands
         hdr['npol'] = self.npols
         hdr['seq0'] = 0

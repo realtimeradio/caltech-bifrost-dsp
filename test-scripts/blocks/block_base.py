@@ -49,7 +49,7 @@ class Block(object):
 
         # optional etcd client
         self.etcd_client = etcd_client
-        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}'.format(
+        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}/ctrl'.format(
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
