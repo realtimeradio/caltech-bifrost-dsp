@@ -16,28 +16,22 @@ import numpy as np
 
 from blocks.block_base import Block
 
-class CorrOutput(Block):
+
+class CorrOutputPart(Block):
     """
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, etcd_client=None, dest_port=10000):
+                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, max_nvis=4656, nvis_per_packet=16):
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
-        super(CorrOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
-        self.nchans = nchans
-        self.npols = npols
-        self.nstands = nstands
-        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
+        super(CorrOutputPart, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
-        self.igulp_size = self.matlen * 8 # complex64
-
-        # Arrays to hold the conjugation and bl indices of data coming from xGPU
-        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        self.reordered_data = BFArray(np.zeros([nstands, nstands, npols, npols, nchans, 2], dtype=np.int32), space='system')
+        self.max_nvis = max_nvis
+        self.nvis_per_packet = nvis_per_packet
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setblocking(0)
         self.dest_ip = None
         self.new_dest_ip = None
         self.dest_port = dest_port
@@ -72,16 +66,17 @@ class CorrOutput(Block):
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = ihdr['start_time']
-            self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
-            self.bl_is_conj[...] = ihdr['bl_is_conj']
-            for ispan in iseq.read(self.igulp_size):
-                print('CORR OUTPUT >> reordering')
+            subsel = ihdr['subsel']
+            nchan = ihdr['nchan']
+            antpols = np.array(ihdr['antpols']).flatten()
+            igulp_size = self.max_nvis * nchan * 8
+            for ispan in iseq.read(igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
                     self.dest_ip = self.new_dest_ip
                     self.dest_port = self.new_dest_port
                     self.update_pending = False
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
+                    self.log.info("CORR PART OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
                     self.stats_proclog.update({'dest_ip': self.dest_ip,
                                                'dest_port': self.dest_port,
                                                'update_pending': self.update_pending,
@@ -90,15 +85,13 @@ class CorrOutput(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                _bf.bfXgpuReorder(ispan.data.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
                 if self.dest_ip is not None:
-                    dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
-                    for stand0 in range(self.nstands):
-                        for stand1 in range(stand0, self.nstands):
-                            header = struct.pack(">Q3L", this_gulp_time, ihdr['chan0'], stand0, stand1)
-                            dout = self.reordered_data[stand0, stand1]
-                            self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
-                    self.log.info("CORR OUPUT >> Sending complete")
+                    idata = ispan.data_view('i32').reshape([nchan, self.max_nvis, 2])
+                    dout = np.zeros([nchan, self.max_nvis, 2], dtype=np.int32)
+                    dout[...] = idata
+                    for vn in range(len(subsel)//self.nvis_per_packet):
+                        header = struct.pack(">QII", this_gulp_time, ihdr['chan0'], self.nvis_per_packet) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
+                        self.sock.sendto(header + dout[:,vn*self.nvis_per_packet:self.nvis_per_packet*(1+vn),:].byteswap().tobytes(), (self.dest_ip, self.dest_port))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

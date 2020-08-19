@@ -46,6 +46,7 @@ class CorrSubSel(Block):
         self._subsel_next = BFArray(np.array(list(range(self.nvis_out)), dtype=np.int32), dtype='i32', space='cuda_host')
         self._subsel_pending = True
         self.obuf_gpu = BFArray(shape=[self.nchans_out, self.nvis_out], dtype='i64', space='cuda')
+        self.antpols = np.zeros([self.nvis_out, 4], dtype=np.int32)
         self.ogulp_size = self.nchans_out * self.nvis_out * 8
         self.stats_proclog.update({'new_subsel': self._subsel_next,
                                    'update_pending': self._subsel_pending,
@@ -94,7 +95,11 @@ class CorrSubSel(Block):
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
+                ant_to_bl_id = ihdr['ant_to_bl_id']
                 ohdr = ihdr.copy()
+                ohdr.pop('ant_to_bl_id')
+                ohdr['nchan'] = ihdr['nchan'] // self.nchan_sum
+                ohdr['antpols'] = self.antpols.tolist()
                 if self._subsel_pending:
                     self.log.info("Updating baseline subselection indices")
                     self._subsel[...] = self._subsel_next
@@ -119,7 +124,7 @@ class CorrSubSel(Block):
                         prev_time = curr_time
                         rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray(), self.nchan_sum)
                         if (rv != _bf.BF_STATUS_SUCCESS):
-                            self.log.error("xgpuIntialize returned %d" % rv)
+                            self.log.error("xgpuSubSelect returned %d" % rv)
                             raise RuntimeError
                         odata = ospan.data_view(dtype='i64').reshape([self.nchans_out, self.nvis_out])
                         copy_array(odata, self.obuf_gpu)
@@ -141,6 +146,7 @@ class CorrSubSel(Block):
                         self.stats_proclog.update({'subsel': self._subsel,
                                                    'update_pending': False,
                                                    'last_update_time': time.time()})
+                        ohdr['antpols'] = self.antpols.tolist()
                         #TODO update time tag based on what has already been processed
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)

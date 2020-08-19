@@ -18,7 +18,8 @@ from blocks.corr_block import Corr
 from blocks.dummy_source_block import DummySource
 from blocks.corr_acc_block import CorrAcc
 from blocks.corr_subsel_block import CorrSubSel
-from blocks.corr_output_block import CorrOutput
+from blocks.corr_output_full_block import CorrOutputFull
+from blocks.corr_output_part_block import CorrOutputPart
 from blocks.copy_block import Copy
 from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
@@ -194,7 +195,10 @@ def main(argv):
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=240000, gpu=args.gpu))
 
-        ops.append(CorrOutput(log, iring=corr_slow_output_ring,
+        ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
+                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+
+        ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
 
     if not (args.nobeamform or args.nogpu):
