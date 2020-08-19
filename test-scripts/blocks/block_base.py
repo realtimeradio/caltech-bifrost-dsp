@@ -27,12 +27,14 @@ class Block(object):
     def __init__(self, log, iring, oring,
             guarantee, core, etcd_client=None,
             command_keyroot='/cmd/corr',
-            monitor_keyroot='/mon/corr'):
+            monitor_keyroot='/mon/corr',
+            name=None):
         self.log = log
         self.iring = iring
         self.oring = oring
         self.guarantee = guarantee
         self.core = core
+        self.name = name or type(self).__name__
 
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -53,12 +55,12 @@ class Block(object):
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=type(self).__name__.lower())
+                                block=self.name.lower())
         self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}'.format(
                                 monroot=monitor_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=type(self).__name__.lower())
+                                block=self.name.lower())
 
         self.etcd_watch_id = None
 
