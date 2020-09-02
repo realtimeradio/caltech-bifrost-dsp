@@ -28,7 +28,6 @@ from blocks.beamform_vlbi_block import BeamformVlbi
 from blocks.beamform_vacc_block import BeamVacc
 from blocks.triggered_dump_block import TriggeredDump
 
-import etcd3 as etcd
 
 ACTIVE_COR_CONFIG = threading.Event()
 
@@ -69,6 +68,7 @@ def main(argv):
     args = parser.parse_args()
     
     if args.useetcd:
+        import etcd3 as etcd
         etcd_client = etcd.client(args.etcdhost)
     else:
         etcd_client = None
