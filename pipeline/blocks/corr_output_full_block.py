@@ -155,7 +155,7 @@ class CorrOutputFull(Block):
                                        badcnt += 1
                                    else:
                                        goodcnt += 1
-                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != -dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
+                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
                                        self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] imag" %(s0,s1,p0,p1))
                                        print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
                                        print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
