@@ -2,6 +2,7 @@ from bifrost.proclog import ProcLog
 import bifrost.ndarray as BFArray
 import bifrost.affinity as cpu_affinity
 
+import os
 import time
 import simplejson as json
 import threading
@@ -41,6 +42,7 @@ class DummySource(object):
         # file containing test data
         if testfile is not None:
             self.testfile = open(testfile, 'rb')
+            self.testfile_nbytes = os.path.getsize(testfile)
         else:
             self.testfile = None
 
@@ -78,6 +80,22 @@ class DummySource(object):
     def shutdown(self):
         self.shutdown_event.set()
 
+    def get_testfile_gulp(self, t):
+        """
+        Get a single gulp from the test file,
+        looping back to the beginning of the file when
+        the end is reached.
+        Inputs: t (int) -- time index of gulp
+        """
+        nbytes = self.gulp_size
+        seekloc = (self.gulp_size * t) % self.testfile_nbytes
+        self.testfile.seek(seekloc)
+        rawdata = self.testfile.read(nbytes)
+        if len(rawdata) != nbytes:
+            self.log.error("Failed to get input test vector gulp")
+            return np.zeros_like(self.test_data[1:])
+        return np.frombuffer(rawdata, dtype=np.uint8).reshape(self.test_data.shape[1:])
+
     def main(self):
         cpu_affinity.set_core(self.core)
         self.bind_proclog.update({'ncore': 1, 
@@ -111,16 +129,7 @@ class DummySource(object):
                         prev_time = curr_time
                         if not self.skip_write:
                             if self.testfile:
-                                # read data from file, and at the end of the file, cycle back to the beginning
-                                rawdata = self.testfile.read(self.gulp_size)
-                                if len(rawdata) != self.gulp_size:
-                                    self.testfile.seek(0)
-                                    rawdata = self.testfile.read(self.gulp_size)
-                                if len(rawdata) != self.gulp_size:
-                                    self.log.error("Failed to read input data file")
-                                else:
-                                    self.test_data[time_tag % NTEST_BLOCKS] = np.frombuffer(rawdata, dtype=np.uint8).reshape(self.test_data.shape[1:])
-
+                                self.test_data[time_tag % NTEST_BLOCKS] = self.get_testfile_gulp(time_tag)
                             odata = ospan.data_view(shape=self.test_data.shape[1:], dtype=self.test_data.dtype)
                             odata[...] = self.test_data[time_tag % NTEST_BLOCKS]
                         time_tag += 1

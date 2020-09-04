@@ -83,10 +83,12 @@ class CorrOutputFull(Block):
         """
         dim = np.array([self.nchans, self.nstands, self.nstands, self.npols, self.npols])
         nbytes = dim.prod() * 2 * 8
-        self.checkfile.seek((nbytes * t) % self.checkfile_nbytes)
+        seekloc = (nbytes * t) % self.checkfile_nbytes
+        self.log.debug("CORR OUTPUT >> Testfile has %d bytes. Seeking to %d and reading %d bytes for sample %d" % (self.checkfile_nbytes, seekloc, nbytes, t))
+        self.checkfile.seek(seekloc)
         dtest_raw = self.checkfile.read(nbytes)
         if len(dtest_raw) != nbytes:
-            self.log.error("Failed to get correlation matrix from checkfile")
+            self.log.error("CORR OUTPUT >> Failed to get correlation matrix from checkfile")
             return np.zeros(dim, dtype=np.complex)
         return np.frombuffer(dtest_raw, dtype=np.complex).reshape(dim)
 
@@ -104,7 +106,6 @@ class CorrOutputFull(Block):
             self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
             self.bl_is_conj[...] = ihdr['bl_is_conj']
             for ispan in iseq.read(self.igulp_size):
-                print('CORR OUTPUT >> reordering')
                 # Update destinations if necessary
                 if self.update_pending:
                     self.dest_ip = self.new_dest_ip
@@ -131,21 +132,28 @@ class CorrOutputFull(Block):
                     self.log.info("CORR OUTPUT >> Integrating %d blocks" % nblocks)
                     dtest = np.zeros([self.nchans, self.nstands, self.nstands, self.npols, self.npols], dtype=np.complex)
                     for i in range(nblocks):
-                        self.log.info("CORR OUTPUT >> Accumulated block %d of %d" % (i+1, nblocks))
-                        dtest += self.get_checkfile_corr(this_gulp_time + i)
+                        dtest += self.get_checkfile_corr(this_gulp_time // self.checkfile_acc_len + i)
                     # check baseline by baseline
                     badcnt = 0
                     goodcnt = 0
                     nonzerocnt = 0
+                    zerocnt = 0
+                    now = time.time()
                     for s0 in range(self.nstands):
-                        self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
+                        if time.time() - now > 15:
+                            self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
+                            now = time.time()
                         for s1 in range(s0, self.nstands):
                             for p0 in range(self.npols):
                                for p1 in range(self.npols):
                                    if not np.all(self.reordered_data[s0, s1, p0, p1, :, 0] == 0):
                                        nonzerocnt += 1
+                                   else:
+                                       zerocnt += 1
                                    if not np.all(self.reordered_data[s0, s1, p0, p1, :, 1] == 0):
                                        nonzerocnt += 1
+                                   else:
+                                       zerocnt += 1
                                    if np.any(self.reordered_data[s0, s1, p0, p1, :, 0] != dtest[:, s0, s1, p0, p1].real):
                                        self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] real" %(s0,s1,p0,p1))
                                        print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
@@ -164,7 +172,10 @@ class CorrOutputFull(Block):
                                        badcnt += 1
                                    else:
                                        goodcnt += 1
-                    self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d" % (goodcnt, badcnt, nonzerocnt))
+                    if badcnt > 0:
+                        self.log.error("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
+                    else:
+                        self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
                 if self.dest_ip is not None:
                     dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
