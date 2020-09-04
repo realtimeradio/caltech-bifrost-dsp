@@ -107,7 +107,7 @@ class CorrAcc(Block):
                             self.log.error("CORRACC >> Requested acc_len %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
                         if (start_time - upstream_start_time) % upstream_acc_len != 0:
                             self.log.error("CORRACC >> Requested start_time %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
-                        ohdr['acc_len'] = ihdr['acc_len'] * acc_len
+                        ohdr['acc_len'] = acc_len
                     self.stats_proclog.update({'curr_sample': this_gulp_time})
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
