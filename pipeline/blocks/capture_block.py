@@ -77,7 +77,7 @@ class Capture(object):
                'npol':     npol,
                'complex':  True,
                'nbit':     4}
-        if self.input_to_ant.shape != [nstand, npol]:
+        if self.input_to_ant.shape != (nstand, npol):
             self.log.error("Input order shape %s does not match data stream (%d, %d)" %
                             (self.input_to_ant.shape, nstand, npol))
         hdr_str = json.dumps(hdr).encode()
