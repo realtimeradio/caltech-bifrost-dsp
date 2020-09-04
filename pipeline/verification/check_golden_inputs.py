@@ -28,8 +28,6 @@ def main(argv):
     parser.add_argument('-s', '--nstand',      type=int, default=NSTAND, help='Number of stands for which data should be generated')
     parser.add_argument('-p', '--npol',        type=int, default=NPOL,   help='Number of polarizations for which data should be generated')
     parser.add_argument('--accshort',          type=int, default=ACCSHORT, help='Number of samples to accumulate for fast correlations')
-    parser.add_argument('--seed',              type=int, default=SEED,     help='Seed for random number generation')
-    parser.add_argument('--datapath',          type=str, default=DATAPATH, help='Directory in which to put data')
     args = parser.parse_args()
 
     print("times:", args.ntime)
@@ -47,9 +45,6 @@ def main(argv):
     print('Total GBs input: %.2f' % (nval / 1e9))
     print('Total GBs corr output: %.2f' % (args.nstand**2 * args.npol**2 * args.nchan * args.ntime / args.accshort * 2 * 8 / 1e9))
 
-    print()
-    print('Seeding generator with %d' % args.seed)
-    np.random.seed(args.seed)
 
     # Force generation in blocks of ACCSHORT samples, so we don't need too much memory
     assert (args.ntime % args.accshort == 0), "Number of samples to generate must be a multiple of fast accumulation length"
