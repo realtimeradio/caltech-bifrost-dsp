@@ -8,6 +8,7 @@ from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
+import os
 import time
 import simplejson as json
 import socket
@@ -21,7 +22,8 @@ class CorrOutputFull(Block):
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, etcd_client=None, dest_port=10000):
+                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, etcd_client=None, dest_port=10000,
+                 checkfile=None, checkfile_acc_len=1):
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
@@ -36,6 +38,16 @@ class CorrOutputFull(Block):
         self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
         self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
         self.reordered_data = BFArray(np.zeros([nstands, nstands, npols, npols, nchans, 2], dtype=np.int32), space='system')
+
+        self.checkfile_acc_len = checkfile_acc_len
+        if checkfile is None:
+            self.checkfile = None
+        else:
+            self.checkfile = open(checkfile, 'rb')
+            self.checkfile_nbytes = os.path.getsize(checkfile)
+            self.log.info("CORR OUTPUT >> Checkfile %s" % self.checkfile.name)
+            self.log.info("CORR OUTPUT >> Checkfile length: %d bytes" % self.checkfile_nbytes)
+            self.log.info("CORR OUTPUT >> Checkfile accumulation length: %d" % self.checkfile_acc_len)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(0)
@@ -61,6 +73,22 @@ class CorrOutputFull(Block):
                                    'new_dest_port': self.new_dest_port,
                                    'update_pending': self.update_pending,
                                    'last_cmd_time': time.time()})
+
+    def get_checkfile_corr(self, t):
+        """
+        Get a single integration from the test file,
+        looping back to the beginning of the file when
+        the end is reached.
+        Inputs: t (int) -- time index of correlation
+        """
+        dim = np.array([self.nchans, self.nstands, self.nstands, self.npols, self.npols])
+        nbytes = dim.prod() * 2 * 8
+        self.checkfile.seek((nbytes * t) % self.checkfile_nbytes)
+        dtest_raw = self.checkfile.read(nbytes)
+        if len(dtest_raw) != nbytes:
+            self.log.error("Failed to get correlation matrix from checkfile")
+            return np.zeros(dim, dtype=np.complex)
+        return np.frombuffer(dtest_raw, dtype=np.complex).reshape(dim)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -92,12 +120,58 @@ class CorrOutputFull(Block):
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
                 _bf.bfXgpuReorder(ispan.data.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
+                # Check against test data if a file is provided
+                if self.checkfile:
+                    assert upstream_acc_len % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline acc len"
+                    assert upstream_start_time % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline start time"
+                    nblocks = (upstream_acc_len // self.checkfile_acc_len)
+                    self.log.info("CORR OUTPUT >> Computing expected output from test file")
+                    self.log.info("CORR OUTPUT >> Upstream accumulation %d" % upstream_acc_len)
+                    self.log.info("CORR OUTPUT >> File accumulation %d" % self.checkfile_acc_len)
+                    self.log.info("CORR OUTPUT >> Integrating %d blocks" % nblocks)
+                    dtest = np.zeros([self.nchans, self.nstands, self.nstands, self.npols, self.npols], dtype=np.complex)
+                    for i in range(nblocks):
+                        self.log.info("CORR OUTPUT >> Accumulated block %d of %d" % (i+1, nblocks))
+                        dtest += self.get_checkfile_corr(this_gulp_time + i)
+                    # check baseline by baseline
+                    badcnt = 0
+                    goodcnt = 0
+                    nonzerocnt = 0
+                    for s0 in range(self.nstands):
+                        self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
+                        for s1 in range(s0, self.nstands):
+                            for p0 in range(self.npols):
+                               for p1 in range(self.npols):
+                                   if not np.all(self.reordered_data[s0, s1, p0, p1, :, 0] == 0):
+                                       nonzerocnt += 1
+                                   if not np.all(self.reordered_data[s0, s1, p0, p1, :, 1] == 0):
+                                       nonzerocnt += 1
+                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 0] != dtest[:, s0, s1, p0, p1].real):
+                                       self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] real" %(s0,s1,p0,p1))
+                                       print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
+                                       print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
+                                       print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 0])
+                                       print("expected:", dtest[0:5, s0, s1, p0, p1].real)
+                                       badcnt += 1
+                                   else:
+                                       goodcnt += 1
+                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != -dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
+                                       self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] imag" %(s0,s1,p0,p1))
+                                       print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
+                                       print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
+                                       print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 1])
+                                       print("expected:", dtest[0:5, s0, s1, p0, p1].imag)
+                                       badcnt += 1
+                                   else:
+                                       goodcnt += 1
+                    self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d" % (goodcnt, badcnt, nonzerocnt))
+
                 if self.dest_ip is not None:
                     dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
-                    for stand0 in range(self.nstands):
-                        for stand1 in range(stand0, self.nstands):
-                            header = struct.pack(">Q3L", this_gulp_time, ihdr['chan0'], stand0, stand1)
-                            dout = self.reordered_data[stand0, stand1]
+                    for s0 in range(self.nstands):
+                        for s1 in range(s0, self.nstands):
+                            header = struct.pack(">Q3L", this_gulp_time, ihdr['chan0'], s0, s1)
+                            dout = self.reordered_data[s0, s1]
                             self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
                     self.log.info("CORR OUPUT >> Sending complete")
                 curr_time = time.time()
@@ -109,3 +183,5 @@ class CorrOutputFull(Block):
                 self.stats_proclog.update({'last_end_sample': this_gulp_time})
                 # And, update overall time counter
                 this_gulp_time += upstream_acc_len
+        if self.checkfile:
+            self.checkfile.close()

@@ -15,7 +15,7 @@ class DummySource(object):
     but mark input buffers ready for consumption.
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False, target_throughput=22.0):
+                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False, target_throughput=22.0, testfile=None):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
@@ -37,6 +37,12 @@ class DummySource(object):
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
+
+        # file containing test data
+        if testfile is not None:
+            self.testfile = open(testfile, 'rb')
+        else:
+            self.testfile = None
 
         # make an array ninputs-elements long with [station, pol] IDs.
         # e.g. if input_to_ant[12] = [27, 1], then the 13th input is stand 27, pol 1
@@ -104,6 +110,17 @@ class DummySource(object):
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
                         if not self.skip_write:
+                            if self.testfile:
+                                # read data from file, and at the end of the file, cycle back to the beginning
+                                rawdata = self.testfile.read(self.gulp_size)
+                                if len(rawdata) != self.gulp_size:
+                                    self.testfile.seek(0)
+                                    rawdata = self.testfile.read(self.gulp_size)
+                                if len(rawdata) != self.gulp_size:
+                                    self.log.error("Failed to read input data file")
+                                else:
+                                    self.test_data[time_tag % NTEST_BLOCKS] = np.frombuffer(rawdata, dtype=np.uint8).reshape(self.test_data.shape[1:])
+
                             odata = ospan.data_view(shape=self.test_data.shape[1:], dtype=self.test_data.dtype)
                             odata[...] = self.test_data[time_tag % NTEST_BLOCKS]
                         time_tag += 1
@@ -123,3 +140,5 @@ class DummySource(object):
                         target_time = 8*bytes_per_report / self.target_throughput / 1e9
                         extra_delay = target_time - dt + extra_delay
                         tick = tock
+        if self.testfile:
+            self.testfile.close()

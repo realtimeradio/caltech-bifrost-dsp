@@ -51,6 +51,10 @@ def main(argv):
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
     parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
+    parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
+    parser.add_argument('--testdatacorr',     type=str, default=None,    help='Path to correlator output test data file')
+    parser.add_argument('--testdatacorr_acc_len', type=int, default=2400, help='Number of accumulations per sample in correlator test data file')
+    parser.add_argument('-a', '--corr_acc_len',   type=int, default=240000, help='Number of accumulations to start accumulating in the slow correlator')
     parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
     parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
     parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
@@ -173,7 +177,7 @@ def main(argv):
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput))
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput, testfile=args.testdatain))
 
     ## capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
@@ -193,10 +197,11 @@ def main(argv):
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=240000, gpu=args.gpu))
+                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu))
 
         ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
+                          checkfile=args.testdatacorr, checkfile_acc_len=args.testdatacorr_acc_len))
 
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
