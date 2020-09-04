@@ -277,7 +277,7 @@ class Corr(Block):
                         self.log.error("CORR: trying to write to not-yet-opened ospan")
                     if self.test:
                         test_out += self._test(ispan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
-                    _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(last))
+                    _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(this_gulp_time==last))
                     curr_time = time.time()
                     process_time = curr_time - prev_time
                     prev_time = curr_time
