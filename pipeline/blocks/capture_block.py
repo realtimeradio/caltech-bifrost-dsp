@@ -18,6 +18,7 @@ class Capture(object):
         self.chan_bw_hz = chan_bw_hz # Channel bandwidth in Hz
         self.args   = args
         self.kwargs = kwargs
+        self.core = self.kwargs.get('core', 0)
         self.utc_start = self.kwargs['utc_start']
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
@@ -49,6 +50,7 @@ class Capture(object):
             stand = inp[0]
             pol = inp[1]
             self.ant_to_input[stand, pol] = i
+        self.time_tag = 0
            
         ## HACK TESTING
         #self.seq_callback = None
@@ -56,14 +58,18 @@ class Capture(object):
         self.shutdown_event.set()
     def seq_callback(self, seq0, chan0, nchan, nsrc,
                      time_tag_ptr, hdr_ptr, hdr_size_ptr):
-        time_tag = time_tag_ptr[0]
-        print("++++++++++++++++ seq0     =", seq0)
-        print("                 time_tag =", time_tag)
-        print("                 time_tag =", time.ctime(time_tag))
-        time_tag_ptr[0] = time_tag
+        #t0 = time.time()
+        self.time_tag += 1
+        sync_time = time_tag_ptr[0]
+        #print("++++++++++++++++ seq0     =", seq0)
+        #print("                 time_tag =", self.time_tag)
+        #print("                 sync_time =", time.ctime(sync_time))
+        #self.log.info("Capture >> New sequence at %s" % time.ctime())
+        time_tag_ptr[0] = self.time_tag
         npol = 2
         nstand = nsrc*32
-        hdr = {'time_tag': time_tag,
+        hdr = {'time_tag': self.time_tag,
+               'sync_time': sync_time,
                'seq0':     seq0, 
                'chan0':    chan0,
                'nchan':    nchan,
@@ -77,16 +83,20 @@ class Capture(object):
                'npol':     npol,
                'complex':  True,
                'nbit':     4}
-        if self.input_to_ant.shape != (nstand, npol):
-            self.log.error("Input order shape %s does not match data stream (%d, %d)" %
-                            (self.input_to_ant.shape, nstand, npol))
+        #if self.input_to_ant.shape != (nstand, npol):
+        #    self.log.error("Input order shape %s does not match data stream (%d, %d)" %
+        #                    (self.input_to_ant.shape, nstand, npol))
+
         hdr_str = json.dumps(hdr).encode()
+        #hdr_str = b'\x00\x00\x00\x00'
         # TODO: Can't pad with NULL because returned as C-string
         #hdr_str = json.dumps(hdr).ljust(4096, '\0')
         #hdr_str = json.dumps(hdr).ljust(4096, ' ')
         self.header_buf = ctypes.create_string_buffer(hdr_str)
         hdr_ptr[0]      = ctypes.cast(self.header_buf, ctypes.c_void_p)
         hdr_size_ptr[0] = len(hdr_str)
+        #t1 = time.time()
+        #print(t1-t0)
         return 0
     def main(self):
         seq_callback = PacketCaptureCallback()

@@ -67,7 +67,7 @@ def main(argv):
     parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
-    parser.add_argument('--bufgbytes',        default=4,                 help='Number of GBytes to buffer for transient buffering')
+    parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
     
@@ -154,7 +154,8 @@ def main(argv):
     trigger_capture_ring = Ring(name="capture", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
-    GSIZE = 480#1200
+    #GSIZE = 480#1200
+    GSIZE = 480
     nstand = 352
     npol = 2
     nchans = 192
@@ -172,39 +173,47 @@ def main(argv):
         isock.bind(iaddr)
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
-                           nsrc=nroach*nfreqblocks, src0=0, max_payload_size=9000,
+                           nsrc=nroach*nfreqblocks, src0=0, max_payload_size=7000,
                            buffer_ntime=GSIZE, core=cores.pop(0),
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
         ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput, testfile=args.testdatain))
 
+    # Get the antenna to input map as understood by the data source
+    # This could (should?) to passed down in the headers and calculated on the fly,
+    # but observational evidence is that this can be problematic for pipeline throughput.
+    ant_to_input = ops[-1].ant_to_input
+
     ## capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
-    ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
-                      core=cores.pop(0), guarantee=True))
+    #ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
+    #                  core=cores.pop(0), guarantee=True))
 
     if not args.nogpu:
-        ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
+        ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client))
+                          core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=2400*8, ant_to_input=ant_to_input))
+        antpol_to_bl = ops[-1].antpol_to_bl
+        bl_is_conj = ops[-1].bl_is_conj
 
-        ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
+        #ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
+        #                  core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu))
+                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu, autostartat=2400*32*2))
 
         ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
-                          checkfile=args.testdatacorr, checkfile_acc_len=args.testdatacorr_acc_len))
+                          checkfile=args.testdatacorr, checkfile_acc_len=args.testdatacorr_acc_len,
+                          antpol_to_bl=antpol_to_bl, bl_is_conj=bl_is_conj))
 
-        ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+        #ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
+        #                  core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,

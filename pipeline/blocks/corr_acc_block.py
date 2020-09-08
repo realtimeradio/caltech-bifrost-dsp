@@ -88,7 +88,7 @@ class CorrAcc(Block):
                 ohdr = ihdr.copy()
                 this_gulp_time = ihdr['seq0']
                 upstream_acc_len = ihdr['acc_len']
-                upstream_start_time = ihdr['start_time']
+                upstream_start_time = this_gulp_time
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
@@ -108,6 +108,7 @@ class CorrAcc(Block):
                         if (start_time - upstream_start_time) % upstream_acc_len != 0:
                             self.log.error("CORRACC >> Requested start_time %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
                         ohdr['acc_len'] = acc_len
+                        ohdr['seq0'] = start_time
                     self.stats_proclog.update({'curr_sample': this_gulp_time})
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
@@ -116,6 +117,7 @@ class CorrAcc(Block):
                         last  = first + acc_len - upstream_acc_len
                         # on a new accumulation start, if a current oseq is open, close it, and start afresh
                         if oseq: oseq.end()
+                        print(ohdr.keys())
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         self.log.info("CORRACC >> Start time %d reached. Accumulating to %d (upstream accumulation: %d)" % (start_time, last, upstream_acc_len))
@@ -145,6 +147,7 @@ class CorrAcc(Block):
                     process_time += curr_time - prev_time
                     prev_time = curr_time
                     if this_gulp_time == last:
+                        self.log.debug("CORR ACC > Last accumulation input")
                         # copy to CPU
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
                         odata = ospan.data_view('i32').reshape(self.accdata.shape)

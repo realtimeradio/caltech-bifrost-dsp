@@ -23,7 +23,7 @@ class CorrOutputFull(Block):
     """
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchans=192, npols=2, nstands=352, etcd_client=None, dest_port=10000,
-                 checkfile=None, checkfile_acc_len=1):
+                 checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None):
         # TODO: Other things we could check:
         # - that nchans/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
@@ -37,6 +37,12 @@ class CorrOutputFull(Block):
         # Arrays to hold the conjugation and bl indices of data coming from xGPU
         self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
         self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        if antpol_to_bl is not None:
+            self.antpol_to_bl[...] = antpol_to_bl
+            print(self.antpol_to_bl.shape)
+        if bl_is_conj is not None:
+            self.bl_is_conj[...] = bl_is_conj
+            print(self.bl_is_conj.shape)
         self.reordered_data = BFArray(np.zeros([nstands, nstands, npols, npols, nchans, 2], dtype=np.int32), space='system')
 
         self.checkfile_acc_len = checkfile_acc_len
@@ -102,9 +108,11 @@ class CorrOutputFull(Block):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
-            upstream_start_time = ihdr['start_time']
-            self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
-            self.bl_is_conj[...] = ihdr['bl_is_conj']
+            upstream_start_time = this_gulp_time
+            if 'ant_to_bl_id' in ihdr:
+                self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
+            if 'bl_is_conj' in ihdr:
+                self.bl_is_conj[...] = ihdr['bl_is_conj']
             for ispan in iseq.read(self.igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
@@ -184,7 +192,7 @@ class CorrOutputFull(Block):
                             header = struct.pack(">Q3L", this_gulp_time, ihdr['chan0'], s0, s1)
                             dout = self.reordered_data[s0, s1]
                             self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
-                    self.log.info("CORR OUPUT >> Sending complete")
+                    self.log.info("CORR OUTPUT >> Sending complete")
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

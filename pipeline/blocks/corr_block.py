@@ -62,7 +62,7 @@ class Corr(Block):
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0):
+                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0, ant_to_input=None):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
         super(Corr, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         # TODO: Other things we could check:
@@ -84,7 +84,7 @@ class Corr(Block):
         self.ogulp_size = self.matlen * 8 # complex64
 
         self.new_start_time = autostartat
-        self.new_acc_len = 2400
+        self.new_acc_len = acc_len
         self.update_pending=True
         self.stats_proclog.update({'new_acc_len': self.new_acc_len,
                                    'new_start_sample': self.new_start_time,
@@ -104,6 +104,8 @@ class Corr(Block):
         self.antpol_to_input = BFArray(np.zeros([nstands, npols], dtype=np.int32), space='system')
         self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
         self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        if ant_to_input is not None:
+            self.update_baseline_indices(ant_to_input)
 
     def _test(self, din, nchan, nstand, npol):
         din_cpu = din.copy(space='system')
@@ -163,6 +165,7 @@ class Corr(Block):
         Decodes integration start time and accumulation length and
         preps to update the pipeline at the end of the next integration.
         """
+        cpu_affinity.set_core(self.core)
         v = json.loads(watchresponse.events[0].value)
         if 'acc_len' not in v or not isinstance(v['acc_len'], int):
             self.log.error("CORR: Incorrect or missing acc_len")
@@ -198,13 +201,12 @@ class Corr(Block):
             where baseline_index is the index within an xGPU buffer, and is_conjugated
             is 1 if the data should be conjugated, or 0 otherwise.
         """
+        cpu_affinity.set_core(self.core)
         self.antpol_to_input[...] = ant_to_input
         _bf.bfXgpuGetOrder(self.antpol_to_input.as_BFarray(),
                            self.antpol_to_bl.as_BFarray(),
                            self.bl_is_conj.as_BFarray())
-        return self.antpol_to_bl.tolist(), self.bl_is_conj.tolist()
-        
-        
+
     def main(self):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
@@ -223,11 +225,13 @@ class Corr(Block):
                 ihdr = json.loads(iseq.header.tostring())
                 this_gulp_time = ihdr['seq0']
                 ohdr = ihdr.copy()
+                # Uncomment if you want the baseline order to be computed on the fly
+                # self.update_baseline_indices(ihdr['ant_to_input'])
                 ohdr.pop('ant_to_input')
                 ohdr.pop('input_to_ant')
                 self.sequence_proclog.update(ohdr)
-                antpol_to_bl_id, bl_is_conj = self.update_baseline_indices(ihdr['ant_to_input'])
-                ohdr.update({'ant_to_bl_id': antpol_to_bl_id, 'bl_is_conj': bl_is_conj})
+                # uncomment if you want downstream processors to deal with input ordering on the fly
+                # ohdr.update({'ant_to_bl_id': self.antpol_to_bl.tolist(), 'bl_is_conj': self.bl_is_conj.tolist()})
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
@@ -238,7 +242,7 @@ class Corr(Block):
                         self.update_pending = False
                         self.release_control_lock()
                         ohdr['acc_len'] = acc_len
-                        ohdr['start_time'] = start_time
+                        ohdr['seq0'] = start_time
                         self.stats_proclog.update({'acc_len': acc_len,
                                                    'start_sample': start_time,
                                                    'curr_sample': this_gulp_time,
