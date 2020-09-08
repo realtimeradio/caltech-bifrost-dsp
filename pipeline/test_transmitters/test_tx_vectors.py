@@ -10,7 +10,7 @@ NSTAND = 352
 
 seq = 0
 magic = 0xaabbccdd
-nchan_per_pkt = 64
+nchan_per_pkt = 96
 nstand_per_pkt = 32
 chan0 = 0
 pol0 = 0
@@ -53,34 +53,55 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 nchan_blocks = args.nchan // nchan_per_pkt
 npol_blocks = args.nstand // nstand_per_pkt
 
+print("Channel blocks:", nchan_blocks)
+print("Polarization blocks:", npol_blocks)
+
+print("pol per packet", args.npol*nstand_per_pkt)
+print("pols total", args.nstand*args.npol)
+print("chans per packet", nchan_per_pkt)
+print("chans total", args.nchan)
+
 nbytes = args.npol * nstand_per_pkt * nchan_per_pkt
+print("Reading input file")
+with open(args.testfile, 'rb') as fh:
+    data = fh.read()
+data_len = len(data)
+print("Data length:", data_len)
+
+assert data_len % nbytes == 0, "Data file should have an integer number of time steps!"
+
+data_nseq = data_len // nbytes
+print("Number of sequence points:", data_nseq)
+
+print(len(data[0:10]))
 
 seq_stat_period = 3e3
 tick = 0
-with open(args.testfile, 'rb') as fh:
-    while(True):
-        try:
-            for chan_block_id in range(nchan_blocks):
-               for pol_block_id in range(npol_blocks):
-                   header = struct.pack('>QLHHHHLLL', seq, magic,
-                              args.npol*nstand_per_pkt,
-                              args.nstand*args.npol,
-                              nchan_per_pkt, args.nchan,
-                              chan_block_id, chan_block_id*nchan_per_pkt,
-                              pol_block_id * nstand_per_pkt * args.npol)
-                   payload = fh.read(nbytes)
-                   if len(payload) == 0:
-                       fh.seek(0)
-                   payload = fh.read(nbytes)
-                   data = header + payload
-                   sock.sendto(data, (args.ip, args.port))
-                   #time.sleep(0.00001)
-            seq += 1
-            if seq % seq_stat_period == 0:
-                tock = time.time()
-                dt = tock - tick
-                tick = time.time()
-                mbytes = seq_stat_period * len(payload) * npol_blocks * nchan_blocks / 1e6
-                print("Dumped 1M packets %d MBytes (%.2f MB/s)" % (mbytes, mbytes/dt))
-        except KeyboardInterrupt:
-            break
+while(True):
+    try:
+        seq_pkt_cnt = 0
+        for chan_block_id in range(nchan_blocks):
+           for pol_block_id in range(npol_blocks):
+               header = struct.pack('>QLHHHHLLL', seq, magic,
+                          args.npol*nstand_per_pkt,
+                          args.nstand*args.npol,
+                          nchan_per_pkt, args.nchan,
+                          chan_block_id, chan_block_id*nchan_per_pkt,
+                          pol_block_id * args.npol * nstand_per_pkt)
+               payload = data[(seq % data_nseq) * nbytes: ((seq % data_nseq)+1) * nbytes]
+               if len(payload) != nbytes:
+                   print("ARGH!!!!", seq, len(payload))
+               pktdata = header + payload
+               sock.sendto(pktdata, (args.ip, args.port))
+               seq_pkt_cnt += 1
+               #time.sleep(0.00001)
+        #print("sent %d packets" % seq_pkt_cnt)
+        seq += 1
+        if seq % seq_stat_period == 0:
+            tock = time.time()
+            dt = tock - tick
+            tick = time.time()
+            mbytes = seq_stat_period * len(payload) * npol_blocks * nchan_blocks / 1e6
+            print("Dumped 1M packets %d MBytes (%.2f MB/s)" % (mbytes, mbytes/dt))
+    except KeyboardInterrupt:
+        break
