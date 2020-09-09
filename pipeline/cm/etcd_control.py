@@ -35,3 +35,14 @@ class EtcdCorrControl():
         key = self._get_cmd_key(host, pipeline, block)
         val = json.dumps(kwargs)
         self.ec.put(key, val)
+
+    def get_status(self, host, pipeline, block, user_only=True):
+        key = self._get_mon_key(host, pipeline, block)
+        val, meta = self.ec.get(key)
+        val = json.loads(val)
+        if user_only:
+            return val.get("stats", {})
+        else:
+            return val
+
+

@@ -20,6 +20,8 @@ class Capture(object):
         self.kwargs = kwargs
         self.core = self.kwargs.get('core', 0)
         self.utc_start = self.kwargs['utc_start']
+        self.nstands = nstands
+        self.npols = npols
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
                 self.CaptureClass = UDPVerbsCapture
@@ -66,8 +68,7 @@ class Capture(object):
         #print("                 sync_time =", time.ctime(sync_time))
         #self.log.info("Capture >> New sequence at %s" % time.ctime())
         time_tag_ptr[0] = self.time_tag
-        npol = 2
-        nstand = nsrc*32
+        nchan = nchan * (nsrc * 32 // self.nstands)
         hdr = {'time_tag': self.time_tag,
                'sync_time': sync_time,
                'seq0':     seq0, 
@@ -76,11 +77,11 @@ class Capture(object):
                'fs_hz':    self.fs_hz,
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
-               'nstand':   nstand,
+               'nstand':   self.nstands,
                'input_to_ant': self.input_to_ant.tolist(),
                'ant_to_input': self.ant_to_input.tolist(),
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
-               'npol':     npol,
+               'npol':     self.npols,
                'complex':  True,
                'nbit':     4}
         #if self.input_to_ant.shape != (nstand, npol):

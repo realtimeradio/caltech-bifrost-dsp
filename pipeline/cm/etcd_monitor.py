@@ -201,24 +201,34 @@ def main(args):
                                     break
                                 kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "%s:"%block, std)
                                 for key, val in sorted(vblock.items()):
-                                    if key in args.keyignorelist.split(','):
-                                        continue
-                                    if kk > (rows-10):
-                                        kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
-                                        overflow = True
-                                        break
-                                    s = "%s:" % key
-                                    if key == 'time':
-                                        s += ' %s' % time.ctime(val)
-                                    elif isinstance(val, float):
-                                        s += ' %.3f' % val
+                                    if isinstance(val, dict):
+                                        kk = _add_line(scr, kk, COL_WIDTH*col + 5*2, "%s:" % (key))
+                                        for key2, val2 in sorted(val.items()):
+                                            kk = _add_line(scr, kk, COL_WIDTH*col + 6*2, "%s: %s" % (key2, val2))
+                                            if kk > (rows-10):
+                                                kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
+                                                overflow = True
+                                                break
                                     else:
-                                        val_s = str(val)
-                                        if len(val_s) > 15:
-                                            val_s = val_s[0:15]+"..."
-                                        s += ' %s' % val_s
-                                    mode = highlight_warnings({'key':key, 'val':val})
-                                    kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, s, mode)
+                                        if key in args.keyignorelist.split(','):
+                                            continue
+                                        if kk > (rows-10):
+                                            if not overflow:
+                                                kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
+                                            overflow = True
+                                            break
+                                        s = "%s:" % key
+                                        if key == 'time':
+                                            s += ' %s' % time.ctime(val)
+                                        elif isinstance(val, float):
+                                            s += ' %.3f' % val
+                                        else:
+                                            val_s = str(val)
+                                            if len(val_s) > 15:
+                                                val_s = val_s[0:15]+"..."
+                                            s += ' %s' % val_s
+                                        mode = highlight_warnings({'key':key, 'val':val})
+                                        kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, s, mode)
                             col += 1
                     else:
                         k = _add_line(scr, k, 4*2, "argh", mode)

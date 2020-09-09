@@ -86,10 +86,12 @@ class Corr(Block):
         self.new_start_time = autostartat
         self.new_acc_len = acc_len
         self.update_pending=True
-        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
-                                   'new_start_sample': self.new_start_time,
-                                   'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time()})
+        self.stats = {'xgpu_acc_len': self.ntime_gulp,
+                      'new_acc_len': self.new_acc_len,
+                      'new_start_sample': self.new_start_time,
+                      'update_pending': self.update_pending,
+                      'last_cmd_time': time.time()}
+        self.update_stats()
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
@@ -167,26 +169,25 @@ class Corr(Block):
         """
         cpu_affinity.set_core(self.core)
         v = json.loads(watchresponse.events[0].value)
-        if 'acc_len' not in v or not isinstance(v['acc_len'], int):
-            self.log.error("CORR: Incorrect or missing acc_len")
-            return
-        if 'start_time' not in v or not isinstance(v['start_time'], int):
-            self.log.error("CORR: Incorrect or missing start_time")
-            return
-        if v['acc_len'] % self.ntime_gulp != 0:
-            self.log.error("CORR: Acc length must be a multiple of %d" % self.ntime_gulp)
-            return
-        if v['start_time'] % self.ntime_gulp != 0:
-            self.log.error("CORR: Start time must be a multiple of %d" % self.ntime_gulp)
-            return
         self.acquire_control_lock()
-        self.new_start_time = v['start_time']
-        self.new_acc_len = v['acc_len']
+        if 'acc_len' in v and isinstance(v['acc_len'], int):
+            self.log.info("CORR: received new acc len: %d" % v['acc_len'])
+            if v['acc_len'] % self.ntime_gulp != 0:
+                self.log.error("CORR: Acc length must be a multiple of %d" % self.ntime_gulp)
+            else:
+                self.new_acc_len = v['acc_len']
+        if 'start_time' in v and isinstance(v['start_time'], int):
+            self.log.info("CORR: received new start time: %d" % v['start_time'])
+            if v['start_time'] % self.ntime_gulp != 0:
+                self.log.error("CORR: Start time must be a multiple of %d" % self.ntime_gulp)
+            else:
+                self.new_start_time = v['start_time']
         self.update_pending = True
-        self.stats_proclog.update({'new_acc_len': self.new_acc_len,
-                                   'new_start_sample': self.new_start_time,
-                                   'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time()})
+        self.stats.update({'new_acc_len': self.new_acc_len,
+                           'new_start_sample': self.new_start_time,
+                           'update_pending': self.update_pending,
+                           'last_cmd_time': time.time()})
+        self.update_stats()
         self.release_control_lock()
 
     def update_baseline_indices(self, ant_to_input):
@@ -218,6 +219,7 @@ class Corr(Block):
         oseq = None
         ospan = None
         start = False
+        time_tag = 1
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -238,26 +240,30 @@ class Corr(Block):
                         start_time = self.new_start_time
                         acc_len = self.new_acc_len
                         start = False
-                        self.log.info("CORR >> Starting at %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
+                        self.log.info("CORR >> New start time set to %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
                         self.update_pending = False
                         self.release_control_lock()
                         ohdr['acc_len'] = acc_len
                         ohdr['seq0'] = start_time
-                        self.stats_proclog.update({'acc_len': acc_len,
-                                                   'start_sample': start_time,
-                                                   'curr_sample': this_gulp_time,
-                                                   'update_pending': self.update_pending,
-                                                   'last_update_time': time.time()})
-                    self.stats_proclog.update({'curr_sample': this_gulp_time})
+                        self.stats.update({'acc_len': acc_len,
+                                           'start_sample': start_time,
+                                           'curr_sample': this_gulp_time,
+                                           'update_pending': self.update_pending,
+                                           'last_update_time': time.time()})
+                    self.stats.update({'curr_sample': this_gulp_time})
+                    self.update_stats()
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
+                        self.log.info("CORR >> Start time %d reached." % start_time)
                         start = True
                         first = start_time
                         last  = first + acc_len - self.ntime_gulp
                         # on a new accumulation start, if a current oseq is open, close it, and start afresh
                         if oseq: oseq.end()
                         ohdr_str = json.dumps(ohdr)
-                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                        self.sequence_proclog.update(ohdr)
+                        oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                        time_tag += 1
                     if not start:
                         this_gulp_time += self.ntime_gulp
                         continue
@@ -289,11 +295,13 @@ class Corr(Block):
                         if self.test:
                             self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                         ospan.close()
+                        throughput_gbps = 8*self.igulp_size / process_time / 1e9
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
-                                                  'gbps': 8*self.igulp_size / process_time / 1e9})
-                        self.stats_proclog.update({'last_end_sample': this_gulp_time})
+                                                  'gbps': throughput_gbps})
+                        self.stats.update({'last_end_sample': this_gulp_time, 'throughput': throughput_gbps})
+                        self.update_stats()
                         process_time = 0
                         # Update integration boundary markers
                         first = last + self.ntime_gulp
@@ -306,4 +314,3 @@ class Corr(Block):
             if oseq:
                 ospan.close()
                 oseq.end()
-

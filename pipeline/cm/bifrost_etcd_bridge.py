@@ -74,21 +74,18 @@ def poll(base_dir):
                 pass
 
 
-            # Get UDP stats if appropriate
-            if block[:3] == 'udp':
-                try:
-                    log     = contents[block]['stats']
-                    good    = log['ngood_bytes']
-                    missing = log['nmissing_bytes']
-                    invalid = log['ninvalid_bytes']
-                    late    = log['nlate_bytes']
-                    nvalid  = log['nvalid']
-                except KeyError:
-                    good, missing, invalid, late, nvalid = 0, 0, 0, 0, 0
-                netstats = {'good': good, 'missing': missing,
-                            'invalid': invalid, 'late': late,
-                            'nvalid': nvalid}
-                blockList['%i-%s' % (pipeline_id, block)]['netstats'] = netstats
+            # Get User stats
+            try:
+                if 'stats' in contents[block]:
+                    log = contents[block]['stats']
+                    for k, v in log.items():
+                        if v == 'True':
+                            log[k] = True
+                        elif v == 'False':
+                            log[k] = False
+                    blockList['%i-%s' % (pipeline_id, block)]['stats'] = log
+            except:
+                print("Error parsing stats")
 
     return time.time(), blockList
 

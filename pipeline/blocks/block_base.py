@@ -55,12 +55,12 @@ class Block(object):
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=self.name.lower())
+                                block=self.name)
         self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}'.format(
                                 monroot=monitor_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=self.name.lower())
+                                block=self.name)
 
         self.etcd_watch_id = None
 
@@ -84,6 +84,9 @@ class Block(object):
 
     def release_control_lock(self):
         self.control_lock.release()
+
+    def update_stats(self):
+        self.stats_proclog.update(self.stats)
 
     def __del__(self):
         if self.etcd_watch_id:
