@@ -189,10 +189,17 @@ class CorrOutputFull(Block):
                     dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
                     for s0 in range(self.nstands):
                         for s1 in range(s0, self.nstands):
-                            header = struct.pack(">Q3L", this_gulp_time, ihdr['chan0'], s0, s1)
+                            header = struct.pack(">QQ4L",
+                                                 ihdr['sync_time'],
+                                                 this_gulp_time,
+                                                 upstream_acc_len,
+                                                 ihdr['chan0'],
+                                                 s0, s1)
                             dout = self.reordered_data[s0, s1]
                             self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
-                    self.log.info("CORR OUTPUT >> Sending complete")
+                    self.log.info("CORR OUTPUT >> Sending complete for time %d" % this_gulp_time)
+                else:
+                    self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time
