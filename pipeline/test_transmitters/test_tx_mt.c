@@ -18,7 +18,7 @@
 #define PORT (10000)
 
 //#define SERVERADDRESS "127.0.0.1"
-#define SERVERADDRESS "100.100.100.101"
+#define SERVERADDRESS "100.100.101.100"
 
 
 #define NCHAN 96
@@ -31,7 +31,7 @@
 // -> delay occurs every 1.5Mbits
 // -> 100,000 ns delay ~>15 Gb/s (per thread)
 // -> 1,000,000 ns delay ~>17 Gb/s (total)
-#define PACKET_DELAY_NS 300000
+#define PACKET_DELAY_NS 10000
 
 pthread_barrier_t barrier;
 
@@ -92,7 +92,7 @@ void send_packets(void *args) {
     delay.tv_sec = d->delay / 1000000000;
     delay.tv_nsec = d->delay % 1000000000;
     // Static header entries
-    d->pkt->header.magic = htobe32(0xaabbccdd);
+    d->pkt->header.magic = htobe32((unsigned)time(NULL));
     d->pkt->header.npol = htobe16(NPOL);
     d->pkt->header.npol_tot = htobe16(NPOL_TOT);
     d->pkt->header.nchan = htobe16(NCHAN);
