@@ -9,7 +9,7 @@ NCHAN = 192
 NSTAND = 352
 
 seq = 0
-magic = 0xaabbccdd
+timeorigin = 0
 nchan_per_pkt = 96
 nstand_per_pkt = 32
 chan0 = 0
@@ -37,7 +37,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 #struct snap2_hdr_type {
 #        uint64_t  seq;       // Spectra counter == packet counter
-#        uint32_t  magic;     // = 0xaabbccdd
+#        uint32_t  sync_time; // = unix sync time
 #        uint16_t  npol;      // Number of polarizations in this packet
 #        uint16_t  npol_tot;      // Total number of polarizations for this pipeline
 #        uint16_t  nchan;     // Number of channels in this packet
@@ -82,7 +82,7 @@ while(True):
         seq_pkt_cnt = 0
         for chan_block_id in range(nchan_blocks):
            for pol_block_id in range(npol_blocks):
-               header = struct.pack('>QLHHHHLLL', seq, magic,
+               header = struct.pack('>QLHHHHLLL', seq, timeorigin,
                           args.npol*nstand_per_pkt,
                           args.nstand*args.npol,
                           nchan_per_pkt, args.nchan,
@@ -102,6 +102,6 @@ while(True):
             dt = tock - tick
             tick = time.time()
             mbytes = seq_stat_period * len(payload) * npol_blocks * nchan_blocks / 1e6
-            print("Dumped 1M packets %d MBytes (%.2f MB/s)" % (mbytes, mbytes/dt))
+            print("Dumped 1M packets %d MBytes (%.2f MB/s) (seq: %d)" % (mbytes, mbytes/dt, seq))
     except KeyboardInterrupt:
         break
