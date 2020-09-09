@@ -205,7 +205,8 @@ def main(argv):
         #                  core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu, autostartat=2400*32*2))
+                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu, autostartat=2400*32*2,
+                          etcd_client=etcd_client))
 
         ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
