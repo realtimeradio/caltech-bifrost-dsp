@@ -61,6 +61,8 @@ class CorrOutputFull(Block):
         self.new_dest_ip = None
         self.dest_port = dest_port
         self.new_dest_port = dest_port
+        self.packet_delay_ns = 1
+        self.new_packet_delay_ns = 1
         self.update_pending = True
 
     def _etcd_callback(self, watchresponse):
@@ -74,9 +76,12 @@ class CorrOutputFull(Block):
             self.new_dest_ip = v['dest_ip']
         if 'dest_port' in v:
             self.new_dest_port = v['dest_port']
+        if 'packet_delay_ns' in v:
+            self.new_packet_delay_ns = v['packet_delay_ns']
         self.update_pending = True
         self.stats_proclog.update({'new_dest_ip': self.new_dest_ip,
                                    'new_dest_port': self.new_dest_port,
+                                   'new_packet_delay_ns': self.new_packet_delay_ns,
                                    'update_pending': self.update_pending,
                                    'last_cmd_time': time.time()})
 
@@ -118,10 +123,12 @@ class CorrOutputFull(Block):
                 if self.update_pending:
                     self.dest_ip = self.new_dest_ip
                     self.dest_port = self.new_dest_port
+                    self.packet_delay_ns = self.new_packet_delay_ns
                     self.update_pending = False
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
+                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.packet_delay_ns))
                     self.stats_proclog.update({'dest_ip': self.dest_ip,
                                                'dest_port': self.dest_port,
+                                               'packet_delay_ns': self.packet_delay_ns,
                                                'update_pending': self.update_pending,
                                                'last_update_time': time.time()})
                 self.stats_proclog.update({'curr_sample': this_gulp_time})
@@ -187,16 +194,24 @@ class CorrOutputFull(Block):
 
                 if self.dest_ip is not None:
                     dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
+                    packet_cnt = 0
                     for s0 in range(self.nstands):
                         for s1 in range(s0, self.nstands):
-                            header = struct.pack(">QQ4L",
+                            header = struct.pack(">QQ6L",
                                                  ihdr['sync_time'],
                                                  this_gulp_time,
                                                  upstream_acc_len,
                                                  ihdr['chan0'],
+                                                 self.npols,
+                                                 self.nchans,
                                                  s0, s1)
                             dout = self.reordered_data[s0, s1]
                             self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
+                            packet_cnt += 1
+                            if packet_cnt % 10 == 0:
+                                # Only implement packet delay every 10 packets because the sleep
+                                # overhead is large
+                                time.sleep(10 * self.packet_delay_ns / 1e9)
                     self.log.info("CORR OUTPUT >> Sending complete for time %d" % this_gulp_time)
                 else:
                     self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)

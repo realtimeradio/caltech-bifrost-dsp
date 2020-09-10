@@ -8,3 +8,7 @@ class CorrOutputFull(BlockControl):
             dest_ip = dest_ip,
             dest_port = dest_port,
         )
+
+    def set_packet_delay(self, delay_ns):
+       assert isinstance(delay_ns, int)
+       self.send_command(packet_delay_ns=delay_ns)
