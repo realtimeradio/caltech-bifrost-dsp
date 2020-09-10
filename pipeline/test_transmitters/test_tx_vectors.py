@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+
 import socket
 import time
 import struct
 import sys
 import argparse
+import json
 
 NPOL = 2
 NCHAN = 192
@@ -25,12 +28,6 @@ parser.add_argument('-i', '--ip', type=str, default='100.100.100.100',
                     help='IP address to which data should be sent')
 parser.add_argument('-f', '--testfile', type=str, default=None,
                     help='File containing test data')
-parser.add_argument('-c', '--nchan', type=int, default=NCHAN,
-                    help='Number of freq channels for which data should be generated')
-parser.add_argument('-s', '--nstand', type=int, default=NSTAND,
-                    help='Number of stands for which data should be generated')
-parser.add_argument('-p', '--npol', type=int, default=NPOL,
-                    help='Number of polarizations for which data should be generated')
 args = parser.parse_args()
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -50,30 +47,34 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # input data has format NCHAN * NSTAND * NPOL
 
-nchan_blocks = args.nchan // nchan_per_pkt
-npol_blocks = args.nstand // nstand_per_pkt
+
+
+print("Reading input file")
+with open(args.testfile, 'rb') as fh:
+    h = json.loads(fh.readline().decode())
+    data = fh.read()
+
+for k, v in h.items():
+    print("%s:" % k, v)
+data_len = len(data)
+
+nchan_blocks = h['nchan'] // nchan_per_pkt
+npol_blocks = h['nstand'] // nstand_per_pkt
+nbytes = h['npol'] * nstand_per_pkt * nchan_per_pkt
 
 print("Channel blocks:", nchan_blocks)
 print("Polarization blocks:", npol_blocks)
 
-print("pol per packet", args.npol*nstand_per_pkt)
-print("pols total", args.nstand*args.npol)
+print("pol per packet", h['npol']*nstand_per_pkt)
+print("pols total", h['nstand']*h['npol'])
 print("chans per packet", nchan_per_pkt)
-print("chans total", args.nchan)
-
-nbytes = args.npol * nstand_per_pkt * nchan_per_pkt
-print("Reading input file")
-with open(args.testfile, 'rb') as fh:
-    data = fh.read()
-data_len = len(data)
+print("chans total", h['nchan'])
 print("Data length:", data_len)
 
 assert data_len % nbytes == 0, "Data file should have an integer number of time steps!"
 
 data_nseq = data_len // nbytes
 print("Number of sequence points:", data_nseq)
-
-print(len(data[0:10]))
 
 seq_stat_period = 3e3
 tick = 0
@@ -83,11 +84,11 @@ while(True):
         for chan_block_id in range(nchan_blocks):
            for pol_block_id in range(npol_blocks):
                header = struct.pack('>QLHHHHLLL', seq, timeorigin,
-                          args.npol*nstand_per_pkt,
-                          args.nstand*args.npol,
-                          nchan_per_pkt, args.nchan,
+                          h['npol']*nstand_per_pkt,
+                          h['nstand']*h['npol'],
+                          nchan_per_pkt, h['nchan'],
                           chan_block_id, chan_block_id*nchan_per_pkt,
-                          pol_block_id * args.npol * nstand_per_pkt)
+                          pol_block_id * h['npol'] * nstand_per_pkt)
                payload = data[(seq % data_nseq) * nbytes: ((seq % data_nseq)+1) * nbytes]
                if len(payload) != nbytes:
                    print("ARGH!!!!", seq, len(payload))
