@@ -178,7 +178,7 @@ class Corr(Block):
                 self.new_acc_len = v['acc_len']
         if 'start_time' in v and isinstance(v['start_time'], int):
             self.log.info("CORR: received new start time: %d" % v['start_time'])
-            if v['start_time'] % self.ntime_gulp != 0:
+            if (v['start_time'] != -1) and (v['start_time'] % self.ntime_gulp != 0):
                 self.log.error("CORR: Start time must be a multiple of %d" % self.ntime_gulp)
             else:
                 self.new_start_time = v['start_time']
@@ -239,6 +239,10 @@ class Corr(Block):
                         self.acquire_control_lock()
                         start_time = self.new_start_time
                         acc_len = self.new_acc_len
+                        # Use start_time = -1 as a special condition to start on the next sample
+                        # which is a multiple of the accumulation length
+                        if start_time == -1:
+                            start_time = (this_gulp_time - (this_gulp_time % acc_len) + acc_len)
                         start = False
                         self.log.info("CORR >> New start time set to %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
                         self.update_pending = False

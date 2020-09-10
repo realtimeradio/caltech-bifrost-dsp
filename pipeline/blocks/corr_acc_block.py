@@ -79,6 +79,7 @@ class CorrAcc(Block):
         ospan = None
         start = False
         process_time = 0
+        time_tag = 1
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -94,6 +95,9 @@ class CorrAcc(Block):
                         self.acquire_control_lock()
                         start_time = self.new_start_time
                         acc_len = self.new_acc_len
+                        # Use start_time = -1 as a special condition to start on the next sample
+                        if start_time == -1:
+                            start_time = this_gulp_time
                         start = False
                         self.log.info("CORRACC >> New start time at %d. Accumulation: %d samples" % (self.new_start_time, self.new_acc_len))
                         self.update_pending = False
@@ -131,7 +135,8 @@ class CorrAcc(Block):
                         if oseq: oseq.end()
                         ohdr_str = json.dumps(ohdr)
                         self.sequence_proclog.update(ohdr)
-                        oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                        oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
+                        time_tag += 1
                         self.log.info("CORRACC >> Start time %d reached. Accumulating to %d (upstream accumulation: %d)" % (start_time, last, upstream_acc_len))
 
                     # If we're still waiting for a start, spin the wheels
