@@ -151,7 +151,7 @@ def main(argv):
     else:
         capture_ring = Ring(name="capture", space='system')
 
-    trigger_capture_ring = Ring(name="capture", space='cuda_host')
+    trigger_capture_ring = Ring(name="trigger_capture", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
