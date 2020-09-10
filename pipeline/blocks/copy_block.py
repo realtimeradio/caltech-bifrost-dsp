@@ -36,7 +36,6 @@ class Copy(Block):
             self.buf_size = 4 * self.igulp_size
         else:
             self.buf_size = (int(1e9 * buf_size_gbytes) // self.igulp_size) * self.igulp_size
-        print(self.igulp_size, self.buf_size)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -46,7 +45,6 @@ class Copy(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         self.oring.resize(self.igulp_size, total_span=self.buf_size)
-        print("resizing buffer to %d" % self.buf_size)
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -66,16 +64,14 @@ class Copy(Block):
                             curr_time = time.time()
                             reserve_time = curr_time - prev_time
                             prev_time = curr_time
-                            #self.log.debug("Copying output")
-                            #odata = ospan.data_view('ci4')
-                            # The copy is asynchronous, so we must wait for it to finish
+                            # The copy to a GPU is asynchronous, so we must wait for it to finish
                             # before committing this span
-                            if self.gpu != -1:
-                                copy_array(ospan.data, ispan.data)
+                            copy_array(ospan.data, ispan.data)
+                            if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
+                                idata = ispan.data.reshape([self.ntime_gulp, 192, 704])
                                 stream_synchronize()
-                            else:
-                                odata = ospan.data_view()
-                                odata = ispan.data
+                            #odata = ospan.data_view()
+                            #odata = ispan.data
 
                         curr_time = time.time()
                         process_time = curr_time - prev_time
