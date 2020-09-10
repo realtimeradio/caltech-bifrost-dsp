@@ -6,6 +6,7 @@ import struct
 import sys
 import argparse
 import json
+import numpy as np
 
 NPOL = 2
 NCHAN = 192
@@ -58,9 +59,12 @@ for k, v in h.items():
     print("%s:" % k, v)
 data_len = len(data)
 
+data_array = np.frombuffer(data, dtype=h['dtype'].lstrip('np.')).reshape(h['shape'])
+
 nchan_blocks = h['nchan'] // nchan_per_pkt
 npol_blocks = h['nstand'] // nstand_per_pkt
 nbytes = h['npol'] * nstand_per_pkt * nchan_per_pkt
+print("nbytes per packet:", nbytes)
 
 print("Channel blocks:", nchan_blocks)
 print("Polarization blocks:", npol_blocks)
@@ -76,11 +80,22 @@ assert data_len % nbytes == 0, "Data file should have an integer number of time 
 data_nseq = data_len // nbytes
 print("Number of sequence points:", data_nseq)
 
+print("Reshaping data array for transmission")
+data_array_reshape = np.ones([data_nseq, nchan_blocks, npol_blocks, nchan_per_pkt, nstand_per_pkt, h['npol']], dtype=data_array.dtype)
+for t in range(h['ntime']):
+    if t % 100 == 0:
+        print("Reshaped %d samples of %d" % (t+1, h['ntime']))
+    for chan_block_id in range(nchan_blocks):
+        for pol_block_id in range(npol_blocks):
+            for chan in range(nchan_per_pkt):
+                data_array_reshape[t, chan_block_id, pol_block_id, chan] = data_array[t, chan_block_id*nchan_per_pkt + chan, pol_block_id*nstand_per_pkt: (pol_block_id+1)*nstand_per_pkt, :]
+data_stream = data_array_reshape.tobytes()
+
 seq_stat_period = 3e3
 tick = 0
+seq_pkt_cnt = 0
 while(True):
     try:
-        seq_pkt_cnt = 0
         for chan_block_id in range(nchan_blocks):
            for pol_block_id in range(npol_blocks):
                header = struct.pack('>QLHHHHLLL', seq, timeorigin,
@@ -88,8 +103,8 @@ while(True):
                           h['nstand']*h['npol'],
                           nchan_per_pkt, h['nchan'],
                           chan_block_id, chan_block_id*nchan_per_pkt,
-                          pol_block_id * h['npol'] * nstand_per_pkt)
-               payload = data[(seq % data_nseq) * nbytes: ((seq % data_nseq)+1) * nbytes]
+                          pol_block_id*nstand_per_pkt*h['npol'])
+               payload = data_stream[(seq_pkt_cnt % data_nseq) * nbytes: ((seq_pkt_cnt % data_nseq)+1) * nbytes]
                if len(payload) != nbytes:
                    print("ARGH!!!!", seq, len(payload))
                pktdata = header + payload
