@@ -5,6 +5,7 @@ import argparse
 import os
 import sys
 import time
+import json
 
 ACCSHORT = 2400
 ACCLONG = 2400 * 100
@@ -70,11 +71,42 @@ def main(argv):
     nblock = args.ntime // args.accshort
 
     print()
-
+    start_time = time.time()
     if not args.nocorr:
         corr_fh = open(corr_outputfile, 'wb')
+        corr_meta = {}
+        corr_meta['time'] = start_time
+        corr_meta['acc_len'] = args.accshort
+        corr_meta['ntime'] = args.ntime // args.accshort
+        corr_meta['nstand'] = args.nstand
+        corr_meta['npol'] = args.npol
+        corr_meta['nchan'] = args.nchan
+        corr_meta['seed'] = args.seed
+        corr_meta['shape'] = [args.ntime // args.accshort, args.nchan, args.nstand, args.nstand, args.npol, args.npol]
+        corr_meta['dtype'] = 'np.complex'
+        if args.chanramp:
+            corr_meta['type'] = 'chanramp'
+        else:
+            corr_meta['type'] = 'random'
+        corr_fh.write(json.dumps(corr_meta).encode())
+        corr_fh.write('\n'.encode())
 
     with open(in_outputfile, 'wb') as in_fh:
+        in_meta = {}
+        in_meta['time'] = start_time
+        in_meta['ntime'] = args.ntime
+        in_meta['nstand'] = args.nstand
+        in_meta['npol'] = args.npol
+        in_meta['nchan'] = args.nchan
+        in_meta['seed'] = args.seed
+        in_meta['shape'] = [args.ntime, args.nchan, args.nstand, args.npol]
+        in_meta['dtype'] = 'np.uint8'
+        if args.chanramp:
+            in_meta['type'] = 'chanramp'
+        else:
+            in_meta['type'] = 'random'
+        in_fh.write(json.dumps(in_meta).encode())
+        in_fh.write('\n'.encode())
         now = time.time()
 
         if args.chanramp:
