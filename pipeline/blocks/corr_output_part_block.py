@@ -50,10 +50,11 @@ class CorrOutputPart(Block):
         if 'dest_port' in v:
             self.new_dest_port = v['dest_port']
         self.update_pending = True
-        self.stats_proclog.update({'new_dest_ip': self.new_dest_ip,
-                                   'new_dest_port': self.new_dest_port,
-                                   'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time()})
+        self.stats.update({'new_dest_ip': self.new_dest_ip,
+                           'new_dest_port': self.new_dest_port,
+                           'update_pending': self.update_pending,
+                           'last_cmd_time': time.time()})
+        self.update_stats()
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -77,11 +78,12 @@ class CorrOutputPart(Block):
                     self.dest_port = self.new_dest_port
                     self.update_pending = False
                     self.log.info("CORR PART OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
-                    self.stats_proclog.update({'dest_ip': self.dest_ip,
-                                               'dest_port': self.dest_port,
-                                               'update_pending': self.update_pending,
-                                               'last_update_time': time.time()})
-                self.stats_proclog.update({'curr_sample': this_gulp_time})
+                    self.stats.update({'dest_ip': self.dest_ip,
+                                       'dest_port': self.dest_port,
+                                       'update_pending': self.update_pending,
+                                       'last_update_time': time.time()})
+                self.stats.update({'curr_sample': this_gulp_time})
+                self.update_stats()
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
@@ -90,7 +92,14 @@ class CorrOutputPart(Block):
                     dout = np.zeros([nchan, self.max_nvis, 2], dtype=np.int32)
                     dout[...] = idata
                     for vn in range(len(subsel)//self.nvis_per_packet):
-                        header = struct.pack(">QII", this_gulp_time, ihdr['chan0'], self.nvis_per_packet) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
+                        header = struct.pack(">QQ4I",
+                                             ihdr['sync_time'],
+                                             this_gulp_time,
+                                             upstream_acc_len,
+                                             ihdr['chan0'],
+                                             self.nvis_per_packet,
+                                             self.nchans,
+                                             ) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap()
                         self.sock.sendto(header + dout[:,vn*self.nvis_per_packet:self.nvis_per_packet*(1+vn),:].byteswap().tobytes(), (self.dest_ip, self.dest_port))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
@@ -98,6 +107,7 @@ class CorrOutputPart(Block):
                 self.perf_proclog.update({'acquire_time': acquire_time, 
                                           'reserve_time': 0, 
                                           'process_time': process_time,})
-                self.stats_proclog.update({'last_end_sample': this_gulp_time})
+                self.stats.update({'last_end_sample': this_gulp_time})
+                self.update_stats()
                 # And, update overall time counter
                 this_gulp_time += upstream_acc_len

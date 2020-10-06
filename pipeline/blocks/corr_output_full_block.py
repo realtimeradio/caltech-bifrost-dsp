@@ -79,11 +79,12 @@ class CorrOutputFull(Block):
         if 'packet_delay_ns' in v:
             self.new_packet_delay_ns = v['packet_delay_ns']
         self.update_pending = True
-        self.stats_proclog.update({'new_dest_ip': self.new_dest_ip,
-                                   'new_dest_port': self.new_dest_port,
-                                   'new_packet_delay_ns': self.new_packet_delay_ns,
-                                   'update_pending': self.update_pending,
-                                   'last_cmd_time': time.time()})
+        self.stats.update({'new_dest_ip': self.new_dest_ip,
+                           'new_dest_port': self.new_dest_port,
+                           'new_packet_delay_ns': self.new_packet_delay_ns,
+                           'update_pending': self.update_pending,
+                           'last_cmd_time': time.time()})
+        self.update_stats()
 
     def get_checkfile_corr(self, t):
         """
@@ -126,12 +127,13 @@ class CorrOutputFull(Block):
                     self.packet_delay_ns = self.new_packet_delay_ns
                     self.update_pending = False
                     self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.packet_delay_ns))
-                    self.stats_proclog.update({'dest_ip': self.dest_ip,
-                                               'dest_port': self.dest_port,
-                                               'packet_delay_ns': self.packet_delay_ns,
-                                               'update_pending': self.update_pending,
-                                               'last_update_time': time.time()})
-                self.stats_proclog.update({'curr_sample': this_gulp_time})
+                    self.stats.update({'dest_ip': self.dest_ip,
+                                       'dest_port': self.dest_port,
+                                       'packet_delay_ns': self.packet_delay_ns,
+                                       'update_pending': self.update_pending,
+                                       'last_update_time': time.time()})
+                self.stats['curr_sample'] = this_gulp_time
+                self.update_stats()
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
@@ -221,7 +223,8 @@ class CorrOutputFull(Block):
                 self.perf_proclog.update({'acquire_time': acquire_time, 
                                           'reserve_time': 0, 
                                           'process_time': process_time,})
-                self.stats_proclog.update({'last_end_sample': this_gulp_time})
+                self.stats['last_end_sample'] = this_gulp_time
+                self.update_stats()
                 # And, update overall time counter
                 this_gulp_time += upstream_acc_len
         if self.checkfile:
