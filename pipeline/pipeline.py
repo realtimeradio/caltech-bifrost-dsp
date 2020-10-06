@@ -201,8 +201,8 @@ def main(argv):
         antpol_to_bl = ops[-1].antpol_to_bl
         bl_is_conj = ops[-1].bl_is_conj
 
-        #ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-        #                  core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM))
+        ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM, antpol_to_bl=antpol_to_bl))
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu, autostartat=2400*32*2,
@@ -213,8 +213,8 @@ def main(argv):
                           checkfile=args.testdatacorr, checkfile_acc_len=args.testdatacorr_acc_len,
                           antpol_to_bl=antpol_to_bl, bl_is_conj=bl_is_conj))
 
-        #ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
-        #                  core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+        ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
+                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,

@@ -20,7 +20,7 @@ class CorrSubSel(Block):
     """
     nvis_out = 4656
     def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
-                 nchans=192, npols=2, nstands=352, nchan_sum=4, gpu=-1):
+                 nchans=192, npols=2, nstands=352, nchan_sum=4, gpu=-1, antpol_to_bl=None):
 
         super(CorrSubSel, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
@@ -42,15 +42,20 @@ class CorrSubSel(Block):
         # will copy this to the GPU when it changes
         # TODO: nvis_out could be dynamic, but we'd have to reallocate the GPU memory
         # if the size changed. Leave static for now, which is all the requirements call for.
-        self._subsel = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
+        self._subsel = BFArray(np.array(list(range(self.nvis_out)), dtype=np.int32), dtype='i32', space='cuda')
         self._subsel_next = BFArray(np.array(list(range(self.nvis_out)), dtype=np.int32), dtype='i32', space='cuda_host')
         self._subsel_pending = True
         self.obuf_gpu = BFArray(shape=[self.nchans_out, self.nvis_out], dtype='i64', space='cuda')
         self.antpols = np.zeros([self.nvis_out, 4], dtype=np.int32)
         self.ogulp_size = self.nchans_out * self.nvis_out * 8
-        self.stats_proclog.update({'new_subsel': self._subsel_next,
-                                   'update_pending': self._subsel_pending,
-                                   'last_cmd_time': time.time()})
+        self.stats.update({'new_subsel': self._subsel_next,
+                           'update_pending': self._subsel_pending,
+                           'last_cmd_time': time.time()})
+        self.update_stats()
+        if antpol_to_bl is not None:
+            self.antpol_to_bl = antpol_to_bl
+        else:
+            self.antpol_to_bl = np.zeros([nstands, npols])
         
     def _etcd_callback(self, watchresponse):
         """
@@ -77,9 +82,10 @@ class CorrSubSel(Block):
             self.acquire_control_lock()
             self._subsel_next[...] = subsel
             self._subsel_pending = True
-            self.stats_proclog.update({'new_subsel': self._subsel_next,
-                                       'update_pending': self._subsel_pending,
-                                       'last_cmd_time': time.time()})
+            self.stats.update({'new_subsel': self._subsel_next,
+                               'update_pending': self._subsel_pending,
+                               'last_cmd_time': time.time()})
+            self.update_stats()
             self.release_control_lock()
 
     def main(self):
@@ -95,18 +101,22 @@ class CorrSubSel(Block):
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
-                ant_to_bl_id = ihdr['ant_to_bl_id']
+                # Uncomment this if you want to read the map on the fly
+                #antpol_to_bl = ihdr['antpol_to_bl']
                 ohdr = ihdr.copy()
-                ohdr.pop('ant_to_bl_id')
+                #ohdr.pop('antpol_to_bl')
                 ohdr['nchan'] = ihdr['nchan'] // self.nchan_sum
                 ohdr['antpols'] = self.antpols.tolist()
-                if self._subsel_pending:
-                    self.log.info("Updating baseline subselection indices")
-                    self._subsel[...] = self._subsel_next
-                    self.stats_proclog.update({'subsel': self._subsel,
-                                               'update_pending': False,
-                                               'last_update_time': time.time()})
-                    ohdr['subsel'] = self._subsel_next.tolist()
+                # On a start of sequence, always grab new subselection
+                self.acquire_control_lock()
+                self.log.info("Updating baseline subselection indices")
+                self._subsel[...] = self._subsel_next
+                self.stats.update({'subsel': self._subsel_next,
+                                   'update_pending': False,
+                                   'last_update_time': time.time()})
+                ohdr['subsel'] = self._subsel_next.tolist()
+                self.update_stats()
+                self.release_control_lock()
                 ohdr_str = json.dumps(ohdr)
                 oseq = oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                 for ispan in iseq.read(self.igulp_size):
@@ -143,9 +153,10 @@ class CorrSubSel(Block):
                         self.log.info("Updating baseline subselection indices")
                         self._subsel[...] = self._subsel_next
                         ohdr['subsel'] = self._subsel_next.tolist()
-                        self.stats_proclog.update({'subsel': self._subsel,
-                                                   'update_pending': False,
-                                                   'last_update_time': time.time()})
+                        self.stats.update({'subsel': self._subsel,
+                                           'update_pending': False,
+                                           'last_update_time': time.time()})
+                        self.update_stats()
                         ohdr['antpols'] = self.antpols.tolist()
                         #TODO update time tag based on what has already been processed
                         ohdr_str = json.dumps(ohdr)

@@ -66,7 +66,7 @@ class CorrOutputPart(Block):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
-            upstream_start_time = ihdr['start_time']
+            upstream_start_time = this_gulp_time
             subsel = ihdr['subsel']
             nchan = ihdr['nchan']
             antpols = np.array(ihdr['antpols']).flatten()
@@ -98,8 +98,8 @@ class CorrOutputPart(Block):
                                              upstream_acc_len,
                                              ihdr['chan0'],
                                              self.nvis_per_packet,
-                                             self.nchans,
-                                             ) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap()
+                                             nchan,
+                                             ) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
                         self.sock.sendto(header + dout[:,vn*self.nvis_per_packet:self.nvis_per_packet*(1+vn),:].byteswap().tobytes(), (self.dest_ip, self.dest_port))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
