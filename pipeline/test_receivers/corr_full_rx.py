@@ -84,10 +84,12 @@ while(True):
         print("New spectra ID: %d. Last ID had %d packets" % (spectra_id, packet_cnt))
         packet_cnt = 0
     payload = np.frombuffer(p[HEADER_SIZE:], dtype=np.int32).reshape([args.npol, args.npol, args.nchan, 2])
-    outbuf[h['stand0'], h['stand1']].real = payload[:,:,:,0]
-    outbuf[h['stand1'], h['stand0']].real = payload[:,:,:,0]
-    outbuf[h['stand0'], h['stand1']].imag = payload[:,:,:,1]
-    outbuf[h['stand1'], h['stand0']].imag = -payload[:,:,:,1]
+    for p0 in range(h['npols']):
+        for p1 in range(h['npols']):
+            outbuf[h['stand0'], h['stand1'], p0, p1].real = payload[p0,p1,:,0]
+            outbuf[h['stand0'], h['stand1'], p0, p1].imag = payload[p0,p1,:,1]
+            outbuf[h['stand1'], h['stand0'], p0, p1].real = payload[p1,p0,:,0]
+            outbuf[h['stand1'], h['stand0'], p0, p1].imag = -payload[p1,p0,:,1]
     packet_cnt += 1
     if packet_cnt == n_bl:
         print("Got %d packets" % n_bl)
