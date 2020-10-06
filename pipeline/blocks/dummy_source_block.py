@@ -111,6 +111,7 @@ class DummySource(object):
         hdr['seq0'] = 0
         hdr['input_to_ant'] = self.input_to_ant.tolist()
         hdr['ant_to_input'] = self.ant_to_input.tolist()
+        hdr['sync_time'] = int(time.time())
         time_tag = 0
         REPORT_PERIOD = 100
         bytes_per_report = REPORT_PERIOD * self.gulp_size
