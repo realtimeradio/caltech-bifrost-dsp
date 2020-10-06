@@ -35,6 +35,7 @@ class Block(object):
         self.guarantee = guarantee
         self.core = core
         self.name = name or type(self).__name__
+        self.stats = {}
 
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")

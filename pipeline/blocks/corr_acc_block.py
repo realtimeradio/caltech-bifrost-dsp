@@ -41,10 +41,10 @@ class CorrAcc(Block):
         self.new_start_time = autostartat
         self.new_acc_len = acc_len
         self.update_pending=True
-        self.stats = {'new_acc_len': self.new_acc_len,
-                      'new_start_sample': self.new_start_time,
-                      'update_pending': self.update_pending,
-                      'last_cmd_time': time.time()}
+        self.stats.update({'new_acc_len': self.new_acc_len,
+                           'new_start_sample': self.new_start_time,
+                           'update_pending': self.update_pending,
+                           'last_cmd_time': time.time()})
         self.update_stats()
 
     def _etcd_callback(self, watchresponse):
