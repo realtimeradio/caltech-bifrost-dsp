@@ -57,8 +57,8 @@ class CorrOutputFull(Block):
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(0)
-        self.dest_ip = None
-        self.new_dest_ip = None
+        self.dest_ip = "0.0.0.0"
+        self.new_dest_ip = "0.0.0.0"
         self.dest_port = dest_port
         self.new_dest_port = dest_port
         self.packet_delay_ns = 1
@@ -194,7 +194,7 @@ class CorrOutputFull(Block):
                     else:
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
-                if self.dest_ip is not None:
+                if self.dest_ip != "0.0.0.0":
                     dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
                     packet_cnt = 0
                     for s0 in range(self.nstands):
