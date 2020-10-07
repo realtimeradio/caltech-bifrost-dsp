@@ -32,8 +32,8 @@ class CorrOutputPart(Block):
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(0)
-        self.dest_ip = None
-        self.new_dest_ip = None
+        self.dest_ip = "0.0.0.0"
+        self.new_dest_ip = "0.0.0.0"
         self.dest_port = dest_port
         self.new_dest_port = dest_port
         self.update_pending = True
@@ -67,10 +67,11 @@ class CorrOutputPart(Block):
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = this_gulp_time
-            subsel = ihdr['subsel']
+            baselines = np.array(ihdr['baselines'], dtype=np.int32)
+            baselines_flat = baselines.flatten()
             nchan = ihdr['nchan']
-            antpols = np.array(ihdr['antpols']).flatten()
             igulp_size = self.max_nvis * nchan * 8
+            dout = np.zeros([self.max_nvis, nchan, 2], dtype=np.int32)
             for ispan in iseq.read(igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
@@ -87,11 +88,10 @@ class CorrOutputPart(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                if self.dest_ip is not None:
-                    idata = ispan.data_view('i32').reshape([nchan, self.max_nvis, 2])
-                    dout = np.zeros([nchan, self.max_nvis, 2], dtype=np.int32)
+                if self.dest_ip != "0.0.0.0":
+                    idata = ispan.data_view('i32').reshape([nchan, self.max_nvis, 2]).transpose([1,0,2]) # baseline x chan x complexity
                     dout[...] = idata
-                    for vn in range(len(subsel)//self.nvis_per_packet):
+                    for vn in range(len(baselines)//self.nvis_per_packet):
                         header = struct.pack(">QQ4I",
                                              ihdr['sync_time'],
                                              this_gulp_time,
@@ -99,8 +99,8 @@ class CorrOutputPart(Block):
                                              ihdr['chan0'],
                                              self.nvis_per_packet,
                                              nchan,
-                                             ) + antpols[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
-                        self.sock.sendto(header + dout[:,vn*self.nvis_per_packet:self.nvis_per_packet*(1+vn),:].byteswap().tobytes(), (self.dest_ip, self.dest_port))
+                                             ) + baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
+                        self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].byteswap().tobytes(), (self.dest_ip, self.dest_port))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

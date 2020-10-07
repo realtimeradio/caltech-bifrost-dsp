@@ -17,7 +17,7 @@ from blocks.block_base import Block
 from blocks.corr_block import Corr
 from blocks.dummy_source_block import DummySource
 from blocks.corr_acc_block import CorrAcc
-from blocks.corr_subsel_block import CorrSubSel
+from blocks.corr_subsel_block import CorrSubsel
 from blocks.corr_output_full_block import CorrOutputFull
 from blocks.corr_output_part_block import CorrOutputPart
 from blocks.copy_block import Copy
@@ -26,6 +26,7 @@ from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
 from blocks.beamform_vlbi_block import BeamformVlbi
 from blocks.beamform_vacc_block import BeamVacc
+from blocks.beamform_output_block import BeamformOutput
 from blocks.triggered_dump_block import TriggeredDump
 
 
@@ -142,9 +143,8 @@ def main(argv):
         capture_ring = Ring(name="capture", space='cuda_host')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
-        bf_power_output_ring = Ring(name="bf-output", space='cuda_host')
-        bf_vlbi_output_ring = Ring(name="bf-output", space='cuda_host')
-        bf_acc_output_ring = [Ring(name="bf-output", space='system') for _ in range(NBEAM)]
+        bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
+        bf_acc_output_ring = [Ring(name="bf-acc-output%d" % i, space='system') for i in range(NBEAM)]
         corr_output_ring = Ring(name="corr-output", space='cuda')
         corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
         corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
@@ -198,23 +198,38 @@ def main(argv):
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
                           core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=2400*8, ant_to_input=ant_to_input))
-        antpol_to_bl = ops[-1].antpol_to_bl
-        bl_is_conj = ops[-1].bl_is_conj
 
-        ops.append(CorrSubSel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client, nchan_sum=CORR_SUBSEL_NCHAN_SUM, antpol_to_bl=antpol_to_bl))
+        # Get the conjugation conventions and baseline IDs provided by the correlator block.
+        # Again, these could be handed downstream through headers, but this way we
+        # save some potential throughput issues. This means the pipeline needs restarting if the
+        # input antenna configuration changes, which doesn't seem too heinous a requirement
+        antpol_to_bl = ops[-1].antpol_to_bl # antpol_to_bl[ant0, pol0, ant1, pol1] is the baseline index of (ant0, pol0) * (ant1, pol1)
+        bl_is_conj = ops[-1].bl_is_conj # bl_is_conj[ant0, pol0, ant1, pol1] is 1 if this baseline is conjugated by xGPU
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
-                          core=cores.pop(0), guarantee=True, acc_len=args.corr_acc_len, gpu=args.gpu, autostartat=2400*32*2,
-                          etcd_client=etcd_client))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
+                          acc_len=args.corr_acc_len,
+                          autostartat=2400*32*2,
+                  ))
 
         ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
-                          checkfile=args.testdatacorr, checkfile_acc_len=args.testdatacorr_acc_len,
-                          antpol_to_bl=antpol_to_bl, bl_is_conj=bl_is_conj))
+                          checkfile=args.testdatacorr,
+                          checkfile_acc_len=args.testdatacorr_acc_len,
+                          antpol_to_bl=antpol_to_bl,
+                          bl_is_conj=bl_is_conj,
+                  ))
+
+        ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
+                          nchan_sum=CORR_SUBSEL_NCHAN_SUM,
+                          antpol_to_bl=antpol_to_bl,
+                          bl_is_conj = bl_is_conj,
+                  ))
 
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
+                  ))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
@@ -223,12 +238,14 @@ def main(argv):
         ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
-        ops.append(BeamformVlbi(log, iring=bf_output_ring, oring=bf_vlbi_output_ring, ntime_gulp=GSIZE,
+        ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchans, ninput_beam=NBEAM, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        for i in range(1):
+        for i in range(3):
             ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
                           nchans=nchans, ninput_beam=NBEAM,
+                          core=cores.pop(0), guarantee=True))
+            ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
                           core=cores.pop(0), guarantee=True))
 
     ## gpu_input_ring -> beamformer
