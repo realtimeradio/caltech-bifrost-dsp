@@ -229,8 +229,16 @@ class Corr(Block):
                 ohdr = ihdr.copy()
                 # Uncomment if you want the baseline order to be computed on the fly
                 # self.update_baseline_indices(ihdr['ant_to_input'])
-                ohdr.pop('ant_to_input')
-                ohdr.pop('input_to_ant')
+
+                # Remove ant-to-input maps. This block outputs xGPU-formatted data,
+                # Which isn't trivially an nstand/npol x nstand/npol array.
+                # Assume that the downstream code knows how the baseline list is formatted.
+                # It would be nice to put that information in the header, but this seems
+                # to cause unexpectedly severe slowdown
+                if 'ant_to_input' in ihdr:
+                    ohdr.pop('ant_to_input')
+                if 'input_to_ant' in ihdr:
+                    ohdr.pop('input_to_ant')
                 self.sequence_proclog.update(ohdr)
                 # uncomment if you want downstream processors to deal with input ordering on the fly
                 # ohdr.update({'ant_to_bl_id': self.antpol_to_bl.tolist(), 'bl_is_conj': self.bl_is_conj.tolist()})
