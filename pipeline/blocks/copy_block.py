@@ -68,10 +68,7 @@ class Copy(Block):
                             # before committing this span
                             copy_array(ospan.data, ispan.data)
                             if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
-                                idata = ispan.data.reshape([self.ntime_gulp, 192, 704])
                                 stream_synchronize()
-                            #odata = ospan.data_view()
-                            #odata = ispan.data
 
                         curr_time = time.time()
                         process_time = curr_time - prev_time
