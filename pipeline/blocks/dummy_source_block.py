@@ -64,11 +64,12 @@ class DummySource(object):
         else:
             print("initializing random numbers")
             #TODO Can't get 'ci4' type to behave
-            self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
-                                dtype='u8', space='system')
-            #self.test_data = BFArray(np.ones([NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
+            #self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
             #                    dtype='u8', space='system')
-            #self.test_data[:,:,:,:,0] = 0
+            self.test_data = BFArray(np.zeros([NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
+                                dtype='u8', space='system')
+            for i in range(nstands):
+                self.test_data[:,:,:,i,:] = i%8
 
         self.shutdown_event = threading.Event()
 
