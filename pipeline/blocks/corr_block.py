@@ -216,13 +216,16 @@ class Corr(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         self.oring.resize(self.ogulp_size)
-        oseq = None
-        ospan = None
-        start = False
         time_tag = 1
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
+                oseq = None
+                ospan = None
+                start = False
+                self.acquire_control_lock()
+                self.update_pending = True
+                self.release_control_lock()
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
                 this_gulp_time = ihdr['seq0']
