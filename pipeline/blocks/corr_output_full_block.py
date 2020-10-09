@@ -210,12 +210,12 @@ class CorrOutputFull(Block):
                                                  bw_hz,
                                                  sfreq,
                                                  upstream_acc_len,
-                                                 nchan,
+                                                 self.nchan,
                                                  chan0,
-                                                 npol,
+                                                 self.npol,
                                                  s0, s1)
                             dout = self.reordered_data[s0, s1]
-                            self.sock.sendto(header + dout.byteswap().tobytes(), (self.dest_ip, self.dest_port))
+                            self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
                             packet_cnt += 1
                             if packet_cnt % 10 == 0:
                                 # Only implement packet delay every 10 packets because the sleep
