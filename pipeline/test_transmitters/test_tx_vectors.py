@@ -14,7 +14,6 @@ NSTAND = 352
 
 seq = 0
 timeorigin = 0
-nchan_per_pkt = 96
 nstand_per_pkt = 32
 chan0 = 0
 pol0 = 0
@@ -29,6 +28,8 @@ parser.add_argument('-i', '--ip', type=str, default='100.100.100.100',
                     help='IP address to which data should be sent')
 parser.add_argument('-f', '--testfile', type=str, default=None,
                     help='File containing test data')
+parser.add_argument('-b', '--nchan_blocks', type=int, default=2,
+                    help='Number of channel blocks. E.g., if 2, send nchans in packets of nchans/2')
 args = parser.parse_args()
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -61,7 +62,8 @@ data_len = len(data)
 
 data_array = np.frombuffer(data, dtype=h['dtype'].lstrip('np.')).reshape(h['shape'])
 
-nchan_blocks = h['nchan'] // nchan_per_pkt
+nchan_blocks = args.nchan_blocks
+nchan_per_pkt = h['nchan'] // nchan_blocks
 npol_blocks = h['nstand'] // nstand_per_pkt
 nbytes = h['npol'] * nstand_per_pkt * nchan_per_pkt
 print("nbytes per packet:", nbytes)
