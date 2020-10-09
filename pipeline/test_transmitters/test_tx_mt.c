@@ -18,10 +18,11 @@
 #define PORT (10000)
 
 //#define SERVERADDRESS "127.0.0.1"
-#define SERVERADDRESS "100.100.101.100"
+#define SERVERADDRESS "100.100.100.100"
+//#define DELIBERATELY_MISS_PACKETS
 
 
-#define NCHAN 96
+#define NCHAN 92
 #define NCHAN_TOT (NCHAN*2)
 #define NPOL 64
 #define NPOL_TOT 704
@@ -97,17 +98,24 @@ void send_packets(void *args) {
     d->pkt->header.npol_tot = htobe16(NPOL_TOT);
     d->pkt->header.nchan = htobe16(NCHAN);
     d->pkt->header.nchan_tot = htobe16(NCHAN_TOT);
+    d->pkt->header.pol0 = htobe32(d->pol * NPOL);
     clock_gettime(CLOCK_MONOTONIC_RAW, &start);
     while(1) {
         d->pkt->header.seq = htobe64(i);
         for (chan_block_id=0; chan_block_id<nchan_blocks; chan_block_id++) {
             d->pkt->header.chan_block_id = htobe32(chan_block_id);
             d->pkt->header.chan0 = htobe32(chan_block_id * NCHAN);
-            if (sendto(d->sockfd, (void *)(d->pkt), sizeof(struct packet), 0,
-                       (const struct sockaddr*)&(d->server), sizeof(d->server)) < 0)
-            {
-                fprintf(stderr, "Error in sendto()\n");
+#ifdef DELIBERATELY_MISS_PACKETS
+            if (i%1000000 != 0) {
+#endif
+                if (sendto(d->sockfd, (void *)(d->pkt), sizeof(struct packet), 0,
+                           (const struct sockaddr*)&(d->server), sizeof(d->server)) < 0)
+                {
+                    fprintf(stderr, "Error in sendto()\n");
+                }
+#ifdef DELIBERATELY_MISS_PACKETS
             }
+#endif
         }
         if (i % 16 == 0) {
             nanosleep(&delay, NULL);
