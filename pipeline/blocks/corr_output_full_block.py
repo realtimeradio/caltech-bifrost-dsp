@@ -214,7 +214,7 @@ class CorrOutputFull(Block):
                                                  chan0,
                                                  self.npol,
                                                  s0, s1)
-                            dout = self.reordered_data[s0, s1]
+                            dout[...] = self.reordered_data[s0, s1]
                             self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
                             packet_cnt += 1
                             if packet_cnt % 10 == 0:

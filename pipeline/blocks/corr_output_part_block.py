@@ -22,16 +22,15 @@ class CorrOutputPart(Block):
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring,
-                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, max_nvis=4656, nvis_per_packet=16):
+                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16):
         # TODO: Other things we could check:
-        # - that nchans/pols/gulp_size matches XGPU compilation
+        # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputPart, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
-        self.max_nvis = max_nvis
         self.nvis_per_packet = nvis_per_packet
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setblocking(0)
+        self.sock.settimeout(0.01)
         self.dest_ip = "0.0.0.0"
         self.new_dest_ip = "0.0.0.0"
         self.dest_port = dest_port
@@ -67,11 +66,15 @@ class CorrOutputPart(Block):
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = this_gulp_time
-            baselines = np.array(ihdr['baselines'], dtype=np.int32)
+            baselines = np.array(ihdr['baselines'], dtype='>i')
             baselines_flat = baselines.flatten()
             nchan = ihdr['nchan']
-            igulp_size = self.max_nvis * nchan * 8
-            dout = np.zeros([self.max_nvis, nchan, 2], dtype=np.int32)
+            chan0 = ihdr['chan0']
+            bw_hz = ihdr['bw_hz']
+            sfreq = ihdr['sfreq']
+            nvis  = ihdr['nvis']
+            igulp_size = nvis * nchan * 8
+            dout = np.zeros(shape=[nvis, nchan, 2], dtype='>i')
             for ispan in iseq.read(igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
@@ -89,18 +92,22 @@ class CorrOutputPart(Block):
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
                 if self.dest_ip != "0.0.0.0":
-                    idata = ispan.data_view('i32').reshape([nchan, self.max_nvis, 2]).transpose([1,0,2]) # baseline x chan x complexity
-                    dout[...] = idata
+                    idata = ispan.data_view('i32').reshape([nchan, nvis, 2]).transpose([1,0,2]) # baseline x chan x complexity
+                    dout[...] = idata;
                     for vn in range(len(baselines)//self.nvis_per_packet):
-                        header = struct.pack(">QQ4I",
+                        header = struct.pack(">QQ2d4I",
                                              ihdr['sync_time'],
                                              this_gulp_time,
+                                             bw_hz,
+                                             sfreq,
                                              upstream_acc_len,
-                                             ihdr['chan0'],
                                              self.nvis_per_packet,
                                              nchan,
-                                             ) + baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].byteswap().tobytes()
-                        self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].byteswap().tobytes(), (self.dest_ip, self.dest_port))
+                                             chan0,
+                                             ) + baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].tobytes()
+                        #print(baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet])
+                        #print(dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet])
+                        self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].tobytes(), (self.dest_ip, self.dest_port))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

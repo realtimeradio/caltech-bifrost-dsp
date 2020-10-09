@@ -237,6 +237,7 @@ def main(argv):
 
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
+                          nvis_per_packet=16,
                   ))
 
     if not (args.nobeamform or args.nogpu):

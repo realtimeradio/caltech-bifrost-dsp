@@ -128,6 +128,9 @@ class CorrSubsel(Block):
                 ohdr = ihdr.copy()
                 #ohdr.pop('antpol_to_bl')
                 ohdr['nchan'] = ihdr['nchan'] // self.nchan_sum
+                ohdr['nvis'] = self.nvis_out
+                chan_width = ihdr['bw_hz'] / ihdr['nchan']
+                ohdr['sfreq'] = (ihdr['sfreq'] + ((self.nchan_sum - 1) * chan_width)) / self.nchan_sum
                 # On a start of sequence, always grab new subselection
                 self.acquire_control_lock()
                 self.log.info("Updating baseline subselection indices")
