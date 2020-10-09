@@ -12,10 +12,12 @@ import json
 #struct corr_output_full_packet {
 #        uint64_t  sync_time;  // Unix time of last sync
 #        uint64_t  spectra_id; // The _first_ spectrum in this integration (i.e., spectra since sync_time)
+#        double    bw_hz;      // Hz bandwidth in this packet
+#        double    sfreq;      // Center freq (in Hz) of first chan in this packet
 #        uint32_t  acc_len;    // Accumulation length
-#        uint32_t  chan0;   // First channel in this packet
-#        uint32_t  npols;      // Number of polarizations
 #        uint32_t  nchans;     // Number of channels
+#        uint32_t  chan0;      // First channel in this packet
+#        uint32_t  npols;      // Number of polarizations
 #        uint32_t  stand0;     // Stand 0
 #        uint32_t  stand1;     // Stand 1
 #        int32_t   data[npols, npols, nchans, 2]; // Data. __Little Endian__
@@ -23,19 +25,21 @@ import json
 
 # For npols = 2; nchans=192; data payload is 6144 Bytes. Total packet size is 6184 Bytes
 
-HEADER_SIZE = 40
+HEADER_SIZE = 56
 
 def decode_header(p):
-    x = struct.unpack('>QQ6L', p[0:HEADER_SIZE])
+    x = struct.unpack('>QQ2d6I', p[0:HEADER_SIZE])
     rv = {}
     rv['sync_time'] = x[0]
     rv['spectra_id'] = x[1]
-    rv['acc_len'] = x[2]
-    rv['chan0'] = x[3]
-    rv['npols'] = x[4]
+    rv['bw'] = x[2]
+    rv['sfreq'] = x[3]
+    rv['acc_len'] = x[4]
     rv['nchans'] = x[5]
-    rv['stand0'] = x[6]
-    rv['stand1'] = x[7]
+    rv['chan0'] = x[6]
+    rv['npols'] = x[7]
+    rv['stand0'] = x[8]
+    rv['stand1'] = x[9]
     return rv
 
 NPOL=2
@@ -76,6 +80,9 @@ spectra_id = None
 packet_cnt = 0
 outbuf = np.zeros([args.nstand, args.nstand, args.npol, args.npol, args.nchan], dtype=np.complex)
 
+payload_dt = np.dtype(np.int32)
+payload_dt.newbyteorder('>')
+
 while(True):
     p = sock.recv(packet_size)
     h = decode_header(p)
@@ -83,7 +90,7 @@ while(True):
         spectra_id = h['spectra_id']
         print("New spectra ID: %d. Last ID had %d packets" % (spectra_id, packet_cnt))
         packet_cnt = 0
-    payload = np.frombuffer(p[HEADER_SIZE:], dtype=np.int32).reshape([args.npol, args.npol, args.nchan, 2])
+    payload = np.frombuffer(p[HEADER_SIZE:], dtype=payload_dt).reshape([args.npol, args.npol, args.nchan, 2])
     for p0 in range(h['npols']):
         for p1 in range(h['npols']):
             outbuf[h['stand0'], h['stand1'], p0, p1].real = payload[p0,p1,:,0]

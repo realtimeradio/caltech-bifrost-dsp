@@ -11,7 +11,7 @@ import numpy as np
 class Capture(object):
     time_tag = 0
     def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125,
-                     input_to_ant=None, nstands=352, npols=2,
+                     input_to_ant=None, nstand=352, npol=2,
                      *args, **kwargs):
         self.log    = log
         self.fs_hz  = fs_hz # sampling frequency in Hz
@@ -20,8 +20,8 @@ class Capture(object):
         self.kwargs = kwargs
         self.core = self.kwargs.get('core', 0)
         self.utc_start = self.kwargs['utc_start']
-        self.nstands = nstands
-        self.npols = npols
+        self.nstand = nstand
+        self.npol = npol
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
                 self.CaptureClass = UDPVerbsCapture
@@ -42,12 +42,12 @@ class Capture(object):
         if input_to_ant is not None:
             self.input_to_ant = input_to_ant
         else:
-            self.input_to_ant = np.zeros([nstands*npols, 2], dtype=np.int32)
-            for s in range(nstands):
-                for p in range(npols):
-                    self.input_to_ant[npols*s + p] = [s, p]
+            self.input_to_ant = np.zeros([nstand*npol, 2], dtype=np.int32)
+            for s in range(nstand):
+                for p in range(npol):
+                    self.input_to_ant[npol*s + p] = [s, p]
 
-        self.ant_to_input = np.zeros([nstands, npols], dtype=np.int32)
+        self.ant_to_input = np.zeros([nstand, npol], dtype=np.int32)
         for i, inp in enumerate(self.input_to_ant):
             stand = inp[0]
             pol = inp[1]
@@ -68,7 +68,7 @@ class Capture(object):
         #print("                 sync_time =", time.ctime(sync_time))
         #self.log.info("Capture >> New sequence at %s" % time.ctime())
         time_tag_ptr[0] = self.time_tag
-        nchan = nchan * (nsrc * 32 // self.nstands)
+        nchan = nchan * (nsrc * 32 // self.nstand)
         hdr = {'time_tag': self.time_tag,
                'sync_time': sync_time,
                'seq0':     seq0, 
@@ -77,11 +77,11 @@ class Capture(object):
                'fs_hz':    self.fs_hz,
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
-               'nstand':   self.nstands,
+               'nstand':   self.nstand,
                'input_to_ant': self.input_to_ant.tolist(),
                'ant_to_input': self.ant_to_input.tolist(),
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
-               'npol':     self.npols,
+               'npol':     self.npol,
                'complex':  True,
                'nbit':     4}
         #if self.input_to_ant.shape != (nstand, npol):

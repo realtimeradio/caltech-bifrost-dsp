@@ -158,7 +158,7 @@ def main(argv):
     GSIZE = 480
     nstand = 352
     npol = 2
-    nchans = 192
+    nchan = 184
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
     cores = list(map(int, args.cores.split(',')))
@@ -178,7 +178,9 @@ def main(argv):
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0), skip_write=args.nodata, target_throughput=args.target_throughput, testfile=args.testdatain))
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0),
+                   skip_write=args.nodata, target_throughput=args.target_throughput,
+                   nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
     # Get the antenna to input map as understood by the data source
     # This could (should?) to passed down in the headers and calculated on the fly,
@@ -187,16 +189,19 @@ def main(argv):
 
     ## capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
+                      nchan=nchan, npol=npol, nstand=nstand,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
     #ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
     #                  core=cores.pop(0), guarantee=True))
 
     if not args.nogpu:
         ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
+                          nchan=nchan, npol=npol, nstand=nstand,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
+                          nchan=nchan, npol=npol, nstand=nstand,
                           core=cores.pop(0), guarantee=True, acc_len=2400, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=2400*8, ant_to_input=ant_to_input))
 
         # Get the conjugation conventions and baseline IDs provided by the correlator block.
@@ -208,12 +213,14 @@ def main(argv):
 
         ops.append(CorrAcc(log, iring=corr_output_ring, oring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
+                          nchan=nchan, npol=npol, nstand=nstand,
                           acc_len=args.corr_acc_len,
                           autostartat=2400*32*2,
                   ))
 
         ops.append(CorrOutputFull(log, iring=corr_slow_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
+                          nchan=nchan, npol=npol, nstand=nstand,
                           checkfile=args.testdatacorr,
                           checkfile_acc_len=args.testdatacorr_acc_len,
                           antpol_to_bl=antpol_to_bl,
@@ -222,6 +229,7 @@ def main(argv):
 
         ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
+                          nchan=nchan, npol=npol, nstand=nstand,
                           nchan_sum=CORR_SUBSEL_NCHAN_SUM,
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj = bl_is_conj,
@@ -233,17 +241,17 @@ def main(argv):
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
+                          nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None))
         ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
+                          nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
         ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchans, ninput_beam=NBEAM, npol=npol,
+                          nchan_max=nchan, ninput_beam=NBEAM, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
         for i in range(3):
             ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
-                          nchans=nchans, ninput_beam=NBEAM,
+                          nchan=nchan, ninput_beam=NBEAM,
                           core=cores.pop(0), guarantee=True))
             ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
                           core=cores.pop(0), guarantee=True))

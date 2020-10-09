@@ -62,16 +62,16 @@ class Corr(Block):
     Perform cross-correlation using xGPU
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0, ant_to_input=None):
+                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=2400, gpu=-1, test=False, etcd_client=None, autostartat=0, ant_to_input=None):
         assert (acc_len % ntime_gulp == 0), "Acculmulation length must be a multiple of gulp size"
         super(Corr, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         # TODO: Other things we could check:
-        # - that nchans/pols/gulp_size matches XGPU compilation
+        # - that nchan/pols/gulp_size matches XGPU compilation
         self.ntime_gulp = ntime_gulp
-        self.nchans = nchans
-        self.npols = npols
-        self.nstands = nstands
-        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
+        self.nchan = nchan
+        self.npol = npol
+        self.nstand = nstand
+        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
         self.gpu = gpu
 
         self.test = test
@@ -80,7 +80,7 @@ class Corr(Block):
             BFSetGPU(self.gpu)
         
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
+        self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
         self.ogulp_size = self.matlen * 8 # complex64
 
         self.new_start_time = autostartat
@@ -103,9 +103,9 @@ class Corr(Block):
             raise RuntimeError
 
         # generate xGPU order map
-        self.antpol_to_input = BFArray(np.zeros([nstands, npols], dtype=np.int32), space='system')
-        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.antpol_to_input = BFArray(np.zeros([nstand, npol], dtype=np.int32), space='system')
+        self.antpol_to_bl = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
+        self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
         if ant_to_input is not None:
             self.update_baseline_indices(ant_to_input)
 

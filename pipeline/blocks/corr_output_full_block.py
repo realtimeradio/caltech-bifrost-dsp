@@ -22,28 +22,28 @@ class CorrOutputFull(Block):
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, etcd_client=None, dest_port=10000,
+                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
                  checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None):
         # TODO: Other things we could check:
-        # - that nchans/pols/gulp_size matches XGPU compilation
+        # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
-        self.nchans = nchans
-        self.npols = npols
-        self.nstands = nstands
-        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
+        self.nchan = nchan
+        self.npol = npol
+        self.nstand = nstand
+        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
 
         self.igulp_size = self.matlen * 8 # complex64
 
         # Arrays to hold the conjugation and bl indices of data coming from xGPU
-        self.antpol_to_bl = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
-        self.bl_is_conj   = BFArray(np.zeros([nstands, nstands, npols, npols], dtype=np.int32), space='system')
+        self.antpol_to_bl = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
+        self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
         if antpol_to_bl is not None:
             self.antpol_to_bl[...] = antpol_to_bl
             print(self.antpol_to_bl.shape)
         if bl_is_conj is not None:
             self.bl_is_conj[...] = bl_is_conj
             print(self.bl_is_conj.shape)
-        self.reordered_data = BFArray(np.zeros([nstands, nstands, npols, npols, nchans, 2], dtype=np.int32), space='system')
+        self.reordered_data = BFArray(np.zeros([nstand, nstand, npol, npol, nchan, 2], dtype=np.int32), space='system')
 
         self.checkfile_acc_len = checkfile_acc_len
         if checkfile is None:
@@ -93,7 +93,7 @@ class CorrOutputFull(Block):
         the end is reached.
         Inputs: t (int) -- time index of correlation
         """
-        dim = np.array([self.nchans, self.nstands, self.nstands, self.npols, self.npols])
+        dim = np.array([self.nchan, self.nstand, self.nstand, self.npol, self.npol])
         nbytes = dim.prod() * 2 * 8
         seekloc = (nbytes * t) % self.checkfile_nbytes
         self.log.debug("CORR OUTPUT >> Testfile has %d bytes. Seeking to %d and reading %d bytes for sample %d" % (self.checkfile_nbytes, seekloc, nbytes, t))
@@ -115,6 +115,11 @@ class CorrOutputFull(Block):
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = this_gulp_time
+            nchan = ihdr['nchan']
+            chan0 = ihdr['chan0']
+            bw_hz = ihdr['bw_hz']
+            sfreq = ihdr['sfreq']
+            sfreq = ihdr['npol']
             if 'ant_to_bl_id' in ihdr:
                 self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
             if 'bl_is_conj' in ihdr:
@@ -147,7 +152,7 @@ class CorrOutputFull(Block):
                     self.log.info("CORR OUTPUT >> Upstream accumulation %d" % upstream_acc_len)
                     self.log.info("CORR OUTPUT >> File accumulation %d" % self.checkfile_acc_len)
                     self.log.info("CORR OUTPUT >> Integrating %d blocks" % nblocks)
-                    dtest = np.zeros([self.nchans, self.nstands, self.nstands, self.npols, self.npols], dtype=np.complex)
+                    dtest = np.zeros([self.nchan, self.nstand, self.nstand, self.npol, self.npol], dtype=np.complex)
                     for i in range(nblocks):
                         dtest += self.get_checkfile_corr(this_gulp_time // self.checkfile_acc_len + i)
                     # check baseline by baseline
@@ -156,13 +161,13 @@ class CorrOutputFull(Block):
                     nonzerocnt = 0
                     zerocnt = 0
                     now = time.time()
-                    for s0 in range(self.nstands):
+                    for s0 in range(self.nstand):
                         if time.time() - now > 15:
                             self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
                             now = time.time()
-                        for s1 in range(s0, self.nstands):
-                            for p0 in range(self.npols):
-                               for p1 in range(self.npols):
+                        for s1 in range(s0, self.nstand):
+                            for p0 in range(self.npol):
+                               for p1 in range(self.npol):
                                    if not np.all(self.reordered_data[s0, s1, p0, p1, :, 0] == 0):
                                        nonzerocnt += 1
                                    else:
@@ -195,20 +200,22 @@ class CorrOutputFull(Block):
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
                 if self.dest_ip != "0.0.0.0":
-                    dout = np.zeros([self.npols, self.npols, self.nchans, 2], dtype='>i')
+                    dout = np.zeros([self.npol, self.npol, self.nchan, 2], dtype='>i')
                     packet_cnt = 0
-                    for s0 in range(self.nstands):
-                        for s1 in range(s0, self.nstands):
-                            header = struct.pack(">QQ6L",
+                    for s0 in range(self.nstand):
+                        for s1 in range(s0, self.nstand):
+                            header = struct.pack(">QQ2d6I",
                                                  ihdr['sync_time'],
                                                  this_gulp_time,
+                                                 bw_hz,
+                                                 sfreq,
                                                  upstream_acc_len,
-                                                 ihdr['chan0'],
-                                                 self.npols,
-                                                 self.nchans,
+                                                 nchan,
+                                                 chan0,
+                                                 npol,
                                                  s0, s1)
                             dout = self.reordered_data[s0, s1]
-                            self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
+                            self.sock.sendto(header + dout.byteswap().tobytes(), (self.dest_ip, self.dest_port))
                             packet_cnt += 1
                             if packet_cnt % 10 == 0:
                                 # Only implement packet delay every 10 packets because the sleep

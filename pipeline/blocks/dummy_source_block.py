@@ -16,15 +16,15 @@ class DummySource(object):
     but mark input buffers ready for consumption.
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchans=192, nstands=352, npols=2, skip_write=False, target_throughput=22.0, testfile=None):
+                 core=-1, nchan=192, nstand=352, npol=2, skip_write=False, target_throughput=22.0, testfile=None):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
         self.core = core
-        self.nchans = nchans
-        self.npols = npols
-        self.nstands = 352
-        self.ninputs = nstands * npols
+        self.nchan = nchan
+        self.npol = npol
+        self.nstand = 352
+        self.ninputs = nstand * npol
         self.skip_write = skip_write
         self.target_throughput = target_throughput
         
@@ -37,7 +37,7 @@ class DummySource(object):
         
         self.out_proclog.update( {'nring':1, 'ring0':self.oring.name})
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.gulp_size = self.ntime_gulp*nchans*nstands*npols*1        # complex8
+        self.gulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
 
         # file containing test data
         if testfile is not None:
@@ -49,26 +49,26 @@ class DummySource(object):
         # make an array ninputs-elements long with [station, pol] IDs.
         # e.g. if input_to_ant[12] = [27, 1], then the 13th input is stand 27, pol 1
         self.input_to_ant = np.zeros([self.ninputs, 2], dtype=np.int32)
-        for s in range(self.nstands):
-            for p in range(self.npols):
-                self.input_to_ant[self.npols*s + p] = [s, p]
+        for s in range(self.nstand):
+            for p in range(self.npol):
+                self.input_to_ant[self.npol*s + p] = [s, p]
 
-        self.ant_to_input = np.zeros([self.nstands, self.npols], dtype=np.int32)
+        self.ant_to_input = np.zeros([self.nstand, self.npol], dtype=np.int32)
         for i, inp in enumerate(self.input_to_ant):
             stand = inp[0]
             pol = inp[1]
             self.ant_to_input[stand, pol] = i
 
         if skip_write:
-            self.test_data = BFArray(shape=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols], dtype='i8', space='system')
+            self.test_data = BFArray(shape=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol], dtype='i8', space='system')
         else:
             print("initializing random numbers")
             #TODO Can't get 'ci4' type to behave
-            #self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
+            #self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
             #                    dtype='u8', space='system')
-            self.test_data = BFArray(np.zeros([NTEST_BLOCKS, ntime_gulp, nchans, nstands, npols]),
+            self.test_data = BFArray(np.zeros([NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
                                 dtype='u8', space='system')
-            for i in range(nstands):
+            for i in range(nstand):
                 self.test_data[:,:,:,i,:] = i%8
 
         self.shutdown_event = threading.Event()
@@ -105,10 +105,12 @@ class DummySource(object):
         time.sleep(0.1)
         self.oring.resize(self.gulp_size, self.gulp_size*4)
         hdr = {}
-        hdr['nchan'] = self.nchans
+        hdr['nchan'] = self.nchan
         hdr['chan0'] = 0
-        hdr['nstand'] = self.nstands
-        hdr['npol'] = self.npols
+        hdr['bw_hz'] = 24e3 * self.nchan
+        hdr['sfreq'] = 0.0
+        hdr['nstand'] = self.nstand
+        hdr['npol'] = self.npol
         hdr['seq0'] = 0
         hdr['input_to_ant'] = self.input_to_ant.tolist()
         hdr['ant_to_input'] = self.ant_to_input.tolist()

@@ -19,7 +19,7 @@ class Copy(Block):
     Copy data from one buffer to another.
     """
     def __init__(self, log, iring, oring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchans=192, npols=704, gpu=-1, etcd_client=None,
+                 guarantee=True, core=-1, nchan=192, nstand=352, npol=2, gpu=-1, etcd_client=None,
                  buf_size_gbytes=None):
 
         super(Copy, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
@@ -30,7 +30,7 @@ class Copy(Block):
             BFSetGPU(self.gpu)
 
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*nchans*npols*1        # complex8
+        self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
         # round down buffer size to an integer gulps
         if buf_size_gbytes is None:
             self.buf_size = 4 * self.igulp_size

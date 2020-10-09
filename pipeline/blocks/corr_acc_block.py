@@ -19,14 +19,14 @@ class CorrAcc(Block):
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring, oring,
-                 guarantee=True, core=-1, nchans=192, npols=2, nstands=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
+                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
         # TODO: Other things we could check:
-        # - that nchans/pols/gulp_size matches XGPU compilation
+        # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrAcc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
-        self.nchans = nchans
-        self.npols = npols
-        self.nstands = nstands
-        self.matlen = nchans * (nstands//2+1)*(nstands//4)*npols*npols*4
+        self.nchan = nchan
+        self.npol = npol
+        self.nstand = nstand
+        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
         self.gpu = gpu
 
         if self.gpu != -1:

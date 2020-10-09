@@ -20,18 +20,18 @@ class CorrSubsel(Block):
     """
     nvis_out = 4656
     def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
-                 nchans=192, npols=2, nstands=352, nchan_sum=4, gpu=-1,
+                 nchan=192, npol=2, nstand=352, nchan_sum=4, gpu=-1,
                  antpol_to_bl=None, bl_is_conj=None):
 
         super(CorrSubsel, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
-        self.nchans_in = nchans
-        self.nchans_out = nchans // nchan_sum
+        self.nchan_in = nchan
+        self.nchan_out = nchan // nchan_sum
         self.nchan_sum = nchan_sum
-        self.npols = npols
-        self.nstands = nstands
+        self.npol = npol
+        self.nstand = nstand
         self.gpu = gpu
-        self.matlen = self.nchans_in * (nstands//2+1)*(nstands//4)*npols*npols*4 # xGPU defined
+        self.matlen = self.nchan_in * (nstand//2+1)*(nstand//4)*npol*npol*4 # xGPU defined
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
@@ -44,26 +44,28 @@ class CorrSubsel(Block):
         # TODO: nvis_out could be dynamic, but we'd have to reallocate the GPU memory
         # if the size changed. Leave static for now, which is all the requirements call for.
         self._subsel      = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
-        self._subsel_next = BFArray(np.zeros([self.nvis_out]), dtype='i32', space='cuda_host')
+        self._subsel_next = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda_host')
         self._baselines = np.zeros([self.nvis_out, 2, 2], dtype=np.int32)
         self._baselines_next = np.zeros([self.nvis_out, 2, 2], dtype=np.int32)
         self._conj      = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
-        self._conj_next = BFArray(np.zeros([self.nvis_out]), dtype='i32', space='cuda_host')
-        self._subsel_pending = True
-        self.obuf_gpu = BFArray(shape=[self.nchans_out, self.nvis_out], dtype='i64', space='cuda')
-        self.ogulp_size = self.nchans_out * self.nvis_out * 8
-        self.stats.update({'new_subsel': self._subsel_next,
-                           'update_pending': self._subsel_pending,
-                           'last_cmd_time': time.time()})
+        self._conj_next = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda_host')
+
+        self.obuf_gpu = BFArray(shape=[self.nchan_out, self.nvis_out], dtype='ci32', space='cuda')
+        self.ogulp_size = self.nchan_out * self.nvis_out * 8
         self.update_stats()
         if antpol_to_bl is not None:
             self._antpol_to_bl = antpol_to_bl
         else:
-            self._antpol_to_bl = np.zeros([nstands, npols, nstands, npols])
+            self._antpol_to_bl = np.zeros([nstand, npol, nstand, npol])
         if bl_is_conj is not None:
             self._bl_is_conj = bl_is_conj
         else:
-            self._bl_is_conj = np.zeros([nstands, npols, nstands, npols])
+            self._bl_is_conj = np.zeros([nstand, npol, nstand, npol])
+
+        # update subselection map to a default initial value of
+        # pol 0 autos
+        # This can't be called until the bl_is_conj and antpol_to_bl maps have been set above
+        self.update_subsel([[[i % nstand,0], [i % nstand,0]] for i in range(self.nvis_out)])
         
     def _etcd_callback(self, watchresponse):
         """
@@ -94,9 +96,11 @@ class CorrSubsel(Block):
                 s0, p0 = i0
                 s1, p1 = i1
                 # index as S0, S1, P0, P1
-                self._subsel_next[v] = self._antpol_to_bl[s0, s1, p0, p1]
+                self._subsel_next.data[v] = self._antpol_to_bl[s0, s1, p0, p1]
+                self._conj_next.data[v] = self._bl_is_conj[s0, s1, p0, p1]
             self._subsel_pending = True
             self.stats.update({'new_subsel': self._subsel_next,
+                               'new_baselines': self._baselines_next,
                                'update_pending': self._subsel_pending,
                                'last_cmd_time': time.time()})
             self.update_stats()
@@ -117,6 +121,8 @@ class CorrSubsel(Block):
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ihdr = json.loads(iseq.header.tostring())
+                this_gulp_time = ihdr['seq0']
+                acc_len = ihdr['acc_len']
                 # Uncomment this if you want to read the map on the fly
                 #antpol_to_bl = ihdr['antpol_to_bl']
                 ohdr = ihdr.copy()
@@ -126,10 +132,13 @@ class CorrSubsel(Block):
                 self.acquire_control_lock()
                 self.log.info("Updating baseline subselection indices")
                 # copy to GPU
-                self._subsel[...] = self._subsel_next
+                #self._subsel[...] = self._subsel_next
+                #self._conj[...] = self._conj_next
+                copy_array(self._subsel, self._subsel_next)
+                copy_array(self._conj, self._conj_next)
                 self._baselines[...] = self._baselines_next
-                self._conj[...] = self._conj_next
                 self.stats.update({'subsel': self._subsel_next,
+                                   'baselines': self._baselines_next,
                                    'update_pending': False,
                                    'last_update_time': time.time()})
                 ohdr['baselines'] = self._baselines.tolist()
@@ -143,7 +152,7 @@ class CorrSubsel(Block):
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
                     self.log.debug("Grabbing subselection")
-                    idata = ispan.data_view('i64').reshape(47849472)
+                    idata = ispan.data_view('ci32').reshape(self.matlen)
                     self.acquire_control_lock()
                     self._subsel_pending = False
                     self.release_control_lock()
@@ -155,7 +164,7 @@ class CorrSubsel(Block):
                         if (rv != _bf.BF_STATUS_SUCCESS):
                             self.log.error("xgpuSubSelect returned %d" % rv)
                             raise RuntimeError
-                        odata = ospan.data_view(dtype='i64').reshape([self.nchans_out, self.nvis_out])
+                        odata = ospan.data_view(dtype='ci32').reshape([self.nchan_out, self.nvis_out])
                         copy_array(odata, self.obuf_gpu)
                         # Wait for copy to complete before committing span
                         stream_synchronize()
@@ -164,8 +173,11 @@ class CorrSubsel(Block):
                         prev_time = curr_time
                     self.perf_proclog.update({'acquire_time': acquire_time, 
                                               'reserve_time': reserve_time, 
-                                              'process_time': process_time,})
-                    # If a new baseline selection is pending, close this oseq and generate a new one
+                                              'process_time': process_time,
+                                              'this_sample' : this_gulp_time})
+                    # tick the sequence counter to the next integration
+                    this_gulp_time += acc_len
+                    # If a baseline change is pending start a new sequence
                     # with an updated header
                     if self._subsel_pending:
                         oseq.end()
@@ -178,7 +190,8 @@ class CorrSubsel(Block):
                                            'last_update_time': time.time()})
                         self.release_control_lock()
                         self.update_stats()
-                        #TODO update time tag based on what has already been processed
+                        #update time tag based on what has already been processed
+                        ohdr['seq0'] = this_gulp_time
                         ohdr_str = json.dumps(ohdr)
                         oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         time_tag += 1
