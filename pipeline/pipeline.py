@@ -140,7 +140,7 @@ def main(argv):
     
     NBEAM = 16
     if not args.nogpu:
-        capture_ring = Ring(name="capture", space='cuda_host')
+        capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
         bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
