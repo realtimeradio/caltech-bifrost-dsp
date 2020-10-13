@@ -93,8 +93,8 @@ class TriggeredDump(Block):
                     # Mash header in here if you want
                     ohdr_str = json.dumps(ohdr)
                     for ispan in iseq.read(self.igulp_size, begin=100*self.igulp_size):
-                        print("size:", ispan.size)
-                        print("offset:", ispan.offset)
+                        #print("size:", ispan.size)
+                        #print("offset:", ispan.offset)
                         if ispan.size < self.igulp_size:
                             continue
                         this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
@@ -135,7 +135,6 @@ class TriggeredDump(Block):
                             self.update_stats()
                             break
                         if ispan.size < self.igulp_size:
-                            print("size:", ispan.size)
                             self.log.info("TRIGGERED DUMP >> Stopped because stream ended")
                             self.stats.update({'status'       : 'stream end'})
                             self.update_stats()
