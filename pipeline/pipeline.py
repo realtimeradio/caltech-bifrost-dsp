@@ -191,8 +191,11 @@ def main(argv):
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
                       nchan=nchan, npol=npol, nstand=nstand,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
-    #ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
-    #                  core=cores.pop(0), guarantee=True))
+
+    ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
+                      nchan=nchan, npol=npol, nstand=nstand,
+                      core=cores.pop(0), guarantee=True,
+                      etcd_client=etcd_client))
 
     if not args.nogpu:
         ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,

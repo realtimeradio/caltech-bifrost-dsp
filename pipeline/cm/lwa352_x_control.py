@@ -10,6 +10,7 @@ from blocks.corr_output_part_control import CorrOutputPart
 from blocks.corr_acc_control import CorrAcc
 from blocks.corr_control import Corr
 from blocks.corr_subsel_control import CorrSubsel
+from blocks.triggered_dump_control import TriggeredDump
 
 default_log = logging.getLogger(__name__)
 logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
@@ -33,6 +34,7 @@ class Lwa352XControl():
         self.corr = Corr(self.log, self.corr_interface, self.host, self.pipeline_id)
         self.corr_acc = CorrAcc(self.log, self.corr_interface, self.host, self.pipeline_id)
         self.corr_subsel = CorrSubsel(self.log, self.corr_interface, self.host, self.pipeline_id)
+        self.triggered_dump = TriggeredDump(self.log, self.corr_interface, self.host, self.pipeline_id)
         
 
 
