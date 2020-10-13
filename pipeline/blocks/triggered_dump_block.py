@@ -86,13 +86,15 @@ class TriggeredDump(Block):
                 start = False
                 file_num = 0
                 file_ndumped = 0
+                total_bytes = 0
+                start_time = time.time()
                 with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
                     ihdr = json.loads(iseq.header.tostring())
                     this_time = ihdr['seq0']
                     ohdr = ihdr.copy()
                     # Mash header in here if you want
                     ohdr_str = json.dumps(ohdr)
-                    for ispan in iseq.read(self.igulp_size, begin=100*self.igulp_size):
+                    for ispan in iseq.read(self.igulp_size):
                         #print("size:", ispan.size)
                         #print("offset:", ispan.offset)
                         if ispan.size < self.igulp_size:
@@ -122,6 +124,7 @@ class TriggeredDump(Block):
                         # Write the data
                         os.write(ofile, ispan.data)
                         file_ndumped += self.ntime_gulp
+                        total_bytes += self.igulp_size
                         if self.command == 'stop':
                             self.log.info("TRIGGERED DUMP >> Stopped")
                             self.stats.update({'last_command' : 'stop',
@@ -144,6 +147,9 @@ class TriggeredDump(Block):
                     if ofile is not None:
                         os.close(ofile)
                         ofile = None
-                    self.log.info("TRIGGERED DUMP >> Complete")
+                    stop_time = time.time()
+                    elapsed = stop_time - start_time
+                    gbytesps = total_bytes / 1e9 / elapsed
+                    self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
                     self.stats.update({'status' : 'finished'})
                     self.update_stats()
