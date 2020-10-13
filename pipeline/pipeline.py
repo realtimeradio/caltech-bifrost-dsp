@@ -187,7 +187,7 @@ def main(argv):
     # but observational evidence is that this can be problematic for pipeline throughput.
     ant_to_input = ops[-1].ant_to_input
 
-    ## capture_ring -> triggered buffer
+    # capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
                       nchan=nchan, npol=npol, nstand=nstand,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
@@ -250,15 +250,15 @@ def main(argv):
         ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
-        ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchan, ninput_beam=NBEAM, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        for i in range(3):
-            ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
-                          nchan=nchan, ninput_beam=NBEAM,
-                          core=cores.pop(0), guarantee=True))
-            ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
-                          core=cores.pop(0), guarantee=True))
+        #ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
+        #                  nchan_max=nchan, ninput_beam=NBEAM, npol=npol,
+        #                  core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        #for i in range(3):
+        #    ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
+        #                  nchan=nchan, ninput_beam=NBEAM,
+        #                  core=cores.pop(0), guarantee=True))
+        #    ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
+        #                  core=cores.pop(0), guarantee=True))
 
     ## gpu_input_ring -> beamformer
     ## beamformer -> UDP
