@@ -9,6 +9,8 @@ import time
 import simplejson as json
 import numpy as np
 import os
+import mmap
+import struct
 
 from blocks.block_base import Block
 
@@ -53,7 +55,10 @@ class TriggeredDump(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        hinfo = HeaderInfo()
+        # Create a 4kB-aligned 1M buffer to store header data.
+        # Needs to be 512-byte aligned to work with O_DIRECT writing.
+        # Luckily mmap aligns to memory page size
+        hinfo = mmap.mmap(-1, 1024*1024)
         start = False
         last_trigger_time = None
         dump_path = self.dump_path
@@ -90,16 +95,13 @@ class TriggeredDump(Block):
                 start_time = time.time()
                 with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
                     ihdr = json.loads(iseq.header.tostring())
-                    this_time = ihdr['seq0']
-                    ohdr = ihdr.copy()
-                    # Mash header in here if you want
-                    ohdr_str = json.dumps(ohdr)
                     for ispan in iseq.read(self.igulp_size):
                         #print("size:", ispan.size)
                         #print("offset:", ispan.offset)
                         if ispan.size < self.igulp_size:
                             continue
                         this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
+                        ihdr['seq'] = this_time
                         if ofile is None or file_ndumped >= ntime_per_file:
                             if file_ndumped >= ntime_per_file:
                                 # Close file and increment file number
@@ -121,6 +123,11 @@ class TriggeredDump(Block):
                                         filename + '.%d' % file_num,
                                         os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
                                     )
+                            header = json.dumps(ihdr).encode()
+                            hsize = len(header)
+                            hinfo.seek(0)
+                            hinfo.write(struct.pack('<I', hsize) + json.dumps(ihdr).encode())
+                            os.write(ofile, hinfo)
                         # Write the data
                         os.write(ofile, ispan.data)
                         file_ndumped += self.ntime_gulp
