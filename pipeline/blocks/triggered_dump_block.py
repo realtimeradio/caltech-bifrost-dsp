@@ -14,6 +14,8 @@ import struct
 
 from blocks.block_base import Block
 
+HEADER_SIZE = 1024*1024
+
 class TriggeredDump(Block):
     """
     Dump a buffer to disk
@@ -58,7 +60,7 @@ class TriggeredDump(Block):
         # Create a 4kB-aligned 1M buffer to store header data.
         # Needs to be 512-byte aligned to work with O_DIRECT writing.
         # Luckily mmap aligns to memory page size
-        hinfo = mmap.mmap(-1, 1024*1024)
+        hinfo = mmap.mmap(-1, HEADER_SIZE)
         start = False
         last_trigger_time = None
         dump_path = self.dump_path
@@ -126,7 +128,7 @@ class TriggeredDump(Block):
                             header = json.dumps(ihdr).encode()
                             hsize = len(header)
                             hinfo.seek(0)
-                            hinfo.write(struct.pack('<I', hsize) + json.dumps(ihdr).encode())
+                            hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
                             os.write(ofile, hinfo)
                         # Write the data
                         os.write(ofile, ispan.data)
