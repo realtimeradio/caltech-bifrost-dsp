@@ -246,7 +246,8 @@ def main(argv):
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None))
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None,
+                          etcd_client=etcd_client))
         ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
                           nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
