@@ -25,7 +25,7 @@ from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
 from blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
-from blocks.beamform_vlbi_block import BeamformVlbi
+from blocks.beamform_vlbi_output_block import BeamformVlbiOutput
 from blocks.beamform_vacc_block import BeamVacc
 from blocks.beamform_output_block import BeamformOutput
 from blocks.triggered_dump_block import TriggeredDump
@@ -253,23 +253,8 @@ def main(argv):
                               nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol, beam_id=i,
                               core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=480))
             ops.append(BeamformOutput(log, iring=bf_power_output_ring[i], core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
-        cores.pop(0)
-        #ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-        #                  nchan_max=nchan, ninput_beam=NBEAM, npol=npol,
-        #                  core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        #for i in range(1):
-        #    ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], beam_id=i,
-        #                  nchan=nchan, ninput_beam=NBEAM, gpu=args.gpu, autostartat=2400*32*2, acc_len=24000,
-        #                  core=cores[0], guarantee=True))
-        #    ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
-        #                  core=cores.pop(0), guarantee=True))
-
-    ## gpu_input_ring -> beamformer
-    ## beamformer -> UDP
-
-    #
-    ## corr_slow_output -> UDP
-    ## corr_fast_output -> UDP
+        ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
+                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     

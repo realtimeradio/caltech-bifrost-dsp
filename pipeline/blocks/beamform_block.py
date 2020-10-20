@@ -125,6 +125,7 @@ class Beamform(Block):
                 ohdr['nstand'] = self.nbeam_max
                 ohdr['nbit'] = 32
                 ohdr['complex'] = True
+                ohdr['nbeam'] = self.nbeam_max
                 ohdr_str = json.dumps(ohdr)
                 
                 self.oring.resize(ogulp_size)
