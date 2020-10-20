@@ -138,10 +138,11 @@ class Beamform(Block):
                             self.log.info("BEAMFORM >> Updating coefficients")
                             #self.compute_weights(ohdr['sfreq'], ohdr['nchan'], ohdr['bw_hz']/ohdr['nchan'])
                             self.acquire_control_lock()
-                            phases = np.exp(1j*2*np.pi*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
-                            self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
+                            #phases = np.exp(1j*2*np.pi*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
+                            #self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
                             # Copy data to GPU
-                            self.cgains[...] = self.new_cgains
+                            #self.cgains[...] = self.new_cgains
+                            self.cgains[0] = self.new_cgains[0]
                             self.update_pending = False
                             self.release_control_lock()
                         

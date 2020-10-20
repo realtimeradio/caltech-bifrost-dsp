@@ -24,6 +24,7 @@ from blocks.copy_block import Copy
 from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
+from blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
 from blocks.beamform_vlbi_block import BeamformVlbi
 from blocks.beamform_vacc_block import BeamVacc
 from blocks.beamform_output_block import BeamformOutput
@@ -141,7 +142,7 @@ def main(argv):
         capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
-        bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
+        bf_power_output_ring = [Ring(name="bf-pow-output%d" %i, space='cuda_host') for i in range(NBEAM)]
         bf_acc_output_ring = [Ring(name="bf-acc-output%d" % i, space='system') for i in range(NBEAM)]
         corr_output_ring = Ring(name="corr-output", space='cuda')
         corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
@@ -154,6 +155,7 @@ def main(argv):
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
     GSIZE = 480
+    GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
     nchan = 184
@@ -187,7 +189,7 @@ def main(argv):
 
     # capture_ring -> triggered buffer
     ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
-                      nchan=nchan, npol=npol, nstand=nstand,
+                      nchan=nchan, npol=npol, nstand=nstand, buffer_multiplier=GPU_NGULP,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
     ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
@@ -196,7 +198,7 @@ def main(argv):
                       etcd_client=etcd_client))
 
     if not args.nogpu:
-        ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GSIZE,
+        ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GPU_NGULP*GSIZE,
                           nchan=nchan, npol=npol, nstand=nstand,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
@@ -242,20 +244,22 @@ def main(argv):
                   ))
 
     if not (args.nobeamform or args.nogpu):
-        ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GSIZE,
+        ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
                           nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None,
                           etcd_client=etcd_client))
-        ops.append(BeamformSum(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GSIZE,
-                          nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=24))
+        for i in range(NBEAM):
+            ops.append(BeamformSumSingleBeam(log, iring=bf_output_ring, oring=bf_power_output_ring[i], ntime_gulp=GPU_NGULP*GSIZE,
+                              nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol, beam_index=i,
+                              core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=480))
+        cores.pop(0)
         #ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
         #                  nchan_max=nchan, ninput_beam=NBEAM, npol=npol,
         #                  core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        #for i in range(3):
-        #    ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], nint=GSIZE//24, beam_id=i,
-        #                  nchan=nchan, ninput_beam=NBEAM,
-        #                  core=cores.pop(0), guarantee=True))
+        #for i in range(1):
+        #    ops.append(BeamVacc(log, iring=bf_power_output_ring, oring=bf_acc_output_ring[i], beam_id=i,
+        #                  nchan=nchan, ninput_beam=NBEAM, gpu=args.gpu, autostartat=2400*32*2, acc_len=24000,
+        #                  core=cores[0], guarantee=True))
         #    ops.append(BeamformOutput(log, iring=bf_acc_output_ring[i], beam_id=i,
         #                  core=cores.pop(0), guarantee=True))
 
@@ -269,16 +273,19 @@ def main(argv):
     threads = [threading.Thread(target=op.main) for op in ops]
     
     log.info("Launching %i thread(s)", len(threads))
-    for thread in threads:
-        #thread.daemon = True
-        thread.start()
-    while not shutdown_event.is_set():
-        signal.pause()
-    log.info("Shutdown, waiting for threads to join")
-    for thread in threads:
-        thread.join()
-    log.info("All done")
-    return 0
+    try:
+        for thread in threads:
+            #thread.daemon = True
+            thread.start()
+        while not shutdown_event.is_set():
+            signal.pause()
+        log.info("Shutdown, waiting for threads to join")
+        for thread in threads:
+            thread.join()
+        log.info("All done")
+        return 0
+    except:
+        raise
 
 if __name__ == '__main__':
     import sys

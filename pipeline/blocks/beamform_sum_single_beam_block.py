@@ -22,13 +22,15 @@ NCHAN            = 4096
 FREQS            = np.around(np.fft.fftfreq(2*NCHAN, 1./CLOCK)[:NCHAN][:-1], 3)
 CHAN_BW          = FREQS[1] - FREQS[0]
 
-class BeamformSum(Block):
+class BeamformSumSingleBeam(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
-    def __init__(self, log, iring, oring, tuning=0, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1, etcd_client=None):
+    def __init__(self, log, iring, oring, nchan_max=256, nbeam_max=1,
+                 nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1,
+                 beam_index=0, etcd_client=None):
 
-        super(BeamformSum, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+        super(BeamformSumSingleBeam, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
-        self.tuning = tuning
+        self.beam_index = beam_index
         self.ntime_gulp = ntime_gulp
         self.gpu = gpu
         self.ntime_sum = ntime_sum
@@ -41,9 +43,6 @@ class BeamformSum(Block):
         self.npol = npol
         self.ninputs = nstand*npol
 
-        # TODO self.configMessage = ISC.BAMConfigurationClient(addr=('adp',5832))
-        self._pending = deque()
-        
         # Setup the beamformer
         if self.gpu != -1:
             BFSetGPU(self.gpu)
@@ -51,7 +50,7 @@ class BeamformSum(Block):
         nchan = self.nchan_max
 
         # Block output
-        self.bf_output = BFArray(shape=(self.nbeam_max//2, self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
+        self.bf_output = BFArray(shape=(self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Don't Initialize beamforming library -- this should have been done by the beamformer already
         #_bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
@@ -66,7 +65,7 @@ class BeamformSum(Block):
                                   'gpu0': BFGetGPU(),})
         
         igulp_size = self.ntime_gulp   * self.nchan_max * self.nbeam_max * 8 #complex 64
-        ogulp_size = self.ntime_blocks * self.nchan_max * self.nbeam_max * 4 * 4 # 4 x float32
+        ogulp_size = self.ntime_blocks * self.nchan_max * 4 * 4 # 4 x float32
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -108,11 +107,11 @@ class BeamformSum(Block):
                             
                             ## Setup and load
                             idata = ispan.data_view(np.float32)
-                            #odata = ospan.data_view(np.float32).reshape(self.bf_output.shape)
+                            odata = ospan.data_view(np.float32).reshape(self.bf_output.shape)
                             #_bf.bfBeamformIntegrate(idata.as_BFarray(), self.bf_output.as_BFarray(), self.ntime_sum)
-                            #odata[...] = self.bf_output
-                            odata = ospan.data_view(np.float32)
-                            _bf.bfBeamformIntegrate(idata.as_BFarray(), odata.as_BFarray(), self.ntime_sum)
+                            #odata = ospan.data_view(np.float32)
+                            _bf.bfBeamformIntegrateSingleBeam(idata.as_BFarray(), self.bf_output.as_BFarray(), self.ntime_sum, self.beam_index)
+                            odata[...] = self.bf_output
                             BFSync()
                             
                         ## Update the base time tag

@@ -18,7 +18,7 @@ class Copy(Block):
     """
     Copy data from one buffer to another.
     """
-    def __init__(self, log, iring, oring, ntime_gulp=2500,
+    def __init__(self, log, iring, oring, ntime_gulp=2500, buffer_multiplier=1,
                  guarantee=True, core=-1, nchan=192, nstand=352, npol=2, gpu=-1, etcd_client=None,
                  buf_size_gbytes=None):
 
@@ -29,6 +29,7 @@ class Copy(Block):
         if self.gpu != -1:
             BFSetGPU(self.gpu)
 
+        self.buffer_multiplier = buffer_multiplier
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
         # round down buffer size to an integer gulps
@@ -44,7 +45,7 @@ class Copy(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        self.oring.resize(self.igulp_size, total_span=self.buf_size)
+        self.oring.resize(self.buffer_multiplier*self.igulp_size, total_span=self.buf_size)
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
