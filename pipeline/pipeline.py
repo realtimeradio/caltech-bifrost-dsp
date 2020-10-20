@@ -250,8 +250,9 @@ def main(argv):
                           etcd_client=etcd_client))
         for i in range(NBEAM):
             ops.append(BeamformSumSingleBeam(log, iring=bf_output_ring, oring=bf_power_output_ring[i], ntime_gulp=GPU_NGULP*GSIZE,
-                              nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol, beam_index=i,
+                              nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol, beam_id=i,
                               core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=480))
+            ops.append(BeamformOutput(log, iring=bf_power_output_ring[i], core=cores[0], guarantee=True, etcd_client=etcd_client))
         cores.pop(0)
         #ops.append(BeamformVlbi(log, iring=bf_output_ring, ntime_gulp=GSIZE,
         #                  nchan_max=nchan, ninput_beam=NBEAM, npol=npol,

@@ -26,11 +26,11 @@ class BeamformSumSingleBeam(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
     def __init__(self, log, iring, oring, nchan_max=256, nbeam_max=1,
                  nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1,
-                 beam_index=0, etcd_client=None):
+                 beam_id=0, etcd_client=None):
 
         super(BeamformSumSingleBeam, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
-        self.beam_index = beam_index
+        self.beam_id = beam_id
         self.ntime_gulp = ntime_gulp
         self.gpu = gpu
         self.ntime_sum = ntime_sum
@@ -82,11 +82,12 @@ class BeamformSumSingleBeam(Block):
                 
                 ohdr = ihdr.copy()
                 ohdr['nstand'] = 1
-                ohdr['nbeam'] = self.nbeam_max // 2
+                ohdr['nbeam'] = 1
                 ohdr['nbit'] = 32
                 ohdr['complex'] = True
                 ohdr['acc_len'] = self.ntime_sum
                 ohdr['ntime_block'] = self.ntime_blocks
+                ohdr['beam_id'] = self.beam_id
                 ohdr_str = json.dumps(ohdr)
                 
                 self.oring.resize(ogulp_size)
@@ -110,7 +111,7 @@ class BeamformSumSingleBeam(Block):
                             odata = ospan.data_view(np.float32).reshape(self.bf_output.shape)
                             #_bf.bfBeamformIntegrate(idata.as_BFarray(), self.bf_output.as_BFarray(), self.ntime_sum)
                             #odata = ospan.data_view(np.float32)
-                            _bf.bfBeamformIntegrateSingleBeam(idata.as_BFarray(), self.bf_output.as_BFarray(), self.ntime_sum, self.beam_index)
+                            _bf.bfBeamformIntegrateSingleBeam(idata.as_BFarray(), self.bf_output.as_BFarray(), self.ntime_sum, self.beam_id)
                             odata[...] = self.bf_output
                             BFSync()
                             
