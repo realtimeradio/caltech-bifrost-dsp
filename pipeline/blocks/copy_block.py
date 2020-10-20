@@ -23,6 +23,7 @@ class Copy(Block):
                  buf_size_gbytes=None):
 
         super(Copy, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+        cpu_affinity.set_core(self.core)
         self.ntime_gulp = ntime_gulp
         self.gpu = gpu
 
