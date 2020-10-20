@@ -34,9 +34,15 @@ class Copy(Block):
         self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
         # round down buffer size to an integer gulps
         if buf_size_gbytes is None:
-            self.buf_size = 4 * self.igulp_size
+            self.buf_size = 4 * self.igulp_size*self.buffer_multiplier
         else:
-            self.buf_size = (int(1e9 * buf_size_gbytes) // self.igulp_size) * self.igulp_size
+            self.buf_size = int(1e9 * buf_size_gbytes) // (self.igulp_size * self.buffer_multiplier) * self.igulp_size * self.buffer_multiplier
+
+        # Looking at bifrost's ring_impl.cpp the buffer will get rounded up to a power of 2
+        buf_size_rounded = 2**int(np.ceil(np.log2(self.buf_size)))
+        self.log.info("COPY >> Allocating %.2f GB of memory (which will be rounded up by bifrost to %.2f GB" % (self.buf_size / 1e9, buf_size_rounded / 1e9))
+        self.oring.resize(self.buffer_multiplier*self.igulp_size, total_span=self.buf_size)
+        self.log.info("COPY >> Allocation complete")
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -45,7 +51,6 @@ class Copy(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        self.oring.resize(self.buffer_multiplier*self.igulp_size, total_span=self.buf_size)
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
