@@ -44,6 +44,7 @@ class CorrOutputFull(Block):
             self.bl_is_conj[...] = bl_is_conj
             print(self.bl_is_conj.shape)
         self.reordered_data = BFArray(np.zeros([nstand, nstand, npol, npol, nchan, 2], dtype=np.int32), space='system')
+        self.dump_size = nstand * (nstand+1) * npol * npol * nchan * 2 * 4 / 2.
 
         self.checkfile_acc_len = checkfile_acc_len
         if checkfile is None:
@@ -200,28 +201,30 @@ class CorrOutputFull(Block):
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
                 if self.dest_ip != "0.0.0.0":
-                    dout = np.zeros([self.npol, self.npol, self.nchan, 2], dtype='>i')
+                    start_time = time.time()
                     packet_cnt = 0
+                    header_static = struct.pack(">QQ2d4I",
+                                                ihdr['sync_time'],
+                                                this_gulp_time,
+                                                bw_hz,
+                                                sfreq,
+                                                upstream_acc_len,
+                                                self.nchan,
+                                                chan0,
+                                                self.npol,
+                                                )
                     for s0 in range(self.nstand):
                         for s1 in range(s0, self.nstand):
-                            header = struct.pack(">QQ2d6I",
-                                                 ihdr['sync_time'],
-                                                 this_gulp_time,
-                                                 bw_hz,
-                                                 sfreq,
-                                                 upstream_acc_len,
-                                                 self.nchan,
-                                                 chan0,
-                                                 self.npol,
-                                                 s0, s1)
-                            dout[...] = self.reordered_data[s0, s1]
-                            self.sock.sendto(header + dout.tobytes(), (self.dest_ip, self.dest_port))
+                            header_dyn = struct.pack(">2I", s0, s1)
+                            self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.dest_ip, self.dest_port))
                             packet_cnt += 1
-                            if packet_cnt % 10 == 0:
-                                # Only implement packet delay every 10 packets because the sleep
+                            if packet_cnt % 50 == 0:
+                                # Only implement packet delay every 50 packets because the sleep
                                 # overhead is large
-                                time.sleep(10 * self.packet_delay_ns / 1e9)
-                    self.log.info("CORR OUTPUT >> Sending complete for time %d" % this_gulp_time)
+                                time.sleep(50 * self.packet_delay_ns / 1e9)
+                    stop_time = time.time()
+                    elapsed = stop_time - start_time
+                    self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
                 else:
                     self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
                 curr_time = time.time()
