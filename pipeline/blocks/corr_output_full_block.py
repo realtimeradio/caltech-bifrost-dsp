@@ -120,7 +120,7 @@ class CorrOutputFull(Block):
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
             sfreq = ihdr['sfreq']
-            sfreq = ihdr['npol']
+            npol  = ihdr['npol']
             if 'ant_to_bl_id' in ihdr:
                 self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
             if 'bl_is_conj' in ihdr:
