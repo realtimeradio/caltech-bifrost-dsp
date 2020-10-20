@@ -43,6 +43,14 @@ class BeamformSumSingleBeam(Block):
         self.npol = npol
         self.ninputs = nstand*npol
 
+        self.igulp_size = self.ntime_gulp   * self.nchan_max * self.nbeam_max * 8 #complex 64
+        self.ogulp_size = self.ntime_blocks * self.nchan_max * 4 * 4 # 4 x float32
+
+        # The output gulp size can be quite small if we base it on the input gulp size
+        # force the numper of times in the output span to match the input, which
+        # is likely to be more reasonable
+        self.oring.resize(self.ntime_gulp * self.nchan_max * 4 * 4)
+
         # Setup the beamformer
         if self.gpu != -1:
             BFSetGPU(self.gpu)
@@ -64,8 +72,6 @@ class BeamformSumSingleBeam(Block):
                                   'ngpu': 1,
                                   'gpu0': BFGetGPU(),})
         
-        igulp_size = self.ntime_gulp   * self.nchan_max * self.nbeam_max * 8 #complex 64
-        ogulp_size = self.ntime_blocks * self.nchan_max * 4 * 4 # 4 x float32
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -90,18 +96,16 @@ class BeamformSumSingleBeam(Block):
                 ohdr['beam_id'] = self.beam_id
                 ohdr_str = json.dumps(ohdr)
                 
-                self.oring.resize(ogulp_size)
-                
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str) as oseq:
-                    for ispan in iseq.read(igulp_size):
-                        if ispan.size < igulp_size:
+                    for ispan in iseq.read(self.igulp_size):
+                        if ispan.size < self.igulp_size:
                             continue # Ignore final gulp
                         curr_time = time.time()
                         acquire_time = curr_time - prev_time
                         prev_time = curr_time
                         
-                        with oseq.reserve(ogulp_size) as ospan:
+                        with oseq.reserve(self.ogulp_size) as ospan:
                             curr_time = time.time()
                             reserve_time = curr_time - prev_time
                             prev_time = curr_time
@@ -124,4 +128,4 @@ class BeamformSumSingleBeam(Block):
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
-                                                  'gbps': 8*igulp_size / process_time / 1e9})
+                                                  'gbps': 8*self.igulp_size / process_time / 1e9})

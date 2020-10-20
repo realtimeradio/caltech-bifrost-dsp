@@ -23,6 +23,7 @@ class BeamformOutput(Block):
     """
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
+                 ntime_gulp=480,
                  ):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
@@ -36,6 +37,7 @@ class BeamformOutput(Block):
         self.packet_delay_ns = 1
         self.new_packet_delay_ns = 1
         self.update_pending = True
+        self.ntime_gulp = ntime_gulp
 
     def _etcd_callback(self, watchresponse):
         """
@@ -69,8 +71,8 @@ class BeamformOutput(Block):
             self.update_pending = True
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
-            acc_len = ihdr['acc_len']
-            ntime_per_gulp = ihdr['ntime_block']
+            upstream_acc_len = ihdr['acc_len']
+            ntime_per_block = ihdr['ntime_block']
             nchan = ihdr['nchan']
             nbit  = ihdr['nbit']
             beam_id = ihdr['beam_id']
@@ -79,7 +81,8 @@ class BeamformOutput(Block):
             bw_hz = ihdr['bw_hz']
             sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
-            igulp_size = ntime_per_gulp * nchan * npol**2 * nbit // 8
+            igulp_size = self.ntime_gulp * nchan * npol**2 * nbit // 8
+            packet_cnt = 0
             for ispan in iseq.read(igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
@@ -98,12 +101,13 @@ class BeamformOutput(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                idata = ispan.data.view('f32').reshape([ntime_per_gulp, nchan, npol**2])
+                idata = ispan.data.view('f32').reshape([self.ntime_gulp, nchan, npol**2])
                 if self.dest_ip != '0.0.0.0':
-                    for t in range(ntime_per_gulp):
+                    start_time = time.time()
+                    for t in range(self.ntime_gulp):
                         header = struct.pack('>QQ2d5I',
                                              ihdr['sync_time'],
-                                             this_gulp_time + t*acc_len,
+                                             this_gulp_time + t*upstream_acc_len,
                                              bw_hz,
                                              sfreq,
                                              upstream_acc_len,
@@ -129,4 +133,4 @@ class BeamformOutput(Block):
                 self.stats['last_end_sample'] = this_gulp_time
                 self.update_stats()
                 # And, update overall time counter
-                this_gulp_time += acc_len * ntime_per_gulp
+                this_gulp_time += upstream_acc_len * self.ntime_gulp
