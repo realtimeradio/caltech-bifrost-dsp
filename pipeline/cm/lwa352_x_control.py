@@ -12,6 +12,7 @@ from blocks.corr_control import Corr
 from blocks.corr_subsel_control import CorrSubsel
 from blocks.triggered_dump_control import TriggeredDump
 from blocks.beamform_control import Beamform
+from blocks.beamform_output_control import BeamformOutput
 
 default_log = logging.getLogger(__name__)
 logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
@@ -37,6 +38,7 @@ class Lwa352XControl():
         self.corr_subsel = CorrSubsel(self.log, self.corr_interface, self.host, self.pipeline_id)
         self.triggered_dump = TriggeredDump(self.log, self.corr_interface, self.host, self.pipeline_id)
         self.beamform = Beamform(self.log, self.corr_interface, self.host, self.pipeline_id)
+        self.beamform_outputs = [BeamformOutput(self.log, self.corr_interface, self.host, self.pipeline_id) for _ in range(16)]
         
 
 
