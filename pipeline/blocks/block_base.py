@@ -19,10 +19,23 @@ class Block(object):
     The base class for a bifrost LWA352 processing block
     """
     pipeline_id = 0
+    _instance_count = -1
 
     @classmethod
     def set_id(cls, x):
        cls.pipeline_id = x
+    _count = -1
+
+    @classmethod
+    def _get_instance_id(cls):
+        """
+        Get an auto-incrementing ID number for a Block of a particular
+        class type.
+        :param cls: ``Block`` class, e.g. ``BeamformOutputBlock``
+        :return: Number of instances of this class currently constructed.
+        """
+        cls._instance_count += 1
+        return cls._instance_count
 
     def __init__(self, log, iring, oring,
             guarantee, core, etcd_client=None,
@@ -34,6 +47,7 @@ class Block(object):
         self.oring = oring
         self.guarantee = guarantee
         self.core = core
+        self.instance_id = self._get_instance_id()
         self.name = name or type(self).__name__
         self.stats = {}
 
@@ -52,16 +66,18 @@ class Block(object):
 
         # optional etcd client
         self.etcd_client = etcd_client
-        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}/ctrl'.format(
+        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}/{id}/ctrl'.format(
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=self.name)
-        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}'.format(
+                                block=self.name,
+                                id=self.instance_id)
+        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}/{id}'.format(
                                 monroot=monitor_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
-                                block=self.name)
+                                block=self.name,
+                                id=self.instance_id)
 
         self.etcd_watch_id = None
 

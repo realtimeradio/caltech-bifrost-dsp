@@ -25,19 +25,19 @@ class EtcdCorrControl():
             log.error('Failed to connect to ETCD host %s' % self.etcdhost)
             raise
 
-    def _get_cmd_key(self, host, pipeline, block):
-        return self.keyroot_cmd + '/%s/pipeline/%d/%s/ctrl' % (host, pipeline, block)
+    def _get_cmd_key(self, host, pipeline, block, inst_id):
+        return self.keyroot_cmd + '/%s/pipeline/%d/%s/%d/ctrl' % (host, pipeline, block, inst_id)
 
-    def _get_mon_key(self, host, pipeline, block):
-        return self.keyroot_mon + '/%s/pipeline/%d/%s' % (host, pipeline, block)
+    def _get_mon_key(self, host, pipeline, block, inst_id):
+        return self.keyroot_mon + '/%s/pipeline/%d/%s/%d' % (host, pipeline, block, inst_id)
 
-    def send_command(self, host, pipeline, block, **kwargs):
-        key = self._get_cmd_key(host, pipeline, block)
+    def send_command(self, host, pipeline, block, inst_id, **kwargs):
+        key = self._get_cmd_key(host, pipeline, block, inst_id)
         val = json.dumps(kwargs)
         self.ec.put(key, val)
 
-    def get_status(self, host, pipeline, block, user_only=True):
-        key = self._get_mon_key(host, pipeline, block)
+    def get_status(self, host, pipeline, block, inst_id, user_only=True):
+        key = self._get_mon_key(host, pipeline, block, inst_id)
         val, meta = self.ec.get(key)
         val = json.loads(val)
         if user_only:
