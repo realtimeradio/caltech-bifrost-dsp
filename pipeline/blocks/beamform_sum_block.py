@@ -84,6 +84,7 @@ class BeamformSum(Block):
                 ohdr = ihdr.copy()
                 ohdr['nstand'] = 1
                 ohdr['nbeam'] = self.nbeam_max // 2
+                ohdr['npol'] = 2 # This block inherently generates dual-pol (2x2 matrix) powers
                 ohdr['nbit'] = 32
                 ohdr['complex'] = True
                 ohdr['acc_len'] = self.ntime_sum

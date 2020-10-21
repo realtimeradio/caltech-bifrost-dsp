@@ -124,6 +124,7 @@ class Beamform(Block):
                 ohdr = ihdr.copy()
                 ohdr['nstand'] = self.nbeam_max
                 ohdr['nbit'] = 32
+                ohdr['npol'] = 1 # The beamformer inherently produces single-pol beams
                 ohdr['complex'] = True
                 ohdr['nbeam'] = self.nbeam_max
                 ohdr_str = json.dumps(ohdr)
