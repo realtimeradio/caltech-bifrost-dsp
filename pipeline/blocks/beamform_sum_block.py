@@ -76,7 +76,7 @@ class BeamformSum(Block):
                 
                 nchan  = ihdr['nchan']
                 nstand = ihdr['nstand']
-                npol   = 2 # This block generates dual-pol (2x2 matrix) powers
+                npol   = ihdr['npol']
                 
                 ticksPerTime = int(FS) / int(CHAN_BW)
                 base_time_tag = iseq.time_tag

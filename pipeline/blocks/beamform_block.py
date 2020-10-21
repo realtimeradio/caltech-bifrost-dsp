@@ -108,7 +108,7 @@ class Beamform(Block):
                 
                 nchan  = ihdr['nchan']
                 nstand = ihdr['nstand']
-                npol   = 1 # Beams are single pol
+                npol   = ihdr['npol']
                 sfreq  = ihdr['sfreq']
                 bw     = ihdr['bw_hz']
                 chan_bw  = bw / nchan
