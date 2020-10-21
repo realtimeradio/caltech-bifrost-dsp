@@ -253,8 +253,9 @@ def main(argv):
                               nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol, beam_id=i,
                               core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=480))
             ops.append(BeamformOutput(log, iring=bf_power_output_ring[i], core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
+        cores.pop(0)
         ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+                          core=cores[0], guarantee=True, etcd_client=etcd_client))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     
