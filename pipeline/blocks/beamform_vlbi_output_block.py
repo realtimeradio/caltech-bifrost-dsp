@@ -125,7 +125,7 @@ class BeamformVlbiOutput(Block):
                         #                     chan0,
                         #                     npol,
                         #                    )
-                        #self.sock.sendto(header + idata_cpu[t].tobytes(), (self.dest_ip, self.dest_port))
+                        self.sock.sendto(header + idata_cpu[t].tobytes(), (self.dest_ip, self.dest_port))
                         packet_cnt += 1
                         if packet_cnt % 50 == 0:
                             # Only implement packet delay every 50 packets because the sleep
