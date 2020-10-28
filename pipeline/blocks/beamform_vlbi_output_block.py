@@ -113,7 +113,6 @@ class BeamformVlbiOutputBf(Block):
                     dout[...] = ispan.data_view('cf32').reshape(self.ntime_gulp, nbeam//2, 2, nchan)[:,0,:,:]
                     dout_reshape = dout.reshape(self.ntime_gulp, 1, 2*nchan)
                     try:
-                        pass
                         udt.send(desc, seq, 1, 0, 0, dout_reshape)
                     except Exception as e:
                         print(type(self).__name__, 'Sending Error', str(e))
