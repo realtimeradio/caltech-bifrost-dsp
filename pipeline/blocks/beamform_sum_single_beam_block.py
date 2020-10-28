@@ -24,8 +24,8 @@ CHAN_BW          = FREQS[1] - FREQS[0]
 
 class BeamformSumSingleBeam(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
-    def __init__(self, log, iring, oring, nchan_max=256, nbeam_max=1,
-                 nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1,
+    def __init__(self, log, iring, oring, nchan_max=256,
+                 ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1,
                  beam_id=0, etcd_client=None):
 
         super(BeamformSumSingleBeam, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
@@ -38,12 +38,7 @@ class BeamformSumSingleBeam(Block):
         self.ntime_blocks = ntime_gulp // ntime_sum
         
         self.nchan_max = nchan_max
-        self.nbeam_max = nbeam_max
-        self.nstand = nstand
-        self.npol = npol
-        self.ninputs = nstand*npol
 
-        self.igulp_size = self.ntime_gulp   * self.nchan_max * self.nbeam_max * 8 #complex 64
         self.ogulp_size = self.ntime_blocks * self.nchan_max * 4 * 4 # 4 x float32
 
         # The output gulp size can be quite small if we base it on the input gulp size
@@ -54,11 +49,6 @@ class BeamformSumSingleBeam(Block):
         # Setup the beamformer
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        ## Metadata
-        nchan = self.nchan_max
-
-        # Block output
-        self.bf_output = BFArray(shape=(self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Don't Initialize beamforming library -- this should have been done by the beamformer already
         #_bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
@@ -94,18 +84,24 @@ class BeamformSumSingleBeam(Block):
                 ohdr['acc_len'] = self.ntime_sum
                 ohdr['ntime_block'] = self.ntime_blocks
                 ohdr['beam_id'] = self.beam_id
+                ohdr['npol'] = 2 # Forces dual pol output by combining pairs of beams as if X/Y
                 ohdr_str = json.dumps(ohdr)
+
+                # Block output
+                self.bf_output = BFArray(shape=(self.ntime_blocks, nchan, 4), dtype=np.float32, space='cuda')
+                igulp_size = self.ntime_gulp * nchan * ihdr['nbeam'] * 2 * ihdr['nbit'] // 8
+                ogulp_size = self.ntime_blocks * nchan * 4 * 4 # 4 x float32
                 
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str) as oseq:
-                    for ispan in iseq.read(self.igulp_size):
-                        if ispan.size < self.igulp_size:
+                    for ispan in iseq.read(igulp_size):
+                        if ispan.size < igulp_size:
                             continue # Ignore final gulp
                         curr_time = time.time()
                         acquire_time = curr_time - prev_time
                         prev_time = curr_time
                         
-                        with oseq.reserve(self.ogulp_size) as ospan:
+                        with oseq.reserve(ogulp_size) as ospan:
                             curr_time = time.time()
                             reserve_time = curr_time - prev_time
                             prev_time = curr_time
@@ -128,4 +124,4 @@ class BeamformSumSingleBeam(Block):
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
-                                                  'gbps': 8*self.igulp_size / process_time / 1e9})
+                                                  'gbps': 8*igulp_size / process_time / 1e9})
