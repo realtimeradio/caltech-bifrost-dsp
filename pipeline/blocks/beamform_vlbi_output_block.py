@@ -33,6 +33,7 @@ class BeamformVlbiOutput(Block):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.dest_ip = '0.0.0.0'
         self.new_dest_ip = '0.0.0.0'
+        self.new_dest_ip = '100.100.100.1'
         self.dest_port = dest_port
         self.new_dest_port = dest_port
         self.packet_delay_ns = 1
@@ -80,7 +81,7 @@ class BeamformVlbiOutput(Block):
             bw_hz = ihdr['bw_hz']
             sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
-            igulp_size = self.ntime_gulp * nbeam * nchan * npol * nbit // 8
+            igulp_size = self.ntime_gulp * nbeam * nchan * npol * 2 * nbit // 8
             idata_cpu = BFArray(shape=[self.ntime_gulp, nchan, 2, 2], dtype='f32', space='cuda_host')
             packet_cnt = 0
             for ispan in iseq.read(igulp_size):
@@ -103,8 +104,8 @@ class BeamformVlbiOutput(Block):
                 prev_time = curr_time
                 if self.dest_ip != '0.0.0.0':
                     idata = ispan.data.view('f32').reshape([self.ntime_gulp, nchan, nbeam, 2])
-                    #idata_cpu[:, :, 0, :] = idata[:, :, 0, :]
-                    #idata_cpu[:, :, 1, :] = idata[:, :, 1, :]
+                    idata_cpu[:, :, 0, :] = idata[:, :, 0, :]
+                    idata_cpu[:, :, 1, :] = idata[:, :, 1, :]
                     start_time = time.time()
                     header = struct.pack('>QQ2d3I',
                                          ihdr['sync_time'],
@@ -116,15 +117,15 @@ class BeamformVlbiOutput(Block):
                                          npol,
                                         )
                     for t in range(self.ntime_gulp):
-                        #header = struct.pack('>QQ2d3I',
-                        #                     ihdr['sync_time'],
-                        #                     this_gulp_time + t,
-                        #                     bw_hz,
-                        #                     sfreq,
-                        #                     nchan,
-                        #                     chan0,
-                        #                     npol,
-                        #                    )
+                        header = struct.pack('>QQ2d3I',
+                                             ihdr['sync_time'],
+                                             this_gulp_time + t,
+                                             bw_hz,
+                                             sfreq,
+                                             nchan,
+                                             chan0,
+                                             npol,
+                                            )
                         self.sock.sendto(header + idata_cpu[t].tobytes(), (self.dest_ip, self.dest_port))
                         packet_cnt += 1
                         if packet_cnt % 50 == 0:
