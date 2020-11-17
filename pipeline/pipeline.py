@@ -25,6 +25,7 @@ from blocks.capture_block import Capture
 from blocks.beamform_block import Beamform
 from blocks.beamform_sum_block import BeamformSum
 from blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
+from blocks.beamform_sum_beams_block import BeamformSumBeams
 from blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
 from blocks.beamform_vacc_block import BeamVacc
 from blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
@@ -142,8 +143,10 @@ def main(argv):
         capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
-        bf_power_output_ring = [Ring(name="bf-pow-output%d" %i, space='cuda_host') for i in range(NBEAM)]
-        bf_acc_output_ring = [Ring(name="bf-acc-output%d" % i, space='system') for i in range(NBEAM)]
+        #bf_power_output_ring = [Ring(name="bf-pow-output%d" %i, space='cuda_host') for i in range(NBEAM)]
+        #bf_acc_output_ring = [Ring(name="bf-acc-output%d" % i, space='system') for i in range(NBEAM)]
+        bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
+        bf_acc_output_ring = Ring(name="bf-acc-output", space='system')
         corr_output_ring = Ring(name="corr-output", space='cuda')
         corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
         corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
@@ -248,11 +251,9 @@ def main(argv):
                           nchan_max=nchan, nbeam_max=NBEAM*2, nstand=nstand, npol=npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None,
                           etcd_client=etcd_client))
-        for i in range(NBEAM):
-            ops.append(BeamformSumSingleBeam(log, iring=bf_output_ring, oring=bf_power_output_ring[i], ntime_gulp=GPU_NGULP*GSIZE,
-                              nchan_max=nchan,
-                              core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
-            ops.append(BeamformOutput(log, iring=bf_power_output_ring[i], core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
+        ops.append(BeamformSumBeams(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
+                              nchan_max=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
+        ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
         cores.pop(0)
         ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
                           core=cores[0], guarantee=True, etcd_client=etcd_client))

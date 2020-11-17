@@ -87,7 +87,7 @@ class BeamformVlbiOutputBf(Block):
                 
                 self.sequence_proclog.update(ihdr)
                 
-                self.log.info("Retransmit: Start of new sequence: %s", str(ihdr))
+                self.log.debug("VLBI Output: Start of new sequence: %s", str(ihdr))
                 
                 chan0   = ihdr['chan0']
                 nchan   = ihdr['nchan']

@@ -39,10 +39,10 @@ class CorrOutputFull(Block):
         self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
         if antpol_to_bl is not None:
             self.antpol_to_bl[...] = antpol_to_bl
-            print(self.antpol_to_bl.shape)
+            #print(self.antpol_to_bl.shape)
         if bl_is_conj is not None:
             self.bl_is_conj[...] = bl_is_conj
-            print(self.bl_is_conj.shape)
+            #print(self.bl_is_conj.shape)
         self.reordered_data = BFArray(np.zeros([nstand, nstand, npol, npol, nchan, 2], dtype=np.int32), space='system')
         self.dump_size = nstand * (nstand+1) * npol * npol * nchan * 2 * 4 / 2.
 
