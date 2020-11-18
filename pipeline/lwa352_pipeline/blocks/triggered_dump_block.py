@@ -12,7 +12,7 @@ import os
 import mmap
 import struct
 
-from blocks.block_base import Block
+from .block_base import Block
 
 HEADER_SIZE = 1024*1024
 

@@ -14,7 +14,7 @@ import socket
 import struct
 import numpy as np
 
-from blocks.block_base import Block
+from .block_base import Block
 
 
 class CorrOutputPart(Block):

@@ -2,7 +2,7 @@ import setuptools
 import glob
 import os
 
-VERSION = "2.0.0"
+VERSION = "1.0.0"
 
 desc_file = "README.md"
 long_description = ""
@@ -11,7 +11,7 @@ if os.path.isfile(desc_file):
         long_description = fh.read()
 
 setuptools.setup(
-    name="lwa352_pipeline",
+    name="lwa352-pipeline",
     version=VERSION,
     author="Real-Time Radio Systems Ltd",
     author_email="jack@realtimeradio.co.uk",

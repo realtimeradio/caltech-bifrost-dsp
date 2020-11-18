@@ -13,7 +13,7 @@ import time
 import simplejson as json
 import numpy as np
 
-from blocks.block_base import Block
+from .block_base import Block
 
 FS=200.0e6 # sampling rate
 CLOCK            = 204.8e6 #???

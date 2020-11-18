@@ -12,7 +12,7 @@ import time
 import simplejson as json
 import numpy as np
 
-from blocks.block_base import Block
+from .block_base import Block
 
 class Copy(Block):
     """

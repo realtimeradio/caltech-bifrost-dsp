@@ -11,33 +11,32 @@ from bifrost.device import stream_synchronize, set_device as BFSetGPU
 import time
 import simplejson as json
 import numpy as np
+import socket
 
-from blocks.block_base import Block
+from .block_base import Block
 
-class CorrAcc(Block):
+class BeamVacc(Block):
     """
-    Perform GPU side accumulation and then transfer to CPU
+    Copy data from one buffer to another.
     """
-    def __init__(self, log, iring, oring,
-                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
-        # TODO: Other things we could check:
-        # - that nchan/pols/gulp_size matches XGPU compilation
-        super(CorrAcc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+    def __init__(self, log, iring, oring, ninput_beam=16, beam_id=0, gpu=0, autostartat=-1, acc_len=24000,
+                 guarantee=True, core=-1, nchan=192, etcd_client=None):
+
+        super(BeamVacc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+        self.ninput_beam = ninput_beam
         self.nchan = nchan
-        self.npol = npol
-        self.nstand = nstand
-        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        self.beam_id = beam_id
+
         self.gpu = gpu
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        
-        self.igulp_size = self.matlen * 8 # complex64
-        self.ogulp_size = self.igulp_size
-        # integration buffer
-        self.accdata = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda')
-        self.bfbf = LinAlg()
 
+        self.ogulp_size = nchan*4*4  # XX, YY, real(XY), im(XY) x 32-bit float
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # Accumulator for a single beam
+        self.accdata = BFArray(np.zeros([nchan, 4]), dtype='f32', space='cuda')
         self.new_start_time = autostartat
         self.new_acc_len = acc_len
         self.update_pending=True
@@ -75,22 +74,27 @@ class CorrAcc(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         self.oring.resize(self.ogulp_size)
-        oseq = None
         ospan = None
+        oseq = None
         start = False
         process_time = 0
         time_tag = 1
         with self.oring.begin_writing() as oring:
-            prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
+                self.update_pending = True
                 ihdr = json.loads(iseq.header.tostring())
-                ohdr = ihdr.copy()
+                ntime_block = 1#ihdr['ntime_block']
+                nbeam = ihdr['nbeam']
+                nchan = ihdr['nchan']
+                igulp_size = nbeam * ntime_block * nchan * 4 * 4 #XX, YY, XYr, XYi, f32
                 this_gulp_time = ihdr['seq0']
+                ohdr = ihdr.copy()
+                # Mash header in here if you want
                 upstream_acc_len = ihdr['acc_len']
                 ohdr['upstream_acc_len'] = upstream_acc_len
-                upstream_start_time = this_gulp_time
-                self.sequence_proclog.update(ohdr)
-                for ispan in iseq.read(self.igulp_size):
+                ohdr_str = json.dumps(ohdr)
+                prev_time = time.time()
+                for ispan in iseq.read(igulp_size):
                     if self.update_pending:
                         self.acquire_control_lock()
                         start_time = self.new_start_time
@@ -99,7 +103,7 @@ class CorrAcc(Block):
                         if start_time == -1:
                             start_time = this_gulp_time
                         start = False
-                        self.log.info("CORRACC >> New start time at %d. Accumulation: %d samples" % (self.new_start_time, self.new_acc_len))
+                        self.log.info("BEAMACC%d >> New start time at %d. Accumulation: %d samples" % (self.beam_id, self.new_start_time, self.new_acc_len))
                         self.update_pending = False
                         self.stats.update({'acc_len': acc_len,
                                            'start_sample': start_time,
@@ -109,9 +113,9 @@ class CorrAcc(Block):
                         self.update_stats()
                         self.release_control_lock()
                         if acc_len % upstream_acc_len != 0:
-                            self.log.error("CORRACC >> Requested acc_len %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
-                        if acc_len != 0 and ((start_time - upstream_start_time) % upstream_acc_len != 0):
-                            self.log.error("CORRACC >> Requested start_time %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
+                            self.log.error("BEAMACC%d >> Requested acc_len %d incompatible with upstream integration %d" % (self.beam_id, acc_len, upstream_acc_len))
+                        #if acc_len != 0 and ((start_time - upstream_start_time) % upstream_acc_len != 0):
+                        #    self.log.error("BEAMACC%d >> Requested start_time %d incompatible with upstream integration %d" % (self.beam_id, acc_len, upstream_acc_len))
                         ohdr['acc_len'] = acc_len
                         ohdr['seq0'] = start_time
                     self.stats.update({'curr_sample': this_gulp_time})
@@ -120,7 +124,7 @@ class CorrAcc(Block):
                     if acc_len == 0:
                         if oseq: oseq.end()
                         start = False
-                        this_gulp_time += upstream_acc_len
+                        this_gulp_time += upstream_acc_len * ntime_block
                         continue
 
                     # If we get here, acc_len is != 0, and we are searching for
@@ -130,25 +134,25 @@ class CorrAcc(Block):
                     if this_gulp_time == start_time:
                         start = True
                         first = start_time
-                        last  = first + acc_len - upstream_acc_len
+                        last  = first + acc_len - upstream_acc_len*ntime_block
                         # on a new accumulation start, if a current oseq is open, close it, and start afresh
                         if oseq: oseq.end()
                         ohdr_str = json.dumps(ohdr)
                         self.sequence_proclog.update(ohdr)
                         oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         time_tag += 1
-                        self.log.info("CORRACC >> Start time %d reached. Accumulating to %d (upstream accumulation: %d)" % (start_time, last, upstream_acc_len))
+                        self.log.info("BEAMACC%d >> Start time %d reached. Accumulating to %d (upstream accumulation: %d)" % (self.beam_id, start_time, last, upstream_acc_len))
 
                     # If we're still waiting for a start, spin the wheels
                     if not start:
-                        this_gulp_time += upstream_acc_len
+                        this_gulp_time += upstream_acc_len * ntime_block
                         continue
 
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
-                    self.log.debug("Accumulating correlation")
-                    idata = ispan.data_view('i32')
+                    self.log.debug("Accumulating beam %d" % self.beam_id)
+                    idata = ispan.data_view('f32').reshape([nbeam, ntime_block, nchan, 4])[self.beam_id, 0]
                     if this_gulp_time == first:
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
@@ -161,10 +165,10 @@ class CorrAcc(Block):
                     process_time += curr_time - prev_time
                     prev_time = curr_time
                     if this_gulp_time == last:
-                        self.log.debug("CORRACC > Last accumulation input")
+                        self.log.info("BEAMACC%d > Last accumulation input" % self.beam_id)
                         # copy to CPU
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
-                        odata = ospan.data_view('i32').reshape(self.accdata.shape)
+                        odata = ospan.data_view('f32').reshape(self.accdata.shape)
                         copy_array(odata, self.accdata)
                         # Wait for copy to complete before committing span
                         stream_synchronize()
@@ -180,10 +184,10 @@ class CorrAcc(Block):
                         self.update_stats()
                         process_time = 0
                         # Update integration boundary markers
-                        first = last + upstream_acc_len
-                        last = first + acc_len - upstream_acc_len
+                        first = last + upstream_acc_len*ntime_block
+                        last = first + acc_len - upstream_acc_len*ntime_block
                     # And, update overall time counter
-                    this_gulp_time += upstream_acc_len
+                    this_gulp_time += upstream_acc_len * ntime_block
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
             if ospan: ospan.close()

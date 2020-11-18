@@ -13,23 +13,23 @@ import socket
 import datetime
 
 # Blocks
-from blocks.block_base import Block
-from blocks.corr_block import Corr
-from blocks.dummy_source_block import DummySource
-from blocks.corr_acc_block import CorrAcc
-from blocks.corr_subsel_block import CorrSubsel
-from blocks.corr_output_full_block import CorrOutputFull
-from blocks.corr_output_part_block import CorrOutputPart
-from blocks.copy_block import Copy
-from blocks.capture_block import Capture
-from blocks.beamform_block import Beamform
-from blocks.beamform_sum_block import BeamformSum
-from blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
-from blocks.beamform_sum_beams_block import BeamformSumBeams
-from blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
-from blocks.beamform_vacc_block import BeamVacc
-from blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
-from blocks.triggered_dump_block import TriggeredDump
+from lwa352_pipeline.blocks.block_base import Block
+from lwa352_pipeline.blocks.corr_block import Corr
+from lwa352_pipeline.blocks.dummy_source_block import DummySource
+from lwa352_pipeline.blocks.corr_acc_block import CorrAcc
+from lwa352_pipeline.blocks.corr_subsel_block import CorrSubsel
+from lwa352_pipeline.blocks.corr_output_full_block import CorrOutputFull
+from lwa352_pipeline.blocks.corr_output_part_block import CorrOutputPart
+from lwa352_pipeline.blocks.copy_block import Copy
+from lwa352_pipeline.blocks.capture_block import Capture
+from lwa352_pipeline.blocks.beamform_block import Beamform
+from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
+from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
+from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
+from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
+from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
+from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
+from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
 
 
 ACTIVE_COR_CONFIG = threading.Event()
