@@ -34,18 +34,21 @@ from blocks.triggered_dump_block import TriggeredDump
 
 ACTIVE_COR_CONFIG = threading.Event()
 
-__version__    = "1.0"
-__date__       = '$LastChangedDate: 2020-11-18'
-__author__     = "Jack Hickish, based on work by Ben Barsdell, Daniel Price, Jayce Dowell"
-__credits__    = ["Jack Hickish", "Ben Barsdell", "Daniel Price", "Jayce Dowell"]
+__version__    = "0.2"
+__date__       = '$LastChangedDate: 2016-08-09 15:44:00 -0600 (Fri, 25 Jul 2014) $'
+__author__     = "Ben Barsdell, Daniel Price, Jayce Dowell"
+__copyright__  = "Copyright 2016, The LWA-SV Project"
+__credits__    = ["Ben Barsdell", "Daniel Price", "Jayce Dowell"]
 __license__    = "Apache v2"
-__maintainer__ = "Jack Hickish"
-__email__      = "jack@realtimeradio.co.uk"
+__maintainer__ = "Jayce Dowell"
+__email__      = "jdowell at unm"
 __status__     = "Development"
 
 def main(argv):
     parser = argparse.ArgumentParser(description='LWA-SV ADP DRX Service',
                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-f', '--fork',       action='store_true',       help='Fork and run in the background')
+    parser.add_argument('-c', '--configfile', default='adp_config.json', help='Specify config file')
     parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
@@ -78,6 +81,12 @@ def main(argv):
 
     # Set the pipeline ID
     Block.set_id(args.pipelineid)
+
+    # Fork, if requested
+    tuning = 0
+    if args.fork:
+        stderr = '/tmp/%s_%i.stderr' % (os.path.splitext(os.path.basename(__file__))[0], tuning)
+        daemonize(stdin='/dev/null', stdout='/dev/null', stderr=stderr)
         
     log = logging.getLogger(__name__)
     logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
@@ -100,6 +109,7 @@ def main(argv):
     log.info("Cmdline args: \"%s\"", ' '.join(argv[1:]))
     log.info("Version:      %s", __version__)
     log.info("Last changed: %s", short_date)
+    log.info("Config file:  %s", args.configfile)
     log.info("Log file:     %s", args.logfile)
     
     ops = []
