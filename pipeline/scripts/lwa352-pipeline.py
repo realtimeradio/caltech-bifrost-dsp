@@ -1,8 +1,3 @@
-from bifrost.address import Address
-from bifrost.udp_socket import UDPSocket
-from bifrost.ring import Ring
-
-
 import signal
 import logging
 import time
@@ -12,67 +7,39 @@ import threading
 import socket
 import datetime
 
-# Blocks
-from lwa352_pipeline.blocks.block_base import Block
-from lwa352_pipeline.blocks.corr_block import Corr
-from lwa352_pipeline.blocks.dummy_source_block import DummySource
-from lwa352_pipeline.blocks.corr_acc_block import CorrAcc
-from lwa352_pipeline.blocks.corr_subsel_block import CorrSubsel
-from lwa352_pipeline.blocks.corr_output_full_block import CorrOutputFull
-from lwa352_pipeline.blocks.corr_output_part_block import CorrOutputPart
-from lwa352_pipeline.blocks.copy_block import Copy
-from lwa352_pipeline.blocks.capture_block import Capture
-from lwa352_pipeline.blocks.beamform_block import Beamform
-from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
-from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
-from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
-from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
-from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
-from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
-from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
-
-
-ACTIVE_COR_CONFIG = threading.Event()
-
-__version__    = "0.2"
-__date__       = '$LastChangedDate: 2016-08-09 15:44:00 -0600 (Fri, 25 Jul 2014) $'
-__author__     = "Ben Barsdell, Daniel Price, Jayce Dowell"
-__copyright__  = "Copyright 2016, The LWA-SV Project"
-__credits__    = ["Ben Barsdell", "Daniel Price", "Jayce Dowell"]
+__version__    = "1.0"
+__date__       = '$LastChangedDate: 2020-25-11$'
+__author__     = "Jack Hickish, Ben Barsdell, Daniel Price, Jayce Dowell"
+__copyright__  = ""
+__credits__    = ["Jack Hickish", "Ben Barsdell", "Daniel Price", "Jayce Dowell"]
 __license__    = "Apache v2"
-__maintainer__ = "Jayce Dowell"
-__email__      = "jdowell at unm"
+__maintainer__ = "Jack Hickish"
+__email__      = "jack@realtimeradio.co.uk"
 __status__     = "Development"
 
-def main(argv):
-    parser = argparse.ArgumentParser(description='LWA-SV ADP DRX Service',
-                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-f', '--fork',       action='store_true',       help='Fork and run in the background')
-    parser.add_argument('-c', '--configfile', default='adp_config.json', help='Specify config file')
-    parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
-    parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
-    parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
-    parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
-    parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
-    parser.add_argument('--testdatacorr',     type=str, default=None,    help='Path to correlator output test data file')
-    parser.add_argument('--testdatacorr_acc_len', type=int, default=2400, help='Number of accumulations per sample in correlator test data file')
-    parser.add_argument('-a', '--corr_acc_len',   type=int, default=240000, help='Number of accumulations to start accumulating in the slow correlator')
-    parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
-    parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
-    parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
-    parser.add_argument('--ibverbs',          action='store_true',       help='Use IB verbs for packet capture')
-    parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
-    parser.add_argument('-P', '--pipelineid', type=int, default=0,       help='Pipeline ID. Useful if you are running multiple pipelines on a single machine')
-    parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
-    parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
-    parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
-    parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
-    parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
-    parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
-    parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
-    parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
-    args = parser.parse_args()
-    
+def build_pipeline(args):
+    from bifrost.address import Address
+    from bifrost.udp_socket import UDPSocket
+    from bifrost.ring import Ring
+    # Blocks
+    from lwa352_pipeline.blocks.block_base import Block
+    from lwa352_pipeline.blocks.corr_block import Corr
+    from lwa352_pipeline.blocks.dummy_source_block import DummySource
+    from lwa352_pipeline.blocks.corr_acc_block import CorrAcc
+    from lwa352_pipeline.blocks.corr_subsel_block import CorrSubsel
+    from lwa352_pipeline.blocks.corr_output_full_block import CorrOutputFull
+    from lwa352_pipeline.blocks.corr_output_part_block import CorrOutputPart
+    from lwa352_pipeline.blocks.copy_block import Copy
+    from lwa352_pipeline.blocks.capture_block import Capture
+    from lwa352_pipeline.blocks.beamform_block import Beamform
+    from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
+    from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
+    from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
+    from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
+    from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
+    from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
+    from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
+
     if args.useetcd:
         import etcd3 as etcd
         etcd_client = etcd.client(args.etcdhost)
@@ -274,6 +241,38 @@ def main(argv):
         return 0
     except:
         raise
+
+def main(argv):
+    parser = argparse.ArgumentParser(description='LWA352-OVRO Correlator-Beamformer Pipeline',
+                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-f', '--fork',       action='store_true',       help='Fork and run in the background')
+    parser.add_argument('-c', '--configfile', default='adp_config.json', help='Specify config file')
+    parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
+    parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
+    parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
+    parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
+    parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
+    parser.add_argument('--testdatacorr',     type=str, default=None,    help='Path to correlator output test data file')
+    parser.add_argument('--testdatacorr_acc_len', type=int, default=2400, help='Number of accumulations per sample in correlator test data file')
+    parser.add_argument('-a', '--corr_acc_len',   type=int, default=240000, help='Number of accumulations to start accumulating in the slow correlator')
+    parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
+    parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
+    parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
+    parser.add_argument('--ibverbs',          action='store_true',       help='Use IB verbs for packet capture')
+    parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
+    parser.add_argument('-P', '--pipelineid', type=int, default=0,       help='Pipeline ID. Useful if you are running multiple pipelines on a single machine')
+    parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
+    parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
+    parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
+    parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
+    parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
+    parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
+    parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
+    parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
+    args = parser.parse_args()
+
+    build_pipeline(args)
+    
 
 if __name__ == '__main__':
     import sys
