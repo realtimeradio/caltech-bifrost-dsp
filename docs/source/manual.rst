@@ -9,8 +9,6 @@ X-Engine Software Manual
    :format: html latex
 ..
 
-at (current page.north east) |image|;
-
 Introduction
 ============
 
@@ -28,18 +26,46 @@ The LWA-352 X-engine system comprises 9 1U dual-socket Silicon Mechanics
 state memory buffers. Hardware specifications are given in
 Table [tab:hardware].
 
-| c c X
-| Hardware & Model & Notes
-| Server & Supermicro 1029GQ-TRT & Re-branded as Silicon Mechanics
-  Rackform R353.v7
-| Motherboard & Supermicro X11 DCQ &
-| CPU & dual Intel Xeon Scalable Silver 4210R & 2.4 GHz, 10 core, 100W
-  TDP
-| RAM & 768 GB PC4-23400 & 12 x 64 GB; 2933 MHz DDR4; ECC RDIMM
-| NIC & dual Mellanox ConnectX-4 & TODO: models
-| NVMe Controllers & Asus Hyper M.2 X16 Card V2 & 2 cards per server
-| NVMe Memory & 8TB Samsung 970 Evo Plus & 8 x 1 TB
-| GPU & Nvidia RTX 2080Ti & 2 cards per server
+.. list-table::
+  :widths: 30 30 100
+  :header-rows: 1
+  :align: left
+
+  * - Hardware
+    - Model
+    - Notes
+
+  * - Server
+    - Supermicro 1029GQ-TRT
+    - Re-branded as Silicon Mechanics Rackform R353.v7
+
+  * - Motherboard
+    - Supermicro X11 DCQ
+    - 
+
+  * - CPU
+    - dual Intel Xeon Scalable Silver 4210R
+    - 2.4 GHz, 10 core, 100W TDP
+
+  * - RAM
+    - 768 GB PC4-23400
+    - 12 x 64 GB; 2933 MHz DDR4; ECC RDIMM
+
+  * - NIC
+    - Mellanox MCX515A-GCAT
+    - ConnectX-5 EN MCX515A-GCAT (1x QSFP28); PCIe 3.0x16
+
+  * - NVMe Controllers
+    - Asus Hyper M.2 X16 Card V2
+    - 2 cards per server
+
+  * - NVMe Memory
+    - 8TB Samsung 970 Evo Plus
+    - 8 x 1 TB
+
+  * - GPU
+    - Nvidia RTX 2080Ti
+    - 2 cards per server
 
 Pipeline
 ========

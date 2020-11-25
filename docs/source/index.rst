@@ -10,6 +10,8 @@ Welcome to LWA Correlator's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   installation.rst
+   manual.rst
    outputs.rst
 
 
