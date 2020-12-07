@@ -44,6 +44,7 @@ followed by a payload of signed 32-bit integers.
         uint32_t  stand0;
         uint32_t  stand1;
         int32_t   data[npols, npols, nchans, 2];
+      };
 
 Packet fields are as follows:
 
@@ -256,42 +257,49 @@ Capture Thread (blockname: ``capture``)
 Commands
 ~~~~~~~~
 
-The ``capture``\ block accepts no runtime commands. When a pipeline is
+The ``capture`` block accepts no runtime commands. When a pipeline is
 executed, the capture module will automatically begin filling processing
-buffers. Buffer boundaries occur every ``GSIZE``\ samples.
+buffers. Buffer boundaries occur every ``GSIZE`` samples.
 
 Monitoring
 ~~~~~~~~~~
 
-The ``capture``\ block writes monitoring data to the key
+The ``capture`` block writes monitoring data to the key
 ``/mon/corr/xeng/<hostname>/pipeline/<pid>/capture``. Data are written
 as a JSON-encoded dictionary with the following entries:
 
-| c c c X Field & Format & Units & Description
-| thoughput & float & Gbits/s & Block throughput
-| n\_dropped & int & packets & Number of packets dropped since pipeline
-  start
-| n\_received & int & packets & Number of packets received since
-  pipeline start
-| frac\_dropped & float & - & Fraction of packets dropped since pipeline
-  start
-| n\_late & int & packets & Number of late packets since pipeline start
-| n\_f\_missing & int & boards & TODO
-| n\_part\_dropped & int & packets & TODO
-| time & float & UNIX time & The time this key was updated.
++------------------+--------+-----------+--------------------------------------------------+
+| Field            | Format | Units     | Description                                      |
++==================+========+===========+==================================================+
+| thoughput        | float  | Gbits/s   | Block throughput                                 |
++------------------+--------+-----------+--------------------------------------------------+
+| n\_dropped       | int    | packets   | Number of packets dropped since pipeline start   |
++------------------+--------+-----------+--------------------------------------------------+
+| n\_received      | int    | packets   | Number of packets received since pipeline start  |
++------------------+--------+-----------+--------------------------------------------------+
+| frac\_dropped    | float  |           | Fraction of packets dropped since pipeline start |
++------------------+--------+-----------+--------------------------------------------------+
+| n\_late          | int    | packets   | Number of late packets since pipeline start      |
++------------------+--------+-----------+--------------------------------------------------+
+| n\_f\_missing    | int    | boards    | TODO                                             |
++------------------+--------+-----------+--------------------------------------------------+
+| n\_part\_dropped | int    | packets   | TODO                                             |
++------------------+--------+-----------+--------------------------------------------------+
+| time             | float  | UNIX time | The time this key was updated.                   |
++------------------+--------+-----------+--------------------------------------------------+
 
 Copy Thread (blockname: ``gpucopy``)
 ------------------------------------
 
-The ``gpucopy``\ block accepts no runtime commands and outputs no
+The ``gpucopy`` block accepts no runtime commands and outputs no
 run-time statistics.
 
 Correlation Thread (blockname: ``corr``)
 ----------------------------------------
 
-The ``corr``\ block takes blocks of ``GSIZE``\ 4-bit time samples from
-the ``gpucopy``\ thread and generates visibility matrices using an xGPU
-computation kernel. Integration takes place over the ``GSIZE``\ input
+The ``corr`` block takes blocks of ``GSIZE`` 4-bit time samples from
+the ``gpucopy`` thread and generates visibility matrices using an xGPU
+computation kernel. Integration takes place over the ``GSIZE`` input
 samples.
 
 Commands
@@ -375,7 +383,7 @@ To set the baseline subsection to choose:
 
 use:
 
-``subsel = [ [[0,0], [0,0]], [[5,1], [6,0]], ... ] ``
+``subsel = [ [[0,0], [0,0]], [[5,1], [6,0]], ... ]``
 
 Note that the uploaded selection list must always have 4656 entries.
 
@@ -387,18 +395,25 @@ the key: ``/mon/corr/xeng/<hostname>/pipeline/<pid>/corrsubsel``.
 
 The status dictionary has the following fields:
 
-| c c c X Field & Format & Units & Description
-| thoughput & float & Gbits/s & Block throughput
-| subsel & list(int) & samples & Current set of visibility indices being
-  selected
-| update\_pending & bool & - & True if new selection parameters are
-  waiting to be loaded.
-| last\_update\_time & float & seconds & The time since UNIX epoch that
-  the selection parameters were last updated.
-| new\_subsel & list(int) & samples & The commanded visibility selection
-  indices.
-| last\_cmd\_time & float & seconds & The time since UNIX epoch that the
-  last command was received
++--------------------+-----------+---------+---------------------------------------------+
+| Field              | Format    | Units   | Description                                 |
++====================+===========+=========+=============================================+
+| thoughput          | float     | Gbits/s | Block throughput                            |
++--------------------+-----------+---------+---------------------------------------------+
+| subsel             | list(int) | samples | Current set of visibility indices being     |
+|                    |           |         | selected                                    |
++--------------------+-----------+---------+---------------------------------------------+
+| update\_pending    | bool      |         | True if new selection parameters are        |
+|                    |           |         | waiting to be loaded.                       |
++--------------------+-----------+---------+---------------------------------------------+
+| last\_update\_time | float     | seconds | The time since UNIX epoch that the          |
+|                    |           |         | selection parameters were last updated.     |
++--------------------+-----------+---------+---------------------------------------------+
+| new\_subsel        | list(int) | samples | The commanded visibility selection indices. |
++--------------------+-----------+---------+---------------------------------------------+
+| last\_cmd\_time    | float     | seconds | The time since UNIX epoch that the last     |
+|                    |           |         | command was received                        |
++--------------------+-----------+---------+---------------------------------------------+
 
 Visibility Integrator (blockname: ``corracc``)
 ----------------------------------------------
@@ -406,24 +421,28 @@ Visibility Integrator (blockname: ``corracc``)
 Commands
 ~~~~~~~~
 
-The ``corracc``\ block further integrates the output of the
-``corr``\ block. Integration parameters can be set by writing a
+The ``corracc`` block further integrates the output of the
+``corr`` block. Integration parameters can be set by writing a
 JSON-encoded dictionary to the key:
 
 ``/cmd/corr/xeng/<hostname>/pipeline/<pid>/corracc``
 
-| This should have the following fields:
+This should have the following fields:
 
-| c c c X Field & Format & Units & Description
-| acc\_len & int & - & Number of samples to integrate. acc\_len = 0 can
-  be used to force the ``corracc``\ module to stop processing.
-| start\_time & int & samples & Sample index on which to begin
-  integrating.
++-------------+--------+---------+-----------------------------------------------+
+| Field       | Format | Units   | Description                                   |
++=============+========+=========+===============================================+
+| acc\_len    | int    |         | Number of samples to integrate. acc\_len = 0  |
+|             |        |         | can be used to force the ``corracc`` module   |
+|             |        |         | to stop processing.                           |
++-------------+--------+---------+-----------------------------------------------+
+| start\_time | int    | samples | Sample index on which to begin integrating.   |
++-------------+--------+---------+-----------------------------------------------+
 
 Note that the acc\_len configuration must be compabible with – i.e.,
 must be a multiple of – the accumulation length set in the
-``corr``\ block. Furtherm the start\_time must be compatible with the
-integration boundaries associated with the ``corr``\ block’s integration
+``corr`` block. Furtherm the start\_time must be compatible with the
+integration boundaries associated with the ``corr`` block’s integration
 settings.
 
 Run-time checks will flag bad configurations as errors, but no check is
@@ -432,40 +451,49 @@ pipeline, a safe order of configuration is:
 
 #. Boot pipeline.
 
-#. Configure ``corracc``\ block
+#. Configure ``corracc`` block
 
-#. Configure ``corr``\ block
+#. Configure ``corr`` block
 
 For changes of configuration, the safe order of updates is:
 
 Monitoring
 ~~~~~~~~~~
 
-The ``corracc``\ block writes status data as a JSON-encoded dictionary
+The ``corracc`` block writes status data as a JSON-encoded dictionary
 to the key:
 
 ``/mon/corr/xeng/<hostname>/pipeline/<pid>/corracc``.
 
-| The status dictionary has the following fields:
+The status dictionary has the following fields:
 
-| c c c X Field & Format & Units & Description
-| acc\_len & int & samples & Number of samples currently set to
-  integrate
-| start\_sample & int & samples & Current start time.
-| curr\_sample & int & samples & The last sample to be processed.
-| update\_pending & bool & - & True if new integration parameters are
-  waiting to be loaded.
-| last\_update\_time & float & seconds & The time since UNIX epoch that
-  the imtegration parameters were last updated.
-| new\_acc\_len & int & samples & The commanded integration length
-| new\_start\_sample & int & samples & The commanded start sample
-| last\_cmd\_time & float & seconds & The time since UNIX epoch that the
-  last command was received
++--------------------+--------+---------+----------------------------------------------+
+| Field              | Format | Units   | Description                                  |
++====================+========+=========+==============================================+
+| acc\_len           | int    | samples | Number of samples currently set to integrate |
++--------------------+--------+---------+----------------------------------------------+
+| start\_sample      | int    | samples | Current start time.                          |
++--------------------+--------+---------+----------------------------------------------+
+| curr\_sample       | int    | samples | The last sample to be processed.             |
++--------------------+--------+---------+----------------------------------------------+
+| update\_pending    | bool   |         | True if new integration parameters are       |
+|                    |        |         | waiting to be loaded.                        |
++--------------------+--------+---------+----------------------------------------------+
+| last\_update\_time | float  | seconds | The time since UNIX epoch that the           |
+|                    |        |         | imtegration parameters were last updated.    |
++--------------------+--------+---------+----------------------------------------------+
+| new\_acc\_len      | int    | samples | The commanded integration length             |
++--------------------+--------+---------+----------------------------------------------+
+| new\_start\_sample | int    | samples | The commanded start sample                   |
++--------------------+--------+---------+----------------------------------------------+
+| last\_cmd\_time    | float  | seconds | The time since UNIX epoch that the last      |
+|                    |        |         | command was received                         |
++--------------------+--------+---------+----------------------------------------------+
 
 Beamformer (blockname: ``beamform``)
 ------------------------------------
 
-The ``beamform``\ block forms 2\*\ ``NBEAM``\ independent, single
+The ``beamform`` block forms ``2 x NBEAM`` independent, single
 polarization voltage beams. Beam pointings are specified by relative
 antenna delays and a set of universal, frequency-dependent calibration
 coefficients, which are shared among all beams. Note that this interface
@@ -474,62 +502,87 @@ precludes direction-dependent calibrations.
 Commands
 ~~~~~~~~
 
-Commands are sent to be ``beamform``\ module by writing a JSON-encoded
+Commands are sent to be ``beamform`` module by writing a JSON-encoded
 command to the key:
 
 ``/cmd/corr/xeng/<hostname>/pipeline/<pid>/beamform``
 
-| This command should have the following fields
+This command should have the following fields
 
-| c c c X Field & Format & Units & Description
-| delays[x] & list(float) & ns & An ``NINPUT``\ element list of
-  geometric delays, in nanoseconds. [x] is a beam index, and should be
-  between 0 and :math:`{\texttt{NBEAM}\xspace}- 1`
-| gains & list(complex32) & - & A two dimensional list of calibration
-  gains with shape (``NCHAN``, ``NINPUT``)
-| load\_sample & int & sample & Sample number on which the supplied
-  delays should be loaded. If this field is absent, new delays will be
-  loaded as soon as possible
++--------------+-----------------+--------+-------------------------------------------+
+| Field        | Format          | Units  | Description                               |
++==============+=================+========+===========================================+
+| delays[x]    | list(float)     | ns     | An ``NINPUT`` element list of geometric   |
+|              |                 |        | delays, in nanoseconds. [x] is a beam     |
+|              |                 |        | index, and should be between 0 and        |
+|              |                 |        | ``NBEAM - 1``                             |
++--------------+-----------------+--------+-------------------------------------------+
+| gains        | list(complex32) |        | A two dimensional list of calibration     |
+|              |                 |        | gains with shape ``[NCHAN, NINPUT]``      |
++--------------+-----------------+--------+-------------------------------------------+
+| load\_sample | int             | sample | Sample number on which the supplied       |
+|              |                 |        | delays should be loaded. If this field is |
+|              |                 |        | absent, new delays will be loaded as soon |
+|              |                 |        | as possible                               |
++--------------+-----------------+--------+-------------------------------------------+
 
-The ``beamform``\ block calculates voltage beams only and has no concept
-of polarization. Instead, the ``beamform``\ block generates
-2\*\ ``NBEAM``\ beams and computes the auto- and cross-power spectra
+The ``beamform`` block calculates voltage beams only and has no concept
+of polarization. Instead, the ``beamform`` block generates
+``2 x NBEAM`` beams and computes the auto- and cross-power spectra
 between beams in order to generate auto- and cross-pol products. Beams
-are paired such that the cross-power of beams :math:`2*n` and
-:math:`2*n+1` are computed – it is the user’s responsibility to ensure
+are paired such that the cross-power of beams ``2n`` and
+``2n+1`` are computed – it is the user’s responsibility to ensure
 that these beams have the same pointing and are formed from
 complementary antenna polarizations.
 
 Monitoring
 ~~~~~~~~~~
 
-The ``beamform``\ block writes status data as a JSON-encoded dictionary
+The ``beamform`` block writes status data as a JSON-encoded dictionary
 to the key:
 
 ``/mon/corr/xeng/<hostname>/pipeline/<pid>/beamform``.
 
-| The status dictionary has the following fields:
+The status dictionary has the following fields:
 
-| c c c X Field & Format & Units & Description
-| thoughput & float & Gbits/s & Block throughput
-| delays[x] & list(float) & ns & An ``NINPUT``\ element list containing
-  the delays currently loaded for beam [x]
-| gains & list(complex32) & - & A two dimensional list of currently
-  loaded calibration gains. The dimensions of this list should be
-  ``NCHAN``\ :math:`\times` ``NINPUT``
-| new\_delays[x] & list(float) & ns & An ``NINPUT``\ element list
-  containing the next set of delays to be loaded for beam [x]
-| new\_gains & list(complex32) & - & A two-dimensional list of
-  calibration gains with shape (``NCHAN``, ``NINPUT``)
-| curr\_sample & int & samples & The last sample to be processed.
-| update\_pending & bool & - & True if new integration parameters are
-  waiting to be loaded.
-| last\_update\_time & float & seconds & The time since UNIX epoch that
-  the imtegration parameters were last updated.
-| new\_acc\_len & int & samples & The commanded integration length
-| new\_start\_sample & int & samples & The commanded start sample
-| last\_cmd\_time & float & seconds & The time since UNIX epoch that the
-  last command was received
++--------------------+-----------------+---------+--------------------------------------+
+| Field              | Format          | Units   | Description                          |
++====================+=================+=========+======================================+
+| thoughput          | float           | Gbits/s | Block throughput                     |
++--------------------+-----------------+---------+--------------------------------------+
+| delays[x]          | list(float)     | ns      | An ``NINPUT`` element list           |
+|                    |                 |         | containing the delays currently      |
+|                    |                 |         | loaded for beam ``x``                |
++--------------------+-----------------+---------+--------------------------------------+
+| gains              | list(complex32) |         | A two dimensional list of currently  |
+|                    |                 |         | loaded calibration gains. The        |
+|                    |                 |         | dimensions of this list should be    |
+|                    |                 |         | ``NCHAN x NINPUT``                   |
++--------------------+-----------------+---------+--------------------------------------+
+| new\_delays[x]     | list(float)     | ns      | An ``NINPUT`` element list           |
+|                    |                 |         | containing the next set of delays to |
+|                    |                 |         | be loaded for beam ``x``             |
++--------------------+-----------------+---------+--------------------------------------+
+| new\_gains         | list(complex32) |         | A two-dimensional list of            |
+|                    |                 |         | calibration gains with shape         |
+|                    |                 |         | ``[NCHAN, NINPUT]``                  |
++--------------------+-----------------+---------+--------------------------------------+
+| curr\_sample       | int             | samples | The last sample to be processed.     |
++--------------------+-----------------+---------+--------------------------------------+
+| update\_pending    | bool            | -       | True if new integration parameters   |
+|                    |                 |         | are waiting to be loaded.            |
++--------------------+-----------------+---------+--------------------------------------+
+| last\_update\_time | float           | seconds | The time since UNIX epoch that the   |
+|                    |                 |         | imtegration parameters were last     |
+|                    |                 |         | updated.                             |
++--------------------+-----------------+---------+--------------------------------------+
+| new\_acc\_len      | int             | samples | The commanded integration length     |
++--------------------+-----------------+---------+--------------------------------------+
+| new\_start\_sample | int             | samples | The commanded start sample           |
++--------------------+-----------------+---------+--------------------------------------+
+| last\_cmd\_time    | float           | seconds | The time since UNIX epoch that the   |
+|                    |                 |         | last command was received            |
++--------------------+-----------------+---------+--------------------------------------+
 
 .. [1]
    See `etcd.io <etcd.io>`__

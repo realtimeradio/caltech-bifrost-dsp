@@ -89,18 +89,25 @@ described below.
 #. ``gpucopy``: Transfer blocks of data from CPU to GPU, for
    high-performance computation.
 
+#. ``triggered_dump``: Buffer large quantities of time-domain data for triggered
+   dump to disk.
+
 #. ``corr``: Correlate data using the ``xGPU`` library.
 
-#. ``corrsubsel``: Down-select and transmit a sub-set of the complete
-   visibility matrix.
+#. ``corr_output_full``: Output full, accumulated visibility matrices.
 
-#. **beamform**: Form multiple voltage beams.
+#. ``corrsubsel``: Down-select a sub-set of the complete visibility matrices.
 
-#. **beamform\_vlbi**: Package and transmit a single voltage beam fof
+#. ``corr_output_part``: Output subselected visibilities as UDP/IP streams.
+
+#. ``beamform``: Form multiple voltage beams.
+
+#. ``beamform_vlbi_output``: Package and transmit multiple voltage beams for
    VLBI purposes.
 
-#. **beamform\_vacc**: Form integrated power-spectra for multiple beams,
-   and output as UDP streams.
+#. ``beamform\_sum_beams``: Form integrated power-spectra for multiple beams.
+
+#. ``beamform\_output``: Output accumulated power beams.
 
 High-Level Parameters
 ---------------------
@@ -123,10 +130,34 @@ sequences).
 ``capture``
 ~~~~~~~~~~~
 
-Functionality
-^^^^^^^^^^^^^
-
-This block receives data from a high-speed network, and writes it to a
-bifrost memory buffer.
-
 .. autoclass:: lwa352_pipeline.blocks.capture_block.Capture
+
+``gpucopy``
+~~~~~~~~~~~
+
+``triggered_dump``
+~~~~~~~~~~~~~~~~~~
+
+``corr``
+~~~~~~~~
+
+``corr_output_full``
+~~~~~~~~~~~~~~~~~~~~
+
+``corrsubsel``
+~~~~~~~~~~~~~~
+
+``corr_output_part``
+~~~~~~~~~~~~~~~~~~~~
+
+``beamform``
+~~~~~~~~~~~~
+
+``beamform_vlbi_output``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``beamform_sum_beams``
+~~~~~~~~~~~~~~~~~~~~~~
+
+``beamform_output``
+~~~~~~~~~~~~~~~~~~~
