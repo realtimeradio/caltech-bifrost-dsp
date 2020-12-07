@@ -9,7 +9,145 @@ import ctypes
 import numpy as np
 
 class Capture(object):
-    time_tag = 0
+    """
+    **Functionality**
+
+    This block receives UDP/IP data from an Ethernet network and writes
+    it to a bifrost memory buffer.
+
+    **New Sequence Condition**
+
+    This block starts a new sequence each time the incoming packet
+    stream timestamp changes in an unexpected way. For example, if a large
+    block of timestamps are missed a news sequence will be started. Or, if
+    the incoming timestamps decrease (which might happen if the upstream
+    transmitters are reset) a new sequence is started.
+
+    **Input Header Requirements**
+
+    This block is a bifrost source, and thus has no input header
+    requirements.
+
+    **Output Headers**
+    
+    Output header fields are as follows:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | Field            | Format     | Units        | Description                                                  |
+        +==================+============+==============+==============================================================+
+        | ``time_tag``     | int        |              | Arbirary integer, incremented with each new sequence.        |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``sync_time``    | int        | UNIX seconds | Synchronization time (corresponding to spectrum sequence     |
+        |                  |            |              | number 0)                                                    |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``seq0``         | int        |              | Spectra number for the first sample in this sequence         |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``chan0``        | int        |              | Channel index of the first channel in this sequence          |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``nchan``        | int        |              | Number of channels in the sequence                           |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``fs_hz``        | double     | Hz           | Sampling frequency of ADCs                                   |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``sfreq``        | double     | Hz           | Center frequency of first channel in the sequence            |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``bw_hz``        | int        | Hz           | Bandwidth of the sequence                                    |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``nstand``       | int        |              | Number of stands (antennas) in the sequence                  |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``npol``         | int        |              | Number of polarizations per stand in the sequence            |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``complex``      | bool       |              | True if the data are complex, False otherwise                |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``nbit``         | int        |              | Number of bits per sample (or per real/imag part if the      |
+        |                  |            |              | samples are complex)                                         |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``input_to_ant`` | list[int]  |              | List of input to stand/pol mappings with dimensions          |
+        |                  |            |              | ``[nstand x npol, 2]``. E.g. if entry ``N`` of this list has |
+        |                  |            |              | value ``[S, P]`` then the ``N``-th correlator input is stand |
+        |                  |            |              | ``S``, polarization ``P``.                                   |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``ant_to_input`` | list[ints] |              | List of stand/pol to correlator input number mappings with   |
+        |                  |            |              | dimensions ``[nstand, npol]``. E.g. if entry ``[S,P]`` of    |
+        |                  |            |              | this list has value ``N`` then stand ``S``, polarization     |
+        |                  |            |              | ``P`` of the array is the ``N``-th correlator input          |
+        +------------------+------------+--------------+--------------------------------------------------------------+
+
+    **Data Buffers**
+    
+    *Input data buffer*: None
+
+    *Output data buffer*: Complex 4-bit data with dimensions (slowest to fastest)
+    ``Time x Freq x Stand x Polarization``
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: Python `logging` object.
+
+    :param fs_hz: Sampling frequency, in Hz, of the upstream ADCs
+    :type fs_hz: int
+
+    :param chan_bw_hz: Bandwidth of a single frequency channel in Hz.
+    :type chan_bw_hz: float
+
+    :param nstand: Number of stands in the array.
+    :type nstand: int
+
+    :param npol: Number of polarizations per antenna stand.
+    :type npol: int
+
+    :param input_to_ant: An map of correlator input to station /
+        polarization. Provided as an ``[nstand x npol, 2]`` array such
+        that if ``input_to_ant[i] == [S,P]`` then the i-th correlator
+        input is stand ``S``, polarization ``P``.
+
+    *Keyword Arguments*
+
+    :param fmt: The string identifier of the packet format to be
+        received. E.g "snap2".
+    :type fmt: string
+
+    :param sock: Input UDP socket on which to receive.
+    :type sock: bifrost.udp_socket.UDPSocket
+
+    :param ring: bifrost output data ring
+    :type ring: bifrost.ring.Ring
+
+    :param core: CPU core to which this block should be bound.
+    :type core: int
+
+    :param nsrc: Number of packet sources. This might mean the number of
+        boards transmitting packets, or, in the case that it takes multiple
+        packets from each board to send a complete set of data, this could
+        be a multiple of the number of source boards.
+    :type nsrc: int
+
+    :param src0: The first source to transmit to this block.
+    :type src0: int
+
+    :param max_payload_size: The maximum payload size, in bytes, of the
+        UDP packets to be received.
+    :type max_payload_size: int
+
+    :param buffer_ntime: The number of time samples to be buffered into the
+        output data ring buffer before it is marked full.
+    :type buffer_ntime: int
+
+    :param utc_start: ?The time at which the block should begin
+        receiving. Set to datetime.datetime.now() to start immediately.
+    :type utc_start: datetime.datetime
+
+    :param ibverbs: Boolean parameter which, if true, will cause this
+        block to use an Infiniband Verbs packet receiver. If false, or not
+        provided,  a standard UDP socket will be used.
+    :type ibverbs: Bool
+    
+    """
+
     def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125,
                      input_to_ant=None, nstand=352, npol=2,
                      *args, **kwargs):
@@ -57,9 +195,41 @@ class Capture(object):
         ## HACK TESTING
         #self.seq_callback = None
     def shutdown(self):
+        """
+        Shutdown this block.
+        """
         self.shutdown_event.set()
     def seq_callback(self, seq0, chan0, nchan, nsrc,
                      time_tag_ptr, hdr_ptr, hdr_size_ptr):
+        """
+        Callback function invoked each time the underlying C receiver
+starts a new sequence.
+
+        :param seq0: The sequence value of the first sample in this
+            sequence.
+        :type seq0: int
+        :param chan0: The ID of the first channel in this sequence.
+        :type chan0: int
+        :param nchan: The number of channels in this sequence.
+        :type nchan: int
+        :param nsrc: The number of distinct sources in this sequence.
+        :type nsrc: int
+        :param time_tag_ptr: A pointer to the underlying time tag used
+            by the C receiver. Set this time tag using: ``time_tag_ptr[0] =
+            time_tag``
+        :param hdr_size_ptr: A pointer to the header size variable used
+            by the C receiver.
+            Set this with ``hdr_size_ptr[0] = header_size``
+        :param hdr_ptr: A pointer to the underlying sequence header used
+            by the C receiver.
+            Set this by creating a string, and assigning it. Eg:
+
+            ``header_string = json.dumps(header_dictionary).encode()
+            header_buf = ctypes.create_string_buffer(header_string)
+            hdr_ptr[0] = ctypes.cast(header_buf, ctypes.c_void_p)
+            hdr_size_ptr[0] = len(header_string)``
+
+        """
         #t0 = time.time()
         self.time_tag += 1
         sync_time = time_tag_ptr[0]
