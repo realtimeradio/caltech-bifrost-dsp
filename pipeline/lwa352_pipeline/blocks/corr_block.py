@@ -139,28 +139,27 @@ class Corr(Block):
     :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
     :type core: int
 
-    :param gpu: GPU device which this block should target. A value of -1 indicates
-    no binding
+    :param gpu: GPU device which this block should target. A value of -1 indicates no binding
     :type gpu: int
 
     :param ntime_gulp: Number of time samples to copy with each gulp.
     :type ntime_gulp: int
 
     :param nchan: Number of frequency channels per time sample. This should match
-    the xGPU ``NFREQUENCY`` compile-time parameter.
+        the xGPU ``NFREQUENCY`` compile-time parameter.
     :type nchan: int
 
     :param nstand: Number of stands per time sample. This should match
-    the xGPU ``NSTATION`` compile-time parameter.
+        the xGPU ``NSTATION`` compile-time parameter.
     :type nstand: int
 
     :param npol: Number of polarizations per stand. This should match
-    the xGPU ``NPOL`` compile-time parameter.
+       the xGPU ``NPOL`` compile-time parameter.
     :type npol: int
 
     :param acc_len: Accumulation length per output buffer write. This should
-    be an integer multiple of the input gulp size ``ntime_gulp``.
-    This parameter can be updated at runtime.
+        be an integer multiple of the input gulp size ``ntime_gulp``.
+        This parameter can be updated at runtime.
     :type acc_len: int
 
     :parameter etcd_client: Etcd client object used to facilitate control of this block.
@@ -168,19 +167,19 @@ class Corr(Block):
     :type etcd_client: etcd3.client.Etcd3Client
 
     :parameter test: If True, run a CPU correlator in parallel with xGPU and
-    verify the output. Beware, the (Python!) CPU correlator is *very* slow.
+        verify the output. Beware, the (Python!) CPU correlator is *very* slow.
     :type test: Bool
 
     :parameter autostartat: The start time at which the correlator should
-    automatically being correlating without intervention of the runtime control
-    system. Use the value ``-1`` to cause integration to being on the next
-    gulp.
+        automatically being correlating without intervention of the runtime control
+        system. Use the value ``-1`` to cause integration to being on the next
+        gulp.
     :type autostartat: int
 
     :parameter ant_to_input: an [nstand, npol] list of input IDs used to map
-    stand/polarization ``S``, ``P`` to a correlator input. This allows the block
-    to pass this information to downstream processors. *This functionality is
-    currently unused*
+        stand/polarization ``S``, ``P`` to a correlator input. This allows the block
+        to pass this information to downstream processors. *This functionality is
+        currently unused*
     :type ant_to_input: nstand x npol list of ints
 
     **Runtime Control and Monitoring**
