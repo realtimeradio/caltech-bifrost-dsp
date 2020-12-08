@@ -7,6 +7,8 @@ from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
+from bifrost.udp_socket import UDPSocket
+from bifrost.packet_writer import HeaderInfo, DiskWriter, UDPTransmit
 
 import os
 import time
@@ -17,13 +19,13 @@ import numpy as np
 
 from .block_base import Block
 
-class CorrOutputFull(Block):
+class CorrOutputFullPy(Block):
     """
     Perform GPU side accumulation and then transfer to CPU
     """
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
-                 checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None):
+                 checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
@@ -55,9 +57,12 @@ class CorrOutputFull(Block):
             self.log.info("CORR OUTPUT >> Checkfile %s" % self.checkfile.name)
             self.log.info("CORR OUTPUT >> Checkfile length: %d bytes" % self.checkfile_nbytes)
             self.log.info("CORR OUTPUT >> Checkfile accumulation length: %d" % self.checkfile_acc_len)
-
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setblocking(0)
+        self.use_cor_fmt = use_cor_fmt
+        if self.use_cor_fmt:
+            self.sock = UDPSocket()
+        else:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sock.setblocking(0)
         self.dest_ip = "0.0.0.0"
         self.new_dest_ip = "0.0.0.0"
         self.dest_port = dest_port
@@ -105,12 +110,62 @@ class CorrOutputFull(Block):
             return np.zeros(dim, dtype=np.complex)
         return np.frombuffer(dtest_raw, dtype=np.complex).reshape(dim)
 
+    def send_packets_py(self, sync_time, this_gulp_time, bw_hz, sfreq,
+                              upstream_acc_len, chan0):
+        cpu_affinity.set_core(self.core)
+        start_time = time.time()
+        packet_cnt = 0
+        header_static = struct.pack(">QQ2d4I",
+                                    sync_time,
+                                    this_gulp_time,
+                                    bw_hz,
+                                    sfreq,
+                                    upstream_acc_len,
+                                    self.nchan,
+                                    chan0,
+                                    self.npol,
+                                    )
+        for s0 in range(self.nstand):
+            for s1 in range(s0, self.nstand):
+                header_dyn = struct.pack(">2I", s0, s1)
+                self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.dest_ip, self.dest_port))
+                packet_cnt += 1
+                if packet_cnt % 50 == 0:
+                    # Only implement packet delay every 50 packets because the sleep
+                    # overhead is large
+                    time.sleep(50 * self.packet_delay_ns / 1e9)
+        stop_time = time.time()
+        elapsed = stop_time - start_time
+        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
+
+    def send_packets_bf(self, this_gulp_time, desc, chan0, gain, navg, nsrc):
+        cpu_affinity.set_core(self.core)
+        start_time = time.time()
+        desc.set_chan0(chan0)
+        desc.set_gain(gain)
+        desc.set_decimation(navg)
+        desc.set_nsrc((self.nstand*(self.nstand + 1)//2)
+        for i in range(self.nstand):
+            # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
+            # copy a single baseline of data
+            sdata = self.reordered_data[i, i:, :, :].copy(space='system')
+            # reshape and send
+            sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol)
+            udt.send(desc, this_gulp_time, 0, i*(2*nstand + 1 - i) // 2 + i, 1, sdata)      
+        del sdata
+        stop_time = time.time()
+        elapsed = stop_time - start_time
+        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
+
     def main(self):
         cpu_affinity.set_core(self.core)
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
+        if self.use_cor_fmt:
+            udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+            desc = HeaderInfo()
         for iseq in self.iring.read(guarantee=self.guarantee):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -133,6 +188,8 @@ class CorrOutputFull(Block):
                     self.packet_delay_ns = self.new_packet_delay_ns
                     self.update_pending = False
                     self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.packet_delay_ns))
+                    if self.use_cor_fmt:
+                        self.sock.connect(Address(self.dest_ip, self.dest_port))
                     self.stats.update({'dest_ip': self.dest_ip,
                                        'dest_port': self.dest_port,
                                        'packet_delay_ns': self.packet_delay_ns,
@@ -201,30 +258,10 @@ class CorrOutputFull(Block):
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
                 if self.dest_ip != "0.0.0.0":
-                    start_time = time.time()
-                    packet_cnt = 0
-                    header_static = struct.pack(">QQ2d4I",
-                                                ihdr['sync_time'],
-                                                this_gulp_time,
-                                                bw_hz,
-                                                sfreq,
-                                                upstream_acc_len,
-                                                self.nchan,
-                                                chan0,
-                                                self.npol,
-                                                )
-                    for s0 in range(self.nstand):
-                        for s1 in range(s0, self.nstand):
-                            header_dyn = struct.pack(">2I", s0, s1)
-                            self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.dest_ip, self.dest_port))
-                            packet_cnt += 1
-                            if packet_cnt % 50 == 0:
-                                # Only implement packet delay every 50 packets because the sleep
-                                # overhead is large
-                                time.sleep(50 * self.packet_delay_ns / 1e9)
-                    stop_time = time.time()
-                    elapsed = stop_time - start_time
-                    self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
+                    if self.use_cor_fmt:
+                        self.send_packets_bf(this_gulp_time, desc, chan0, 0, upstream_acc_len)
+                    else:
+                        self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
                     self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
                 curr_time = time.time()
