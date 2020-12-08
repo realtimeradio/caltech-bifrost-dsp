@@ -42,10 +42,8 @@ class CorrOutputFull(Block):
         self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
         if antpol_to_bl is not None:
             self.antpol_to_bl[...] = antpol_to_bl
-            #print(self.antpol_to_bl.shape)
         if bl_is_conj is not None:
             self.bl_is_conj[...] = bl_is_conj
-            #print(self.bl_is_conj.shape)
         self.reordered_data = BFArray(np.zeros([nstand, nstand, npol, npol, nchan, 2], dtype=np.int32), space='system')
         self.dump_size = nstand * (nstand+1) * npol * npol * nchan * 2 * 4 / 2.
 
@@ -60,7 +58,7 @@ class CorrOutputFull(Block):
             self.log.info("CORR OUTPUT >> Checkfile accumulation length: %d" % self.checkfile_acc_len)
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
-            self.sock = UDPSocket()
+            self.sock = None
         else:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.setblocking(0)
@@ -139,7 +137,7 @@ class CorrOutputFull(Block):
         elapsed = stop_time - start_time
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
 
-    def send_packets_bf(self, this_gulp_time, desc, chan0, gain, navg, nsrc):
+    def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
@@ -149,10 +147,10 @@ class CorrOutputFull(Block):
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
             # copy a single baseline of data
-            sdata = self.reordered_data[i, i:, :, :].copy(space='system')
+            sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32') # packet format expects floats
             # reshape and send
-            sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol)
-            udt.send(desc, this_gulp_time, 0, i*(2*nstand + 1 - i) // 2 + i, 1, sdata)      
+            sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
+            udt.send(desc, this_gulp_time, 0, i*(2*self.nstand + 1 - i) // 2 + i, 1, sdata)      
         del sdata
         stop_time = time.time()
         elapsed = stop_time - start_time
@@ -164,9 +162,7 @@ class CorrOutputFull(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
-        if self.use_cor_fmt:
-            udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
-            desc = HeaderInfo()
+        udt = None
         for iseq in self.iring.read(guarantee=self.guarantee):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -190,7 +186,13 @@ class CorrOutputFull(Block):
                     self.update_pending = False
                     self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.packet_delay_ns))
                     if self.use_cor_fmt:
+                        if self.sock: del self.sock
+                        if udt: del udt
+                        self.sock = UDPSocket()
                         self.sock.connect(Address(self.dest_ip, self.dest_port))
+                        
+                        udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+                        desc = HeaderInfo()
                     self.stats.update({'dest_ip': self.dest_ip,
                                        'dest_port': self.dest_port,
                                        'packet_delay_ns': self.packet_delay_ns,
@@ -260,7 +262,7 @@ class CorrOutputFull(Block):
 
                 if self.dest_ip != "0.0.0.0":
                     if self.use_cor_fmt:
-                        self.send_packets_bf(this_gulp_time, desc, chan0, 0, upstream_acc_len)
+                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
