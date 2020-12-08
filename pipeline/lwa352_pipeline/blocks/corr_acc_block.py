@@ -16,8 +16,148 @@ from .block_base import Block
 
 class CorrAcc(Block):
     """
-    Perform GPU side accumulation and then transfer to CPU
+    **Functionality**
+
+    This block reads data from a GPU-side bifrost ring buffer and accumulates
+    it in an internal GPU buffer. The accumulated data are then copied to
+    an output ring buffer. 
+
+    **New Sequence Condition**
+
+    This block starts a new sequence each time a new integration
+    configuration is loaded or the upstream sequence changes.
+
+    **Input Header Requirements**
+
+    This block requires that the following header fields
+    be provided by the upstream data source:
+
+    +-------------+--------+-------+------------------------------------------------+
+    | Field       | Format | Units | Description                                    |
+    +=============+========+=======+================================================+
+    | ``seq0``    | int    |       | Spectra number for the first sample in the     |
+    |             |        |       | input sequence                                 |
+    +-------------+--------+-------+------------------------------------------------+
+    | ``acc_len`` | int    | -     | Number of spectra integrated into each output  |
+    |             |        |       | sample by the upstream processing              |
+    +-------------+--------+-------+------------------------------------------------+
+
+    **Output Headers**
+
+    This block passes headers from the upstream block with
+    the following modifications:
+
+    +----------------------+----------+---------+---------------------------------+
+    | Field                | Format   | Units   | Description                     |
+    +======================+==========+=========+=================================+
+    | ``seq0``             | int      | -       | Spectra number for the *first*  |
+    |                      |          |         | sample in the integrated output |
+    +----------------------+----------+---------+---------------------------------+
+    | ``acc_len``          | int      | -       | Total number of spectra         |
+    |                      |          |         | integrated into each output     |
+    |                      |          |         | sample by this block,           |
+    |                      |          |         | incorporating any upstream      |
+    |                      |          |         | processing                      |
+    +----------------------+----------+---------+---------------------------------+
+    | ``upstream_acc_len`` | int      | -       | Number of spectra already       |
+    |                      |          |         | integrated by upstream          |
+    |                      |          |         | processing                      |
+    +----------------------+----------+---------+---------------------------------+
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A GPU-side bifrost ring buffer of 32+32 bit
+    complex integer data. The input buffer is read in gulps of
+    ``nchan * (nstand//2+1)*(nstand//4)*npol*npol*4*2`` 32-bit words, which
+    is the appropriate size if this block is fed by an upstream ``Corr`` block.
+    
+    *Note that if the upstream block is ``Corr``, the complexity axis of the input
+    buffer is not the fastest changing.*
+
+    *Output Data Buffer*: A bifrost ring buffer of 32+32 bit complex
+    integer data of the same ordering and dimensionality as the input buffer.
+
+    The output buffer is written in single accumulation blocks (an integration of
+    ``acc_len`` input vectors).
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring. This should be on the GPU.
+    :type iring: bifrost.ring.Ring
+
+    :param oring: bifrost output data ring. This should be on the GPU.
+    :type oring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :param gpu: GPU device which this block should target. A value of -1 indicates
+    no binding
+    :type gpu: int
+
+    :param nchan: Number of frequency channels per time sample.
+    :type nchan: int
+
+    :param nstand: Number of stands per time sample.
+    :type nstand: int
+
+    :param npol: Number of polarizations per stand.
+    :type npol: int
+
+    :param acc_len: Accumulation length per output buffer write. This should
+    be an integer multiple of any upstream accumulation.
+    This parameter can be updated at runtime.
+    :type acc_len: int
+
+    :parameter etcd_client: Etcd client object used to facilitate control of this block.
+        If ``None``, do not use runtime control.
+    :type etcd_client: etcd3.client.Etcd3Client
+
+    :parameter autostartat: The start time at which the correlator should
+    automatically being correlating without intervention of the runtime control
+    system. Use the value ``-1`` to cause integration to being on the next
+    gulp.
+    :type autostartat: int
+
+    **Runtime Control and Monitoring**
+
+    This block accepts the following command fields:
+
+    +------------------+--------+---------+------------------------------+
+    | Field            | Format | Units   | Description                  |
+    +==================+========+=========+==============================+
+    | ``acc_len``      | int    | samples | Number of samples to         |
+    |                  |        |         | accumulate. This should be a |
+    |                  |        |         | multiple of any upstream     |
+    |                  |        |         | accumulation performed by    |
+    |                  |        |         | other blocks. I.e., it       |
+    |                  |        |         | should be an integer         |
+    |                  |        |         | multiple of a sequences      |
+    |                  |        |         | ``acc_len`` header entry.    |
+    +------------------+--------+---------+------------------------------+
+    | ``start_time``   | int    | samples | The desired first time       |
+    |                  |        |         | sample in an accumulation.   |
+    |                  |        |         | This should be compatible    |
+    |                  |        |         | with the accumulation length |
+    |                  |        |         | and start time of upstream   |
+    |                  |        |         | blocks. I.e. it should be    |
+    |                  |        |         | offset from the input        |
+    |                  |        |         | sequence header's ``seq0``   |
+    |                  |        |         | value by an integer multiple |
+    |                  |        |         | of the input sequence        |
+    |                  |        |         | header's ``acc_len`` value   |
+    +------------------+--------+---------+------------------------------+
+
     """
+
     def __init__(self, log, iring, oring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
         # TODO: Other things we could check:

@@ -89,18 +89,18 @@ class Corr(Block):
     +------------------+----------------+---------+-------------------------------+
     | Field            | Format         | Units   | Description                   |
     +==================+================+=========+===============================+
-    | ``seq0``         | int            | -       | Spectra number for the        |
+    | ``seq0``         | int            |         | Spectra number for the        |
     |                  |                |         | *first* sample in the         |
     |                  |                |         | integrated output             |
     +------------------+----------------+---------+-------------------------------+
-    | ``acc_len``      | int            | -       | Number of spectra integrated  |
+    | ``acc_len``      | int            |         | Number of spectra integrated  |
     |                  |                |         | into each output sample by    |
     |                  |                |         | this block                    |
     +------------------+----------------+---------+-------------------------------+
-    | ``ant_to_input`` | list of ints   | -       | This header is removed from   |
+    | ``ant_to_input`` | list of ints   |         | This header is removed from   |
     |                  |                |         | the sequence                  |
     +------------------+----------------+---------+-------------------------------+
-    | ``input_to_ant`` | list of ints   | -       | This header is removed from   |
+    | ``input_to_ant`` | list of ints   |         | This header is removed from   |
     |                  |                |         | the sequence                  |
     +------------------+----------------+---------+-------------------------------+
 
