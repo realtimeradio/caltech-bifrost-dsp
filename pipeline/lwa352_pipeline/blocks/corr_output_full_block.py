@@ -9,6 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 from bifrost.udp_socket import UDPSocket
 from bifrost.packet_writer import HeaderInfo, DiskWriter, UDPTransmit
+from bifrost.address import Address
 
 import os
 import time
@@ -19,7 +20,7 @@ import numpy as np
 
 from .block_base import Block
 
-class CorrOutputFullPy(Block):
+class CorrOutputFull(Block):
     """
     Perform GPU side accumulation and then transfer to CPU
     """
@@ -144,7 +145,7 @@ class CorrOutputFullPy(Block):
         desc.set_chan0(chan0)
         desc.set_gain(gain)
         desc.set_decimation(navg)
-        desc.set_nsrc((self.nstand*(self.nstand + 1)//2)
+        desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
             # copy a single baseline of data

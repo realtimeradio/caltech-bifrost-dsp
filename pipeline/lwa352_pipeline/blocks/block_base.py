@@ -51,6 +51,8 @@ class Block(object):
         self.name = name or type(self).__name__
         self.stats = {}
 
+        self.log.info("Pipeline %d: Initializing block: %s (instance %d)" % (self.pipeline_id, self.name, self.instance_id))
+
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
         self.out_proclog  = ProcLog(type(self).__name__+"/out")

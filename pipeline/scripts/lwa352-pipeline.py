@@ -19,6 +19,17 @@ __maintainer__ = "Jack Hickish"
 __email__      = "jack@realtimeradio.co.uk"
 __status__     = "Development"
 
+class CoreList(list):
+    """
+    A dumb class to catch pop-ing too many cores and print an error
+    """
+    def pop(self, i):
+        try:
+            return list.pop(self, i)
+        except IndexError:
+            print("Ran out of CPU cores to use!")
+            exit()
+
 def build_pipeline(args):
     from bifrost.address import Address
     from bifrost.udp_socket import UDPSocket
@@ -74,8 +85,8 @@ def build_pipeline(args):
     
 
     short_date = ' '.join(__date__.split()[1:4])
-    log.info("Starting %s with PID %i", argv[0], os.getpid())
-    log.info("Cmdline args: \"%s\"", ' '.join(argv[1:]))
+    log.info("Starting %s with PID %i", sys.argv[0], os.getpid())
+    log.info("Cmdline args: \"%s\"", ' '.join(sys.argv[1:]))
     log.info("Version:      %s", __version__)
     log.info("Last changed: %s", short_date)
     log.info("Config file:  %s", args.configfile)
@@ -133,7 +144,7 @@ def build_pipeline(args):
     nchan = 184
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
-    cores = list(map(int, args.cores.split(',')))
+    cores = CoreList(map(int, args.cores.split(',')))
     
     nroach = 11
     nfreqblocks = 2

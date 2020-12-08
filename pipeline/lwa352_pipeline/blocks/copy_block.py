@@ -103,7 +103,7 @@ class Copy(Block):
 
         self.buffer_multiplier = buffer_multiplier
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*byte_per_time*1        # complex8
+        self.igulp_size = self.ntime_gulp*nbyte_per_time*1        # complex8
         # round down buffer size to an integer gulps
         if buf_size_gbytes is None:
             self.buf_size = 4 * self.igulp_size*self.buffer_multiplier
