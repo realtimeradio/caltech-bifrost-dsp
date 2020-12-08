@@ -18,20 +18,145 @@ HEADER_SIZE = 1024*1024
 
 class TriggeredDump(Block):
     """
-    Dump a buffer to disk
+    **Functionality**
+
+    This block writes data from an input bifrost ring buffer to disk, when triggered.
+
+    **New Sequence Condition**
+
+    This block is a bifrost sink, and generates no output sequences.
+
+    **Input Header Requirements**
+
+    This block requires that the following header fields be provided by the upstream data
+    source:
+
+    +-------+--------+-------+-----------------------------------------------------------+
+    | Field | Format | Units | Description                                               |
+    +=======+========+=======+===========================================================+
+    | seq0  | int    |       | Spectra number for the first sample in the input sequence |
+    +-------+--------+-------+-----------------------------------------------------------+
+
+    The field ``seq`` if provided by the upstream block will be overwritten.
+
+    **Output Headers**
+
+    This block is a bifrost sink, and generates no output headers. Headers provided
+    by the upstream block are written to this block's data files, with the exception of the
+    ``seq`` field, which is overwritten.
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A bifrost ring buffer of at least
+    ``nbyte_per_time x ntime_gulp`` bytes size.
+
+    *Output Data Buffer*: None
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring
+    :type iring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :param ntime_gulp: Number of time samples to copy with each gulp.
+    :type ntime_gulp: int
+
+    :param nbyte_per_time: Number of bytes per time sample. The total number of bytes read
+        with each gulp is ``nbyte_per_time x ntime_gulp``.
+    :type nbyte_per_time: int
+
+    :parameter etcd_client: Etcd client object used to facilitate control of this block.
+        If ``None``, do not use runtime control.
+    :type etcd_client: etcd3.client.Etcd3Client
+
+    :parameter dump_path: Root path to directory where dumped data should be stored.
+        This parameter can be overridden by runtime control commands.
+    :type data_path: string
+
+    :parameter ntime_per_file: Number of time samples of data to write to each output file.
+        This parameter can be overridden by runtime control commands.
+    :type ntime_per_file: int
+
+
+    **Runtime Control and Monitoring**
+
+    This block accepts the following command fields:
+
+    +------------------+--------+---------+----------------------------------------------------------------------+
+    | Field            | Format | Units   | Description                                                          |
+    +==================+========+=========+======================================================================+
+    | ``command``      | string |         | Commands:                                                            |
+    |                  |        |         |                                                                      |
+    |                  |        |         | ``Trigger``: Begin capturing data ASAP                               |
+    |                  |        |         |                                                                      |
+    |                  |        |         | ``Abort``: Abort a capture currently in progress and delete its data |
+    |                  |        |         |                                                                      |
+    |                  |        |         | ``Stop``: Stop a capture currently in progress                       |
+    +------------------+--------+---------+----------------------------------------------------------------------+
+    | ``ntime_per      | int    | samples | Number of time samples to capture in each file.                      |
+    | _sample``        |        |         |                                                                      |
+    +------------------+--------+---------+----------------------------------------------------------------------+
+    | ``nfile``        | int    |         | Number of files to capture per trigger event.                        |
+    +------------------+--------+---------+----------------------------------------------------------------------+
+    | ``dump_path``    | str    |         | Root path to directory where data should be stored.                  |
+    +------------------+--------+---------+----------------------------------------------------------------------+
+
+    **Output Data Format**
+
+    When triggered, this block will output a series of ``nfile`` data files, each containing ``ntime_per_file``
+    time samples of data.
+
+    File names begin ``lwa-dump-`` and are suffixed by the trigger time as a floating-point UNIX timestamp with
+    two decimal points of precision, a file extension ".tbf", and a file number ".N" where N runs from 0 to
+    ``nfile - 1``. For example: ``lwa-dump-1607434049.77.tbf.0``.
+
+    The files have the following structure:
+      - The first 4 bytes contains a little-endian 32-bit integer, ``hsize``,  describing the number of bytes of
+        subsequent header data.
+      - The following 4 bytes contains a little-endian 32-bit integer, ``hblock_size`` describing the size of
+        header block which precedes the data payload in the file.
+      - Bytes ``8`` to ``8 + hsize`` contain the json-encoded header of the bifrost sequence which is contained
+        in the payload of this file, with an additional ``seq`` keyword, which indicates the spectra number of the
+        first spectra in this data file.
+      - Bytes ``hblock_size`` to ``EOF`` contain data in the shape and format of the input bifrost data buffer.
+
+    Output data files can thus be read with:
+    
+    .. code-block:: python
+
+        import struct
+        with open(FILENAME, "rb") as fh:
+            hsize = struct.unpack('<I', fh.read(4))
+            hblock_size = struct.unpack('<I', fh.read(4))
+            header = json.loads(fh.read(hsize))
+            fh.seek(hblock_size)
+            data = fh.read() # read to EOF
+
+
     """
-    def __init__(self, log, iring, ntime_gulp=2500,
-                 guarantee=True, core=-1, nchan=192, nstand=352, npol=2, etcd_client=None, dump_path='/fastdata'):
+
+    def __init__(self, log, iring, ntime_gulp=2500, ntime_per_file=1000000,
+                 guarantee=True, core=-1, nbyte_per_time=192*352*2, etcd_client=None, dump_path='/fastdata'):
 
         super(TriggeredDump, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
         self.ntime_gulp = ntime_gulp
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
+        self.igulp_size = self.ntime_gulp*nbyte_per_time
         self.command = None
-        self.ntime_per_file = 1000000
+        self.ntime_per_file = ntime_per_file
         self.nfile = 1
         self.dump_path = dump_path
-        self.nbyte_per_time = nchan*nstand*npol*1        # complex8
+        self.nbyte_per_time = nbyte_per_time
 
     def _etcd_callback(self, watchresponse):
         v = json.loads(watchresponse.events[0].value)

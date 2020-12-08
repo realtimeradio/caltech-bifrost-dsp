@@ -16,13 +16,84 @@ from .block_base import Block
 
 class Copy(Block):
     """
-    Copy data from one buffer to another.
+    **Functionality**
+    
+    This block copies data from one bifrost buffer to another.
+    The buffers may be in CPU or GPU space.
+    
+    **New Sequence Condition**
+    
+    This block has no new sequence condition. It will output a new sequence
+    only when the upstream sequence changes.
+    
+    **Input Header Requirements**
+    
+    This block has no input header requirements.
+    
+    **Output Headers**
+    
+    This block copies input headers downstream, adding none of its own.
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A bifrost ring buffer of at least
+    ``nbyte_per_time x ntime_gulp`` bytes size.
+
+    *Output Data Buffer*: A bifrost ring buffer whose size is set by the
+    ``buffer_multiplier`` and/or ``buf_size_gbytes`` parameters.
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring
+    :type iring: bifrost.ring.Ring
+
+    :param oring: bifrost output data ring
+    :type oring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :param gpu: GPU device ID to which this block should copy to/from.
+        A value of -1 indicates no binding. This parameter need not be provided if neither
+        input nor output data rings are allocated in GPU (or GPU-pinned) memory.
+    :type gpu: int
+
+    :param ntime_gulp: Number of time samples to copy with each gulp.
+    :type ntime_gulp: int
+
+    :param nbyte_per_time: Number of bytes per time sample. The total number of bytes read
+        with each gulp is ``nbyte_per_time x ntime_gulp``.
+    :type nbyte_per_time: int
+
+    :param buffer_multiplier: The block will set the output buffer size to be
+        ``4 x buffer_multiplier`` times the size of a single data gulp. If
+        ``buf_size_gbytes`` is also provided then the output memory block size is required
+        to be a mulitple of ``buffer_multiplier x ntime_gulp x nbyte_per_time`` bytes.
+    :type buffer_multiplier: int
+
+    :param buf_size_gbytes: If provided, attempt to set the output buffer size to
+        ``buf_size_gbytes`` Gigabytes (10**9 Bytes). Round down the buffer such that the
+        chosen size is the largest integer multiple of ``buffer_multiplier x ntime_gulp x nbyte_per_time``
+        which is less than ``10**9 x buf_size_gbytes``.
+        Note that bifrost (seems to) round up buffer sizes to an integer power of two
+        number of bytes, so be careful about accidentally allocating more memory than you have!
+    :type buf_size_gbytes: int
+
     """
+
     def __init__(self, log, iring, oring, ntime_gulp=2500, buffer_multiplier=1,
-                 guarantee=True, core=-1, nchan=192, nstand=352, npol=2, gpu=-1, etcd_client=None,
+                 guarantee=True, core=-1, nbyte_per_time=184*352*2, gpu=-1,
                  buf_size_gbytes=None):
 
-        super(Copy, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
+        super(Copy, self).__init__(log, iring, oring, guarantee, core, etcd_client=None)
         cpu_affinity.set_core(self.core)
         self.ntime_gulp = ntime_gulp
         self.gpu = gpu
@@ -32,7 +103,7 @@ class Copy(Block):
 
         self.buffer_multiplier = buffer_multiplier
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
-        self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
+        self.igulp_size = self.ntime_gulp*byte_per_time*1        # complex8
         # round down buffer size to an integer gulps
         if buf_size_gbytes is None:
             self.buf_size = 4 * self.igulp_size*self.buffer_multiplier

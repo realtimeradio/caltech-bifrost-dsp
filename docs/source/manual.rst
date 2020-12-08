@@ -86,7 +86,7 @@ described below.
    buffers for downstream processing. Monitor and record missing packets
    and network performance statistics.
 
-#. ``gpucopy``: Transfer blocks of data from CPU to GPU, for
+#. ``copy``: Transfer blocks of data from CPU to GPU, for
    high-performance computation.
 
 #. ``triggered_dump``: Buffer large quantities of time-domain data for triggered
@@ -132,11 +132,16 @@ sequences).
 
 .. autoclass:: lwa352_pipeline.blocks.capture_block.Capture
 
-``gpucopy``
-~~~~~~~~~~~
+``copy``
+~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.copy_block.Copy
 
 ``triggered_dump``
 ~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.triggered_dump_block.TriggeredDump
+
 
 ``corr``
 ~~~~~~~~

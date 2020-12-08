@@ -86,7 +86,7 @@ class Capture(object):
 
     :param log: Logging object to which runtime messages should be
         emitted.
-    :type log: Python `logging` object.
+    :type log: logging.Logger
 
     :param fs_hz: Sampling frequency, in Hz, of the upstream ADCs
     :type fs_hz: int
