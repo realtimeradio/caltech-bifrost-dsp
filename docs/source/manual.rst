@@ -142,12 +142,15 @@ sequences).
 
 .. autoclass:: lwa352_pipeline.blocks.triggered_dump_block.TriggeredDump
 
-
 ``corr``
 ~~~~~~~~
 
+.. autoclass:: lwa352_pipeline.blocks.corr_block.Corr
+
 ``corr_output_full``
 ~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.corr_output_full_block.CorrOutputFull
 
 ``corrsubsel``
 ~~~~~~~~~~~~~~
