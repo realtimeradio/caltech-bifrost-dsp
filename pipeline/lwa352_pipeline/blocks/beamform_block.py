@@ -84,8 +84,8 @@ class Beamform(Block):
         |                  |                |         | ``True``, indicating that the |
         |                  |                |         | data out of this block are    |
         |                  |                |         | complex, with real and        |
-        |                  |                |         | imaginary parts each          |
-        |                  |                |         | ``nbit``s wide                |
+        |                  |                |         | imaginary parts each of width |
+        |                  |                |         | ``nbit``                      |
         +------------------+----------------+---------+-------------------------------+
 
     **Data Buffers**
