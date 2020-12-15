@@ -100,7 +100,7 @@ class CorrAcc(Block):
     :type core: int
 
     :param gpu: GPU device which this block should target. A value of -1 indicates
-    no binding
+        no binding
     :type gpu: int
 
     :param nchan: Number of frequency channels per time sample.
@@ -113,8 +113,8 @@ class CorrAcc(Block):
     :type npol: int
 
     :param acc_len: Accumulation length per output buffer write. This should
-    be an integer multiple of any upstream accumulation.
-    This parameter can be updated at runtime.
+        be an integer multiple of any upstream accumulation.
+        This parameter can be updated at runtime.
     :type acc_len: int
 
     :parameter etcd_client: Etcd client object used to facilitate control of this block.
@@ -122,9 +122,9 @@ class CorrAcc(Block):
     :type etcd_client: etcd3.client.Etcd3Client
 
     :parameter autostartat: The start time at which the correlator should
-    automatically being correlating without intervention of the runtime control
-    system. Use the value ``-1`` to cause integration to being on the next
-    gulp.
+        automatically being correlating without intervention of the runtime control
+        system. Use the value ``-1`` to cause integration to being on the next
+        gulp.
     :type autostartat: int
 
     **Runtime Control and Monitoring**

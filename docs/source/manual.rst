@@ -147,6 +147,11 @@ sequences).
 
 .. autoclass:: lwa352_pipeline.blocks.corr_block.Corr
 
+``corr_acc``
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.corr_acc_block.CorrAcc
+
 ``corr_output_full``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -154,6 +159,8 @@ sequences).
 
 ``corrsubsel``
 ~~~~~~~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.corr_subsel_block.CorrSubsel
 
 ``corr_output_part``
 ~~~~~~~~~~~~~~~~~~~~

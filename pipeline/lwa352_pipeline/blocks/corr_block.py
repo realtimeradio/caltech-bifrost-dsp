@@ -186,26 +186,26 @@ class Corr(Block):
 
     This block accepts the following command fields:
 
-    +------------------+--------+---------+------------------------------+
-    | Field            | Format | Units   | Description                  |
-    +==================+========+=========+==============================+
-    | ``acc_len``      | int    | samples | Number of samples to         |
-    |                  |        |         | accumulate. This should be a |
-    |                  |        |         | multiple of ``ntime_gulp``   |
-    +------------------+--------+---------+------------------------------+
-    | ``start_time``   | int    | samples | The desired first time       |
-    |                  |        |         | sample in an accumulation.   |
-    |                  |        |         | This should be a multiple of |
-    |                  |        |         | ``ntime_gulp``, and should   |
-    |                  |        |         | be related to GPS time       |
-    |                  |        |         | through external knowledge   |
-    |                  |        |         | of the spectra count origin  |
-    |                  |        |         | (aka SNAP *sync time*). The  |
-    |                  |        |         | special value ``-1`` can be  |
-    |                  |        |         | used to force an immediate   |
-    |                  |        |         | start of the correlator on   |
-    |                  |        |         | the next input gulp.         |
-    +------------------+--------+---------+------------------------------+
+    +-----------------+--------+---------+------------------------------+
+    | Field           | Format | Units   | Description                  |
+    +=================+========+=========+==============================+
+    | ``acc_len``     | int    | samples | Number of samples to         |
+    |                 |        |         | accumulate. This should be a |
+    |                 |        |         | multiple of ``ntime_gulp``   |
+    +-----------------+--------+---------+------------------------------+
+    | ``start_time``  | int    | samples | The desired first time       |
+    |                 |        |         | sample in an accumulation.   |
+    |                 |        |         | This should be a multiple of |
+    |                 |        |         | ``ntime_gulp``, and should   |
+    |                 |        |         | be related to GPS time       |
+    |                 |        |         | through external knowledge   |
+    |                 |        |         | of the spectra count origin  |
+    |                 |        |         | (aka SNAP *sync time*). The  |
+    |                 |        |         | special value ``-1`` can be  |
+    |                 |        |         | used to force an immediate   |
+    |                 |        |         | start of the correlator on   |
+    |                 |        |         | the next input gulp.         |
+    +-----------------+--------+---------+------------------------------+
 
     """
 
