@@ -68,24 +68,25 @@ class CorrOutputFull(Block):
     .. table::
         :widths: 25 10 10 55
 
-        +-----------+--------+-------+------------------------------------------------+
-        | Field     | Format | Units | Description                                    |
-        +===========+========+=======+================================================+
-        | ``ant_to_ | list   |       | A 4D list of integers, with dimensions         |
-        | bl_id``   | of int |       | ``[nstand, nstand, npol, npol]`` which maps    |
-        |           |        |       | the correlation of ``stand0, pol0`` with       |
-        |           |        |       | ``stand1, pol1`` to visibility index           |
-        |           |        |       | ``[stand0, stand1, pol0, pol1]``               |
-        +-----------+--------+-------+------------------------------------------------+
-        | ``bl_is_c | list   |       | A 4D list of boolean values, with dimensions   |
-        | onj``     | of     |       | ``[nstand, nstand, npol, npol]`` which         |
-        |           | bool   |       | indicates if the correlation of ``stand0,      |
-        |           |        |       | pol0`` with ``stand1, pol1`` has the first     |
-        |           |        |       | (``stand0, pol0``) or second (``stand1,        |
-        |           |        |       | pol1``) input conjugated. If ``[stand0,        |
-        |           |        |       | stand1, pol0, pol1]`` has the value ``True``,  |
-        |           |        |       | then ``stand0,pol0`` is the conjugated input.  |
-        +-----------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
+        | Field            | Format | Units | Description                                    |
+        +==================+========+=======+================================================+
+        | ``ant_to_        | list   |       | A 4D list of integers, with dimensions         |
+        | bl_id``          | of int |       | ``[nstand, nstand, npol, npol]`` which maps    |
+        |                  |        |       | the correlation of ``stand0, pol0`` with       |
+        |                  |        |       | ``stand1, pol1`` to visibility index           |
+        |                  |        |       | ``[stand0, stand1, pol0, pol1]``               |
+        +------------------+--------+-------+------------------------------------------------+
+        | ``bl_is_conj``   | list   |       | A 4D list of boolean values, with dimensions   |
+        |                  | of     |       | ``[nstand, nstand, npol, npol]`` which         |
+        |                  | bool   |       | indicates if the correlation of ``stand0,      |
+        |                  |        |       | pol0`` with ``stand1, pol1`` has the first     |
+        |                  |        |       | (``stand0, pol0``) or second (``stand1,        |
+        |                  |        |       | pol1``) input conjugated. If                   |
+        |                  |        |       | ``bl_id_conj[stand0, stand1, pol0, pol1]`` has |
+        |                  |        |       | the value ``True``, then ``stand0,pol0`` is    |
+        |                  |        |       | the conjugated input.                          |
+        +------------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
