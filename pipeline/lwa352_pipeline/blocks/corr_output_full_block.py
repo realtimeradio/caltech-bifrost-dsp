@@ -22,7 +22,320 @@ from .block_base import Block
 
 class CorrOutputFull(Block):
     """
-    Perform GPU side accumulation and then transfer to CPU
+    **Functionality**
+
+    Output an xGPU-spec visibility buffer as a stream of UDP packets.
+
+    **New Sequence Condition**
+
+    This block is a bifrost sink, and generated no downstream sequences.
+
+    **Input Header Requirements**
+
+    This block requires that the following header fields
+    be provided by the upstream data source:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +---------------+--------+-------+------------------------------------------------+
+        | Field         | Format | Units | Description                                    |
+        +===============+========+=======+================================================+
+        | ``seq0``      | int    |       | Spectra number for the first sample in the     |
+        |               |        |       | input sequence                                 |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``acc_len``   | int    |       | Number of spectra integrated into each output  |
+        |               |        |       | sample by upstream processing                  |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``nchan``     | int    |       | The number of frequency channels in the input  |
+        |               |        |       | visibility matrices                            |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``npol``      | int    |       | The number of polarizations per stand in the   |
+        |               |        |       | input visibility matrices                      |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``bw_hz``     | double | Hz    | Bandwidth of the input visibility matrices.    |
+        |               |        |       | Only required if ``use_cor_fmt=False``         |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``sfreq``     | double | Hz    | Center frequency of the first channel in the   |
+        |               |        |       | input visibility matrices. Only required if    |
+        |               |        |       | ``use_cor_fmt=False``.                         |
+        +---------------+--------+-------+------------------------------------------------+
+
+    Optional header fields, which describe the input xGPU buffer contents. If not
+    supplied as headers, these should be provided as keyword arguments when this
+    block is instantiated.
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-----------+--------+-------+------------------------------------------------+
+        | Field     | Format | Units | Description                                    |
+        +===========+========+=======+================================================+
+        | ``ant_to_ | list   |       | A 4D list of integers, with dimensions         |
+        | bl_id``   | of int |       | ``[nstand, nstand, npol, npol]`` which maps    |
+        |           |        |       | the correlation of ``stand0, pol0`` with       |
+        |           |        |       | ``stand1, pol1`` to visibility index           |
+        |           |        |       | ``[stand0, stand1, pol0, pol1]``               |
+        +-----------+--------+-------+------------------------------------------------+
+        | ``bl_is_c | list   |       | A 4D list of boolean values, with dimensions   |
+        | onj``     | of     |       | ``[nstand, nstand, npol, npol]`` which         |
+        |           | bool   |       | indicates if the correlation of ``stand0,      |
+        |           |        |       | pol0`` with ``stand1, pol1`` has the first     |
+        |           |        |       | (``stand0, pol0``) or second (``stand1,        |
+        |           |        |       | pol1``) input conjugated. If ``[stand0,        |
+        |           |        |       | stand1, pol0, pol1]`` has the value ``True``,  |
+        |           |        |       | then ``stand0,pol0`` is the conjugated input.  |
+        +-----------+--------+-------+------------------------------------------------+
+
+    **Output Headers**
+
+    This is a bifrost sink block, and provides no data to an output ring.
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A CPU-side bifrost ring buffer of 32+32 bit complex integer data.
+    This input buffer is read in gulps of ``nchan * (nstand//2+1)*(nstand//4)*npol*npol*4*2``
+    32-bit words, which is the size of an xGPU visibility matrix.
+
+    *Output Data Buffer*: This block has no output data buffer.
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring. This should be on the GPU.
+    :type iring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :param nchan: Number of frequency channels per time sample.
+    :type nchan: int
+
+    :param nstand: Number of stands per time sample.
+    :type nstand: int
+
+    :param npol: Number of polarizations per stand.
+    :type npol: int
+
+    :parameter etcd_client: Etcd client object used to facilitate control of this block.
+        If ``None``, do not use runtime control.
+    :type etcd_client: etcd3.client.Etcd3Client
+
+    :param dest_port: Default destination port for UDP data. Can be overriden with the runtime
+        control interface.
+    :type dest_port: int
+
+    :param use_cor_fmt: If True, use the LWA ``COR`` packet output format. Otherwise use a custom
+        format. See *Output Format*, below.
+    :type use_cor_fmt: Bool
+
+    :param antpol_to_bl: Map of antenna/polarization visibility intputs to xGPU output indices.
+        See optional sequence header entry ``ant_to_bl_id``. If not provided, this map
+        should be available as a bifrost sequence header.
+    :type antpol_to_bl: 4D list of int
+
+    :param bl_is_conj: Map of visibility index to conjugation convention. See optional
+        sequence header entry ``bl_is_conj``. If not provided, this map should be available
+        as a bifrost sequence header.
+    :type bl_is_conj: 4D list of bool
+
+    :param checkfile: Path to a data file containing the expected correlator output. If provided,
+        the data input to this block will be checked against this file. The data file should
+        contain binary numpy.complex-format data in order ``time x nchan x nstand x nstand x npol x npol``.
+        Each entry in this data file should represent an expected visibility which has been integrated
+        for ``checkfile_acc_len`` samples. This file can be generated with this package's
+        ``make_golden_inputs.py`` script.
+    :type checkfile: str
+
+    :param checkfile_acc_len: The number of integrations which have gone into each time slice of the
+        provided ``checkfile``. For a check to be run, the accumulation length (and accumulation starts)
+        of data input to this block should be a multiple of ``checkfile_acc_len``.
+    :type checkfile_acc_len: int
+
+    **Runtime Control and Monitoring**
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+--------+---------+------------------------------+
+        | Field            | Format | Units   | Description                  |
+        +==================+========+=========+==============================+
+        | ``dest_ip``      | string |         | Destination IP for           |
+        |                  |        |         | transmitted packets, in      |
+        |                  |        |         | dotted-quad format. Eg.      |
+        |                  |        |         | ``"10.0.0.1"``. Use          |
+        |                  |        |         | ``"0.0.0.0"`` to skip        |
+        |                  |        |         | sending packets              |
+        +------------------+--------+---------+------------------------------+
+        | ``dest_port``    | int    |         | UDP port to which packets    |
+        |                  |        |         | should be transmitted.       |
+        +------------------+--------+---------+------------------------------+
+        | ``max_mbps``     | int    | Mbits/s | The maximum output data rate |
+        |                  |        |         | to allow before throttling.  |
+        |                  |        |         | Set to ``-1`` to send as     |
+        |                  |        |         | fast as possible.            |
+        +------------------+--------+---------+------------------------------+
+
+
+    **Output Data Format**
+
+    Each packet from the correlator contains data from multiple channels for a single,
+    dual-polarization baseline. There are two possible output formats depending on the
+    value of ``use_cor_fmt`` with which this block is instantiated.
+
+    If ``use_cor_fmt=True``, this block outputs packets conforming to the LWA-SV "COR"
+    spec (though with integer rather than floating point data). This format comprises
+    a stream of UDP packets, each with a 32 byte header defined as follows:
+
+    .. code:: C
+    
+          struct cor {
+            uint32_t  sync_word;
+            uint8_t   id;
+            uint24_t  frame_number;
+            uint32_t  secs_count;
+            int16_t   freq_count;
+            int16_t   cor_gain;
+            int64_t   time_tag;
+            int32_t   cor_navg;
+            int16_t   stand_i;
+            int16_t   stand_j;
+            int32_t   data[nchans, npols, npols, 2];
+          };
+
+    Packet fields are as follows:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +---------------+------------+----------------+---------------------------------------------+
+        | Field         | Format     | Units          | Description                                 |
+        +===============+============+================+=============================================+
+        | sync\_word    | uint32     |                | Mark 5C magic number, ``0xDEC0DE5C``        |
+        +---------------+------------+----------------+---------------------------------------------+
+        | id            | uint8      |                | Mark 5C ID, used to identify COR packet,    |
+        |               |            |                | ``0x02``                                    |
+        +---------------+------------+----------------+---------------------------------------------+
+        | frame_number  | uint24     |                | Mark 5C frame number. Unused.               |
+        +---------------+------------+----------------+---------------------------------------------+
+        | secs_count    | uint32     |                | Mark 5C seconds since 1970-01-01 00:00:00   |
+        |               |            |                | UTC. Unused.                                |
+        +---------------+------------+----------------+---------------------------------------------+
+        | freq_count    | int16      |                | zero-indexed frequency channel ID of the    |
+        |               |            |                | first channel in the packet.                |
+        +---------------+------------+----------------+---------------------------------------------+
+        | cor_gain      | int16      |                | Right bitshift used for gain compensation.  |
+        |               |            |                | Unused.                                     |
+        +---------------+------------+----------------+---------------------------------------------+
+        | time_tag      | int64      | ADC sample     | Central sampling time since 1970-01-01      |
+        |               |            | period         | 00:00:00 UTC.                               |
+        +---------------+------------+----------------+---------------------------------------------+
+        | cor_navg      | int32      | TODO: subslots | Integration time.                           |
+        |               |            | doesn't work   |                                             |
+        +---------------+------------+----------------+---------------------------------------------+
+        | stand_i       | int16      |                | 1-indexed stand number of the unconjugated  |
+        |               |            |                | stand.                                      |
+        +---------------+------------+----------------+---------------------------------------------+
+        | stand_j       | int16      |                | 1-indexed stand number of the conjugated    |
+        |               |            |                | stand.                                      |
+        +---------------+------------+----------------+---------------------------------------------+
+        | data          | int32\*    |                | The data payload. Data for the visibility   |
+        |               |            |                | of antennas at stand_i and stand_j, with    |
+        |               |            |                | stand_j conjugated. Data are a              |
+        |               |            |                | multidimensional array of 32-bit integers,  |
+        |               |            |                | with dimensions ``[nchans, npols, npols,    |
+        |               |            |                | nchans, 2]``. The first axis is frequency   |
+        |               |            |                | channel. The second axis is the             |
+        |               |            |                | polatizaioon of the antenna at stand_i. The |
+        |               |            |                | second axis is the polarization of the      |
+        |               |            |                | antenna at stand_j.| The fourth axis is     |
+        |               |            |                | complexity, with index 0 the real part of   |
+        |               |            |                | the visibility, and index 1 the imaginary   |
+        |               |            |                | part.                                       |
+        +---------------+------------+----------------+---------------------------------------------+
+
+    If ``use_cor_fmt=False``, this block outputs a stream of UDP packets, with each comprising
+    a 56 byte header followed by a payload of signed 32-bit integers. The packet definition is
+    as follows:
+
+    .. code:: C
+    
+          struct corr_output_full_packet {
+            uint64_t  sync_time;
+            uint64_t  spectra_id;
+            double    bw_hz;
+            double    sfreq_hz;
+            uint32_t  acc_len;
+            uint32_t  nchans;
+            uint32_t  chan0;
+            uint32_t  npols;
+            uint32_t  stand0;
+            uint32_t  stand1;
+            int32_t   data[npols, npols, nchans, 2];
+          };
+
+    Packet fields are as follows:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | Field         | Format              | Units          | Description                                 |
+        +===============+=====================+================+=============================================+
+        | sync\_time    | uint64              | UNIX seconds   | The sync time to which spectra IDs are      |
+        |               |                     |                | referenced.                                 |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | spectra\_id   | int                 |                | The spectrum number for the first spectra   |
+        |               |                     |                | which contributed to this packet’s          |
+        |               |                     |                | integration.                                |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | bw\_hz        | double (binary64)   | Hz             | The total bandwidth of data in this packet  |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | sfreq\_hz     | double (binary64)   | Hz             | The center frequency of the first channel   |
+        |               |                     |                | of data in this packet                      |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | acc\_len      | uint32              |                | The number of spectra integrated in this    |
+        |               |                     |                | packet                                      |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | nchans        | uint32              |                | The number of frequency channels in this    |
+        |               |                     |                | packet. For LWA-352 this is 184             |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | chan0         | uint32              |                | The index of the first frequency channel in |
+        |               |                     |                | this packet                                 |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | npols         | uint32              |                | The number of polarizations of data in this |
+        |               |                     |                | packet. For LWA-352, this is 2.             |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | stand0        | uint32              |                | The index of the first antenna stand in     |
+        |               |                     |                | this packet’s visibility.                   |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | stand1        | uint32              |                | The index of the second antenna stand in    |
+        |               |                     |                | this packet’s visibility.                   |
+        +---------------+---------------------+----------------+---------------------------------------------+
+        | data          | int32\*             |                | The data payload. Data for the visibility   |
+        |               |                     |                | of antennas at stand0 and stand1, with      |
+        |               |                     |                | stand1 conjugated. Data are a               |
+        |               |                     |                | multidimensional array of 32-bit integers,  |
+        |               |                     |                | with dimensions [``npols``, ``npols``,      |
+        |               |                     |                | ``nchans``, 2]. The first axis is the       |
+        |               |                     |                | polarization of the antenna at stand0. The  |
+        |               |                     |                | second axis is the polarization of the      |
+        |               |                     |                | antenna at stand1. The third axis is        |
+        |               |                     |                | frequency channel. The fourth axis is       |
+        |               |                     |                | complexity, with index 0 the real part of   |
+        |               |                     |                | the visibility, and index 1 the imaginary   |
+        |               |                     |                | part.                                       |
+        +---------------+---------------------+----------------+---------------------------------------------+
+
+
+
     """
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
@@ -66,8 +379,8 @@ class CorrOutputFull(Block):
         self.new_dest_ip = "0.0.0.0"
         self.dest_port = dest_port
         self.new_dest_port = dest_port
-        self.packet_delay_ns = 1
-        self.new_packet_delay_ns = 1
+        self.max_mbps = -1
+        self.new_max_mbps = -1
         self.update_pending = True
 
     def _etcd_callback(self, watchresponse):
@@ -81,12 +394,12 @@ class CorrOutputFull(Block):
             self.new_dest_ip = v['dest_ip']
         if 'dest_port' in v:
             self.new_dest_port = v['dest_port']
-        if 'packet_delay_ns' in v:
-            self.new_packet_delay_ns = v['packet_delay_ns']
+        if 'max_mbps' in v:
+            self.new_max_mbps = v['max_mbps']
         self.update_pending = True
         self.stats.update({'new_dest_ip': self.new_dest_ip,
                            'new_dest_port': self.new_dest_port,
-                           'new_packet_delay_ns': self.new_packet_delay_ns,
+                           'new_max_mbps': self.new_max_mbps,
                            'update_pending': self.update_pending,
                            'last_cmd_time': time.time()})
         self.update_stats()
@@ -124,15 +437,26 @@ class CorrOutputFull(Block):
                                     chan0,
                                     self.npol,
                                     )
+        pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
+        block_bits_sent = 0
+        start_time = time.time()
+        block_start = time.time()
         for s0 in range(self.nstand):
             for s1 in range(s0, self.nstand):
                 header_dyn = struct.pack(">2I", s0, s1)
                 self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.dest_ip, self.dest_port))
-                packet_cnt += 1
-                if packet_cnt % 50 == 0:
-                    # Only implement packet delay every 50 packets because the sleep
-                    # overhead is large
-                    time.sleep(50 * self.packet_delay_ns / 1e9)
+                if self.max_mbps > 0:
+                    block_bits_sent += pkt_payload_bits
+                    # Apply throttle every 1MByte -- every >~100 packets
+                    if block_bits_sent > 8000000:
+                        block_elapsed = time.time() - block_start
+                        # Minimum allowed time to satisfy max rate
+                        min_time = block_bits_sent / (1.e6 * self.max_mbps)
+                        delay = min_time - block_elapsed
+                        if delay > 0:
+                            time.sleep(delay)
+                        block_start = time.time()
+                        block_bits_sent = 0
         stop_time = time.time()
         elapsed = stop_time - start_time
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
@@ -144,6 +468,10 @@ class CorrOutputFull(Block):
         desc.set_gain(gain)
         desc.set_decimation(navg)
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
+        pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
+        block_bits_sent = 0
+        start_time = time.time()
+        block_start = time.time()
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
             # copy a single baseline of data
@@ -151,6 +479,18 @@ class CorrOutputFull(Block):
             # reshape and send
             sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
             udt.send(desc, this_gulp_time, 0, i*(2*self.nstand + 1 - i) // 2 + i, 1, sdata)      
+            if self.max_mbps > 0:
+                block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
+                # Apply throttle every 1MByte -- every >~100 packets
+                if block_bits_sent > 8000000:
+                    block_elapsed = time.time() - block_start
+                    # Minimum allowed time to satisfy max rate
+                    min_time = block_bits_sent / (1.e6 * self.max_mbps)
+                    delay = min_time - block_elapsed
+                    if delay > 0:
+                        time.sleep(delay)
+                    block_start = time.time()
+                    block_bits_sent = 0
         del sdata
         stop_time = time.time()
         elapsed = stop_time - start_time
@@ -182,9 +522,9 @@ class CorrOutputFull(Block):
                 if self.update_pending:
                     self.dest_ip = self.new_dest_ip
                     self.dest_port = self.new_dest_port
-                    self.packet_delay_ns = self.new_packet_delay_ns
+                    self.max_mbps = self.new_max_mbps
                     self.update_pending = False
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.packet_delay_ns))
+                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.max_mbps))
                     if self.use_cor_fmt:
                         if self.sock: del self.sock
                         if udt: del udt
@@ -195,7 +535,7 @@ class CorrOutputFull(Block):
                         desc = HeaderInfo()
                     self.stats.update({'dest_ip': self.dest_ip,
                                        'dest_port': self.dest_port,
-                                       'packet_delay_ns': self.packet_delay_ns,
+                                       'max_mbps': self.max_mbps,
                                        'update_pending': self.update_pending,
                                        'last_update_time': time.time()})
                 self.stats['curr_sample'] = this_gulp_time
