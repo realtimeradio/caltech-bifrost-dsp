@@ -80,7 +80,7 @@ class Corr(Block):
         +-----------+--------+-------+------------------------------------------------+
         | Field     | Format | Units | Description                                    |
         +===========+========+=======+================================================+
-        | ``seq 0`` | int    |       | Spectra number for the first sample in the     |
+        | ``seq0``  | int    |       | Spectra number for the first sample in the     |
         |           |        |       | input sequence                                 |
         +-----------+--------+-------+------------------------------------------------+
 

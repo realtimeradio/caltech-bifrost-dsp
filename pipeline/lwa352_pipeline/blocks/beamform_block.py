@@ -15,15 +15,168 @@ import numpy as np
 
 from .block_base import Block
 
-FS=200.0e6 # sampling rate
-CLOCK            = 204.8e6 #???
-NCHAN            = 4096
-FREQS            = np.around(np.fft.fftfreq(2*NCHAN, 1./CLOCK)[:NCHAN][:-1], 3)
-CHAN_BW          = FREQS[1] - FREQS[0]
-
 class Beamform(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
-    def __init__(self, log, iring, oring, nchan_max=256, nbeam_max=1, nstand=352, npol=2, ntime_gulp=2500, ntime_sum=24, guarantee=True, core=-1, gpu=-1, etcd_client=None):
+    """
+    **Functionality**
+
+    This block reads data from a GPU-side bifrost ring buffer and feeds
+    it to to a beamformer, generating either voltage or (integrated)
+    power beams.
+
+    **New Sequence Condition**
+
+    This block starts a new sequence each time the upstream sequence changes.
+
+    **Input Header Requirements**
+
+    This block requires that the following header fields
+    be provided by the upstream data source:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-------------+--------+-------+------------------------------------------------+
+        | Field       | Format | Units | Description                                    |
+        +=============+========+=======+================================================+
+        | ``seq0``    | int    |       | Spectra number for the first sample in the     |
+        |             |        |       | input sequence                                 |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``nchan``   | int    |       | Number of channels in the sequence             |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``sfreq``   | double | Hz    | Center frequency of first channel in the       |
+        |             |        |       | sequence                                       |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``bw_hz``   | int    | Hz    | Bandwidth of the sequence                      |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``nstand``  | int    |       | Number of stands (antennas) in the sequence    |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``npol``    | int    |       | Number of polarizations per stand in the       |
+        |             |        |       | sequence                                       |
+        +-------------+--------+-------+------------------------------------------------+
+
+    **Output Headers**
+
+    This block passes headers from the upstream block with
+    the following modifications:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+----------------+---------+-------------------------------+
+        | Field            | Format         | Units   | Description                   |
+        +==================+================+=========+===============================+
+        | ``nstand``       | int            |         | Number of beams in the        |
+        |                  |                |         | sequence                      |
+        +------------------+----------------+---------+-------------------------------+
+        | ``nbeam``        | int            |         | Number of beams in the        |
+        |                  |                |         | sequence                      |
+        +------------------+----------------+---------+-------------------------------+
+        | ``nbit``         | int            |         | Number of bits per output     |
+        |                  |                |         | sample. This block sets this  |
+        |                  |                |         | value to 32                   |
+        +------------------+----------------+---------+-------------------------------+
+        | ``npol``         | int            |         | Number of polarizations per   |
+        |                  |                |         | beam. This block sets this    |
+        |                  |                |         | value to 1.                   |
+        +------------------+----------------+---------+-------------------------------+
+        | ``complex``      | Bool           |         | This block sets this entry to |
+        |                  |                |         | ``True``, indicating that the |
+        |                  |                |         | data out of this block are    |
+        |                  |                |         | complex, with real and        |
+        |                  |                |         | imaginary parts each          |
+        |                  |                |         | ``nbit``s wide                |
+        +------------------+----------------+---------+-------------------------------+
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A GPU-side bifrost ring buffer of 4+4 bit
+    complex data in order: ``time x channel x input``.
+
+    Typically, the ``input`` axis is composed of ``stand x polarization``,
+    but this block does not assume this is the case.
+
+    Each gulp of the input buffer reads ``ntime_gulp`` samples, I.e
+    ``ntime_gulp x nchan x ninput`` bytes.
+
+    *Output Data Buffer*: A GPU-side bifrost ring buffer of 32+32 bit complex
+    floating-point  data containing beamformed data. With ``ntime_sum=None``, this is
+    complex beamformer data with dimensionality
+    ``time x channel x beams x complexity``. This output buffer is written
+    in blocks of ``ntime_gulp`` samples, I.e. ``ntime_gulp x nchan x nbeam x 8`` bytes.
+
+    With ``ntime_sum != None``, this block will generate dynamic power spectra
+    rather than voltages. This mode is experimental. See ``bifrost/beamform.h``
+    for details.
+
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring. This should be on the GPU.
+    :type iring: bifrost.ring.Ring
+
+    :param oring: bifrost output data ring. This should be on the GPU.
+    :type oring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :param gpu: GPU device which this block should target. A value of -1 indicates no binding
+    :type gpu: int
+
+    :param ntime_gulp: Number of time samples to copy with each gulp.
+    :type ntime_gulp: int
+
+    :param nchan: Number of frequency channels per time sample. This should match
+        the sequence header ``nchan`` value, else an AssertionError is raised.
+    :type nchan: int
+
+    :param ninput: Number of inputs per time sample. This should match
+        the sequence headers ``nstand x npol``, else an AssertionError is raised.
+    :type nstand: int
+
+    :param ntime_sum: Set to ``None`` to generate voltage beams. Set to an integer
+        value >=0 to generate accumulated dynamic spectra. Values other than
+        None are *experimental*.
+    :type ntime_sum: int
+
+    :parameter etcd_client: Etcd client object used to facilitate control of this block.
+        If ``None``, do not use runtime control.
+    :type etcd_client: etcd3.client.Etcd3Client
+
+    **Runtime Control and Monitoring**
+
+    This block accepts the following command fields:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | Field            | Format          | Units  | Description                                     |
+        +==================+=================+========+=================================================+
+        | ``delays``       | 2D list of      | ns     | An ``nbeam x ninput`` element list of geometric |
+        |                  | float           |        | delays, in nanoseconds.                         |
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | ``gains``        | 2D list of      |        | A two dimensional list of calibration gains     |
+        |                  | complex32)      |        | with shape ``nchan x ninput``                   |
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | ``load_sample``  | int             | sample | **NOT YET IMPLEMENTED** Sample number on which  |
+        |                  |                 |        | the supplied delays should be loaded. If this   |
+        |                  |                 |        | field is absent, new delays will be loaded as   |
+        |                  |                 |        | soon as possible.                               |
+        +------------------+-----------------+--------+-------------------------------------------------+
+
+    """
+
+    def __init__(self, log, iring, oring, nchan=256, nbeam=1, ninput=352*2, ntime_gulp=2500, ntime_sum=None, guarantee=True, core=-1, gpu=-1, etcd_client=None):
 
         super(Beamform, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
 
@@ -36,31 +189,26 @@ class Beamform(Block):
         else:
             self.ntime_blocks = ntime_gulp
         
-        self.nchan_max = nchan_max
-        self.nbeam_max = nbeam_max
-        self.nstand = nstand
-        self.npol = npol
-        self.ninputs = nstand*npol
+        self.nchan = nchan
+        self.nbeam = nbeam
+        self.ninput = self.ninput
         
         # Setup the beamformer
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        ## Metadata
-        nchan = self.nchan_max
         ## Delays and gains
-        self.delays = np.zeros((self.nbeam_max,nstand*npol), dtype=np.float64)
-        self.gains = np.zeros((self.nbeam_max,nstand*npol), dtype=np.float64)
-        self.new_cgains = np.zeros((self.nbeam_max,nchan,nstand*npol), dtype=np.complex64)
-        self.cgains = BFArray(shape=(self.nbeam_max,nchan,nstand*npol), dtype=np.complex64, space='cuda')
+        self.delays = np.zeros((nbeam, ninput), dtype=np.float64)
+        self.gains = np.zeros((nbeam, ninput), dtype=np.float64)
+        self.new_cgains = np.zeros((nbeam,nchan,ninput), dtype=np.complex64)
+        self.cgains = BFArray(shape=(nbeam,nchan,ninput), dtype=np.complex64, space='cuda')
         self.update_pending = True
-        # Block output
-        #self.bf_output = BFArray(shape=(self.nbeam_max, self.ntime_blocks, self.nchan_max, 4), dtype=np.float32, space='cuda')
 
         # Initialize beamforming library
         if ntime_sum is not None:
-            _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, self.ntime_blocks)
+            self.log.warning("Running Beamform block with ntime_sum != None is experimental!")
+            _bf.bfBeamformInitialize(self.gpu, self.ninput, self.nchan, self.ntime_gulp, self.nbeam, self.ntime_blocks)
         else:
-            _bf.bfBeamformInitialize(self.gpu, self.ninputs, self.nchan_max, self.ntime_gulp, self.nbeam_max, 0)
+            _bf.bfBeamformInitialize(self.gpu, self.ninput, self.nchan, self.ntime_gulp, self.nbeam, 0)
 
 
     def _etcd_callback(self, watchresponse):
@@ -73,17 +221,18 @@ class Beamform(Block):
         self.update_pending = True
         #self.release_control_lock()
 
-    def compute_weights(self, sfreq, nchan, chan_bw):
+    def _compute_weights(self, sfreq, nchan, chan_bw):
         """
         Regenerate complex gains from
         sfreq: Center freq of first channel in Hz
         nchan: Number of frequencies
         chan_bw: Channel bandwidth in Hz
         """
+        cpu_affinity.set_core(self.core)
         self.acquire_control_lock()
-        #freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
-        #phases = 2*np.pi*np.exp(1j*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
-        #self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
+        freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
+        phases = 2*np.pi*np.exp(1j*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
+        self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
         self.release_control_lock()
 
     def main(self):
@@ -95,8 +244,8 @@ class Beamform(Block):
                                   'ngpu': 1,
                                   'gpu0': BFGetGPU(),})
         
-        igulp_size = self.ntime_gulp   * self.nchan_max * self.ninputs       # 4+4
-        ogulp_size = self.ntime_blocks * self.nchan_max * self.nbeam_max * 8 # complex 64
+        igulp_size = self.ntime_gulp   * self.nchan * self.ninputs       # 4+4
+        ogulp_size = self.ntime_blocks * self.nchan * self.nbeam * 8 # complex 64
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -112,9 +261,11 @@ class Beamform(Block):
                 sfreq  = ihdr['sfreq']
                 bw     = ihdr['bw_hz']
                 chan_bw  = bw / nchan
+
+                assert nchan == self.nchan
+                assert self.ninput == nstand * npol
                 
-                ishape = (self.ntime_gulp,nchan,nstand*npol)
-                oshape = (self.ntime_gulp,nchan,self.nbeam_max*2)
+                oshape = (self.ntime_gulp,nchan,self.nbeam*2)
                 
                 freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
 
@@ -122,11 +273,11 @@ class Beamform(Block):
                 base_time_tag = iseq.time_tag
                 
                 ohdr = ihdr.copy()
-                ohdr['nstand'] = self.nbeam_max
+                ohdr['nstand'] = self.nbeam
                 ohdr['nbit'] = 32
                 ohdr['npol'] = 1 # The beamformer inherently produces single-pol beams
                 ohdr['complex'] = True
-                ohdr['nbeam'] = self.nbeam_max
+                ohdr['nbeam'] = self.nbeam
                 ohdr_str = json.dumps(ohdr)
                 
                 self.oring.resize(ogulp_size)
@@ -138,13 +289,11 @@ class Beamform(Block):
                             continue # Ignore final gulp
                         if self.update_pending:
                             self.log.info("BEAMFORM >> Updating coefficients")
-                            #self.compute_weights(ohdr['sfreq'], ohdr['nchan'], ohdr['bw_hz']/ohdr['nchan'])
+                            self._compute_weights(ohdr['sfreq'], ohdr['nchan'], ohdr['bw_hz']/ohdr['nchan'])
                             self.acquire_control_lock()
-                            #phases = np.exp(1j*2*np.pi*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
-                            #self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
                             # Copy data to GPU
-                            #self.cgains[...] = self.new_cgains
-                            self.cgains[0] = self.new_cgains[0]
+                            self.cgains[...] = self.new_cgains
+                            #self.cgains[0] = self.new_cgains[0]
                             self.update_pending = False
                             self.release_control_lock()
                         
@@ -159,18 +308,13 @@ class Beamform(Block):
                             
                             ## Setup and load
                             idata = ispan.data_view('i8')
-                            odata = ospan.data_view(np.float32)#.reshape(oshape)
+                            odata = ospan.data_view(np.float32)
                             
-                            #_bf.bfBeamformRun(idata.as_BFarray(), self.bf_output.as_BFarray(), self.cgains.as_BFarray())
                             _bf.bfBeamformRun(idata.as_BFarray(), odata.as_BFarray(), self.cgains.as_BFarray())
-                            #odata = self.bf_output.data
                             BFSync()
                             
                         ## Update the base time tag
                         base_time_tag += self.ntime_gulp*ticksPerTime
-                        
-                        ## Check for an update to the configuration
-                        #self.updateConfig( self.configMessage(), ihdr, base_time_tag, forceUpdate=False )
                         
                         curr_time = time.time()
                         process_time = curr_time - prev_time
