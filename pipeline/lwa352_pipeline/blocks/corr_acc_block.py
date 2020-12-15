@@ -38,7 +38,7 @@ class CorrAcc(Block):
     | ``seq0``    | int    |       | Spectra number for the first sample in the     |
     |             |        |       | input sequence                                 |
     +-------------+--------+-------+------------------------------------------------+
-    | ``acc_len`` | int    | -     | Number of spectra integrated into each output  |
+    | ``acc_len`` | int    |       | Number of spectra integrated into each output  |
     |             |        |       | sample by the upstream processing              |
     +-------------+--------+-------+------------------------------------------------+
 
@@ -50,16 +50,16 @@ class CorrAcc(Block):
     +----------------------+----------+---------+---------------------------------+
     | Field                | Format   | Units   | Description                     |
     +======================+==========+=========+=================================+
-    | ``seq0``             | int      | -       | Spectra number for the *first*  |
+    | ``seq0``             | int      |         | Spectra number for the *first*  |
     |                      |          |         | sample in the integrated output |
     +----------------------+----------+---------+---------------------------------+
-    | ``acc_len``          | int      | -       | Total number of spectra         |
+    | ``acc_len``          | int      |         | Total number of spectra         |
     |                      |          |         | integrated into each output     |
     |                      |          |         | sample by this block,           |
     |                      |          |         | incorporating any upstream      |
     |                      |          |         | processing                      |
     +----------------------+----------+---------+---------------------------------+
-    | ``upstream_acc_len`` | int      | -       | Number of spectra already       |
+    | ``upstream_acc_len`` | int      |         | Number of spectra already       |
     |                      |          |         | integrated by upstream          |
     |                      |          |         | processing                      |
     +----------------------+----------+---------+---------------------------------+
