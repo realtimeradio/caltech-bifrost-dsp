@@ -28,7 +28,7 @@ class CorrOutputFull(Block):
 
     **New Sequence Condition**
 
-    This block is a bifrost sink, and generated no downstream sequences.
+    This block is a bifrost sink, and generates no downstream sequences.
 
     **Input Header Requirements**
 
@@ -49,6 +49,9 @@ class CorrOutputFull(Block):
         +---------------+--------+-------+------------------------------------------------+
         | ``nchan``     | int    |       | The number of frequency channels in the input  |
         |               |        |       | visibility matrices                            |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``chan0``     | int    |       | The index of the first frequency channel in    |
+        |               |        |       | the input visibility matrices                  |
         +---------------+--------+-------+------------------------------------------------+
         | ``npol``      | int    |       | The number of polarizations per stand in the   |
         |               |        |       | input visibility matrices                      |

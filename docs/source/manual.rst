@@ -165,6 +165,8 @@ sequences).
 ``corr_output_part``
 ~~~~~~~~~~~~~~~~~~~~
 
+.. autoclass:: lwa352_pipeline.blocks.corr_output_part_block.CorrOutputPart
+
 ``beamform``
 ~~~~~~~~~~~~
 
