@@ -31,11 +31,15 @@ class TriggeredDump(Block):
     This block requires that the following header fields be provided by the upstream data
     source:
 
-    +-------+--------+-------+-----------------------------------------------------------+
-    | Field | Format | Units | Description                                               |
-    +=======+========+=======+===========================================================+
-    | seq0  | int    |       | Spectra number for the first sample in the input sequence |
-    +-------+--------+-------+-----------------------------------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-----------+--------+-------+---------------------------------------------------+
+        | Field     | Format | Units | Description                                       |
+        +===========+========+=======+===================================================+
+        | ``seq 0`` | int    |       | Spectra number for the first sample in the input  |
+        |           |        |       | sequence                                          |
+        +-----------+--------+-------+---------------------------------------------------+
 
     The field ``seq`` if provided by the upstream block will be overwritten.
 
@@ -92,24 +96,27 @@ class TriggeredDump(Block):
 
     This block accepts the following command fields:
 
-    +------------------+--------+---------+----------------------------------------------------------------------+
-    | Field            | Format | Units   | Description                                                          |
-    +==================+========+=========+======================================================================+
-    | ``command``      | string |         | Commands:                                                            |
-    |                  |        |         |                                                                      |
-    |                  |        |         | ``Trigger``: Begin capturing data ASAP                               |
-    |                  |        |         |                                                                      |
-    |                  |        |         | ``Abort``: Abort a capture currently in progress and delete its data |
-    |                  |        |         |                                                                      |
-    |                  |        |         | ``Stop``: Stop a capture currently in progress                       |
-    +------------------+--------+---------+----------------------------------------------------------------------+
-    | ``ntime_per      | int    | samples | Number of time samples to capture in each file.                      |
-    | _sample``        |        |         |                                                                      |
-    +------------------+--------+---------+----------------------------------------------------------------------+
-    | ``nfile``        | int    |         | Number of files to capture per trigger event.                        |
-    +------------------+--------+---------+----------------------------------------------------------------------+
-    | ``dump_path``    | str    |         | Root path to directory where data should be stored.                  |
-    +------------------+--------+---------+----------------------------------------------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+--------+---------+----------------------------------------------------------------------+
+        | Field            | Format | Units   | Description                                                          |
+        +==================+========+=========+======================================================================+
+        | ``command``      | string |         | Commands:                                                            |
+        |                  |        |         |                                                                      |
+        |                  |        |         | ``Trigger``: Begin capturing data ASAP                               |
+        |                  |        |         |                                                                      |
+        |                  |        |         | ``Abort``: Abort a capture currently in progress and delete its data |
+        |                  |        |         |                                                                      |
+        |                  |        |         | ``Stop``: Stop a capture currently in progress                       |
+        +------------------+--------+---------+----------------------------------------------------------------------+
+        | ``ntime_per      | int    | samples | Number of time samples to capture in each file.                      |
+        | _sample``        |        |         |                                                                      |
+        +------------------+--------+---------+----------------------------------------------------------------------+
+        | ``nfile``        | int    |         | Number of files to capture per trigger event.                        |
+        +------------------+--------+---------+----------------------------------------------------------------------+
+        | ``dump_path``    | str    |         | Root path to directory where data should be stored.                  |
+        +------------------+--------+---------+----------------------------------------------------------------------+
 
     **Output Data Format**
 

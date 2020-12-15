@@ -74,35 +74,41 @@ class Corr(Block):
     This block requires that the following header fields
     be provided by the upstream data source:
 
-    +-----------+--------+-------+------------------------------------------------+
-    | Field     | Format | Units | Description                                    |
-    +===========+========+=======+================================================+
-    | ``seq 0`` | int    |       | Spectra number for the first sample in the     |
-    |           |        |       | input sequence                                 |
-    +-----------+--------+-------+------------------------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-----------+--------+-------+------------------------------------------------+
+        | Field     | Format | Units | Description                                    |
+        +===========+========+=======+================================================+
+        | ``seq 0`` | int    |       | Spectra number for the first sample in the     |
+        |           |        |       | input sequence                                 |
+        +-----------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
     This block passes headers from the upstream block with
     the following modifications:
 
-    +------------------+----------------+---------+-------------------------------+
-    | Field            | Format         | Units   | Description                   |
-    +==================+================+=========+===============================+
-    | ``seq0``         | int            |         | Spectra number for the        |
-    |                  |                |         | *first* sample in the         |
-    |                  |                |         | integrated output             |
-    +------------------+----------------+---------+-------------------------------+
-    | ``acc_len``      | int            |         | Number of spectra integrated  |
-    |                  |                |         | into each output sample by    |
-    |                  |                |         | this block                    |
-    +------------------+----------------+---------+-------------------------------+
-    | ``ant_to_input`` | list of ints   |         | This header is removed from   |
-    |                  |                |         | the sequence                  |
-    +------------------+----------------+---------+-------------------------------+
-    | ``input_to_ant`` | list of ints   |         | This header is removed from   |
-    |                  |                |         | the sequence                  |
-    +------------------+----------------+---------+-------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+----------------+---------+-------------------------------+
+        | Field            | Format         | Units   | Description                   |
+        +==================+================+=========+===============================+
+        | ``seq0``         | int            |         | Spectra number for the        |
+        |                  |                |         | *first* sample in the         |
+        |                  |                |         | integrated output             |
+        +------------------+----------------+---------+-------------------------------+
+        | ``acc_len``      | int            |         | Number of spectra integrated  |
+        |                  |                |         | into each output sample by    |
+        |                  |                |         | this block                    |
+        +------------------+----------------+---------+-------------------------------+
+        | ``ant_to_input`` | list of ints   |         | This header is removed from   |
+        |                  |                |         | the sequence                  |
+        +------------------+----------------+---------+-------------------------------+
+        | ``input_to_ant`` | list of ints   |         | This header is removed from   |
+        |                  |                |         | the sequence                  |
+        +------------------+----------------+---------+-------------------------------+
 
     **Data Buffers**
 
@@ -186,26 +192,29 @@ class Corr(Block):
 
     This block accepts the following command fields:
 
-    +-----------------+--------+---------+------------------------------+
-    | Field           | Format | Units   | Description                  |
-    +=================+========+=========+==============================+
-    | ``acc_len``     | int    | samples | Number of samples to         |
-    |                 |        |         | accumulate. This should be a |
-    |                 |        |         | multiple of ``ntime_gulp``   |
-    +-----------------+--------+---------+------------------------------+
-    | ``start_time``  | int    | samples | The desired first time       |
-    |                 |        |         | sample in an accumulation.   |
-    |                 |        |         | This should be a multiple of |
-    |                 |        |         | ``ntime_gulp``, and should   |
-    |                 |        |         | be related to GPS time       |
-    |                 |        |         | through external knowledge   |
-    |                 |        |         | of the spectra count origin  |
-    |                 |        |         | (aka SNAP *sync time*). The  |
-    |                 |        |         | special value ``-1`` can be  |
-    |                 |        |         | used to force an immediate   |
-    |                 |        |         | start of the correlator on   |
-    |                 |        |         | the next input gulp.         |
-    +-----------------+--------+---------+------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-----------------+--------+---------+------------------------------+
+        | Field           | Format | Units   | Description                  |
+        +=================+========+=========+==============================+
+        | ``acc_len``     | int    | samples | Number of samples to         |
+        |                 |        |         | accumulate. This should be a |
+        |                 |        |         | multiple of ``ntime_gulp``   |
+        +-----------------+--------+---------+------------------------------+
+        | ``start_time``  | int    | samples | The desired first time       |
+        |                 |        |         | sample in an accumulation.   |
+        |                 |        |         | This should be a multiple of |
+        |                 |        |         | ``ntime_gulp``, and should   |
+        |                 |        |         | be related to GPS time       |
+        |                 |        |         | through external knowledge   |
+        |                 |        |         | of the spectra count origin  |
+        |                 |        |         | (aka SNAP *sync time*). The  |
+        |                 |        |         | special value ``-1`` can be  |
+        |                 |        |         | used to force an immediate   |
+        |                 |        |         | start of the correlator on   |
+        |                 |        |         | the next input gulp.         |
+        +-----------------+--------+---------+------------------------------+
 
     """
 

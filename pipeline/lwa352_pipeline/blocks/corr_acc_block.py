@@ -32,37 +32,43 @@ class CorrAcc(Block):
     This block requires that the following header fields
     be provided by the upstream data source:
 
-    +-------------+--------+-------+------------------------------------------------+
-    | Field       | Format | Units | Description                                    |
-    +=============+========+=======+================================================+
-    | ``seq0``    | int    |       | Spectra number for the first sample in the     |
-    |             |        |       | input sequence                                 |
-    +-------------+--------+-------+------------------------------------------------+
-    | ``acc_len`` | int    |       | Number of spectra integrated into each output  |
-    |             |        |       | sample by the upstream processing              |
-    +-------------+--------+-------+------------------------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +-------------+--------+-------+------------------------------------------------+
+        | Field       | Format | Units | Description                                    |
+        +=============+========+=======+================================================+
+        | ``seq0``    | int    |       | Spectra number for the first sample in the     |
+        |             |        |       | input sequence                                 |
+        +-------------+--------+-------+------------------------------------------------+
+        | ``acc_len`` | int    |       | Number of spectra integrated into each output  |
+        |             |        |       | sample by the upstream processing              |
+        +-------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
     This block passes headers from the upstream block with
     the following modifications:
 
-    +----------------------+----------+---------+---------------------------------+
-    | Field                | Format   | Units   | Description                     |
-    +======================+==========+=========+=================================+
-    | ``seq0``             | int      |         | Spectra number for the *first*  |
-    |                      |          |         | sample in the integrated output |
-    +----------------------+----------+---------+---------------------------------+
-    | ``acc_len``          | int      |         | Total number of spectra         |
-    |                      |          |         | integrated into each output     |
-    |                      |          |         | sample by this block,           |
-    |                      |          |         | incorporating any upstream      |
-    |                      |          |         | processing                      |
-    +----------------------+----------+---------+---------------------------------+
-    | ``upstream_acc_len`` | int      |         | Number of spectra already       |
-    |                      |          |         | integrated by upstream          |
-    |                      |          |         | processing                      |
-    +----------------------+----------+---------+---------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +----------------------+----------+---------+---------------------------------+
+        | Field                | Format   | Units   | Description                     |
+        +======================+==========+=========+=================================+
+        | ``seq0``             | int      |         | Spectra number for the *first*  |
+        |                      |          |         | sample in the integrated output |
+        +----------------------+----------+---------+---------------------------------+
+        | ``acc_len``          | int      |         | Total number of spectra         |
+        |                      |          |         | integrated into each output     |
+        |                      |          |         | sample by this block,           |
+        |                      |          |         | incorporating any upstream      |
+        |                      |          |         | processing                      |
+        +----------------------+----------+---------+---------------------------------+
+        | ``upstream_acc_len`` | int      |         | Number of spectra already       |
+        |                      |          |         | integrated by upstream          |
+        |                      |          |         | processing                      |
+        +----------------------+----------+---------+---------------------------------+
 
     **Data Buffers**
 
@@ -131,30 +137,33 @@ class CorrAcc(Block):
 
     This block accepts the following command fields:
 
-    +------------------+--------+---------+------------------------------+
-    | Field            | Format | Units   | Description                  |
-    +==================+========+=========+==============================+
-    | ``acc_len``      | int    | samples | Number of samples to         |
-    |                  |        |         | accumulate. This should be a |
-    |                  |        |         | multiple of any upstream     |
-    |                  |        |         | accumulation performed by    |
-    |                  |        |         | other blocks. I.e., it       |
-    |                  |        |         | should be an integer         |
-    |                  |        |         | multiple of a sequences      |
-    |                  |        |         | ``acc_len`` header entry.    |
-    +------------------+--------+---------+------------------------------+
-    | ``start_time``   | int    | samples | The desired first time       |
-    |                  |        |         | sample in an accumulation.   |
-    |                  |        |         | This should be compatible    |
-    |                  |        |         | with the accumulation length |
-    |                  |        |         | and start time of upstream   |
-    |                  |        |         | blocks. I.e. it should be    |
-    |                  |        |         | offset from the input        |
-    |                  |        |         | sequence header's ``seq0``   |
-    |                  |        |         | value by an integer multiple |
-    |                  |        |         | of the input sequence        |
-    |                  |        |         | header's ``acc_len`` value   |
-    +------------------+--------+---------+------------------------------+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+--------+---------+------------------------------+
+        | Field            | Format | Units   | Description                  |
+        +==================+========+=========+==============================+
+        | ``acc_len``      | int    | samples | Number of samples to         |
+        |                  |        |         | accumulate. This should be a |
+        |                  |        |         | multiple of any upstream     |
+        |                  |        |         | accumulation performed by    |
+        |                  |        |         | other blocks. I.e., it       |
+        |                  |        |         | should be an integer         |
+        |                  |        |         | multiple of a sequences      |
+        |                  |        |         | ``acc_len`` header entry.    |
+        +------------------+--------+---------+------------------------------+
+        | ``start_time``   | int    | samples | The desired first time       |
+        |                  |        |         | sample in an accumulation.   |
+        |                  |        |         | This should be compatible    |
+        |                  |        |         | with the accumulation length |
+        |                  |        |         | and start time of upstream   |
+        |                  |        |         | blocks. I.e. it should be    |
+        |                  |        |         | offset from the input        |
+        |                  |        |         | sequence header's ``seq0``   |
+        |                  |        |         | value by an integer multiple |
+        |                  |        |         | of the input sequence        |
+        |                  |        |         | header's ``acc_len`` value   |
+        +------------------+--------+---------+------------------------------+
 
     """
 
