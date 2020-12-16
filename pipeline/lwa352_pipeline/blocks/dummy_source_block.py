@@ -12,8 +12,119 @@ NTEST_BLOCKS = 2
 
 class DummySource(object):
     """
-    A dummy source block for throughput testing. Does nothing
-    but mark input buffers ready for consumption.
+    **Functionality**
+
+    A dummy source block for throughput testing. Optionally writes
+    test data to an output buffer.
+
+    **New Sequence Condition**
+
+    This block starts a single new sequence when main() is called.
+
+    **Input Header Requirements**
+
+    This block is a bifrost source, and thus has no input header
+    requirements.
+
+    **Output Headers**
+    
+    .. table::
+        :widths: 25 10 10 10 45
+
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | Field            | Format     | Units         | Value           | Description                         |
+        +==================+============+===============+=================+=====================================+
+        | ``sync_time``    | int        | UNIX seconds  | ``int(time.tim  | Synchronization time (corresponding |
+        |                  |            |               | e())``          | to spectrum sequence number 0).     |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``seq0``         | int        |               | 0               | Spectra number for the first sample |
+        |                  |            |               |                 | in this sequence                    |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``chan0``        | int        |               | 0               | Channel index of the first channel  |
+        |                  |            |               |                 | in this sequence                    |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``nchan``        | int        |               | ``nchan``       | Number of channels in the sequence  |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``system_nchan`` | int        |               | ``nchan``       | The total number of channels in the |
+        |                  |            |               |                 | system (i.e., the number of         |
+        |                  |            |               |                 | channels across all pipelines)      |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``sfreq``        | double     | Hz            | 0.0             | Center frequency of first channel   |
+        |                  |            |               |                 | in the sequence                     |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``bw_hz``        | int        | Hz            | ``24000 *       | Bandwidth of the sequence           |
+        |                  |            |               | nchan``         |                                     |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``nstand``       | int        |               | ``nstand``      | Number of stands (antennas) in the  |
+        |                  |            |               |                 | sequence                            |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``npol``         | int        |               | ``npol``        | Number of polarizations per stand   |
+        |                  |            |               |                 | in the sequence                     |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``input_to_ant`` | list[int]  |               | entry ``i`` is  | List of input to stand/pol mappings |
+        |                  |            |               | ``[i // npol, i | with dimensions ``[nstand x npol,   |
+        |                  |            |               | % npol]``       | 2]``. E.g. if entry ``N`` of this   |
+        |                  |            |               |                 | list has value ``[S, P]`` then the  |
+        |                  |            |               |                 | ``N``-th correlator input is stand  |
+        |                  |            |               |                 | ``S``, polarization ``P``.          |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``ant_to_input`` | list[ints] |               | entry ``[s,p]`` | List of stand/pol to correlator     |
+        |                  |            |               | is ``npol*s +   | input number mappings with          |
+        |                  |            |               | p``             | dimensions ``[nstand, npol]``. E.g. |
+        |                  |            |               |                 | if entry ``[S,P]`` of this list has |
+        |                  |            |               |                 | value ``N`` then stand ``S``,       |
+        |                  |            |               |                 | polarization ``P`` of the array is  |
+        |                  |            |               |                 | the ``N``-th correlator input       |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
+
+    **Data Buffers**
+    
+    *Input data buffer*: None
+
+    *Output data buffer*: Complex 4-bit data with dimensions (slowest to fastest)
+    ``Time x Freq x Stand x Polarization x Complexity``
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param oring: bifrost output data ring
+    :type oring: bifrost.ring.Ring
+
+    :param nstand: Number of stands in the array.
+    :type nstand: int
+
+    :param npol: Number of polarizations per antenna stand.
+    :type npol: int
+
+    :param nchan: Number of frequency channels this block will output
+    :type nchan: int
+
+    :param core: CPU core to which this block should be bound. If ``-1``, no binding is used.
+    :type core: int
+
+    :param ntime_gulp: The number of time samples to output on each processing loop iteration.
+    :type ntime_gulp: int
+
+    :param test_file: Path to a file containing test data, as a raw binary file containing
+       4+4 bit complex data in ``time x channel x stand x polarization`` order, with
+       polarization changing fastest. This file should contain a multiple of ``ntime_gulp``
+       samples. When the end of the file is reached, it is repeated.
+    :type test_file: str
+
+    :param target_throughput: The target Gbits/s at which this block should output data.
+       Throttling will be used to target this rate if necessary.
+    :type target_throughput: float
+
+    :param skip_write: If set to ``True``, no data will be copied to the output buffer,
+       blocks of memory will just be marked full as fast as possible. This can be useful
+       to test the maximum throughput of the dowstream pipeline blocks.
+       If set to ``False`` and no ``testfile`` is provided, the output data is a ramp,
+       with each 4+4-bit data sample taking the value ``stand % 8``
+    :type skip_write: Bool
+
     """
     def __init__(self, log, oring, ntime_gulp=2500,
                  core=-1, nchan=192, nstand=352, npol=2, skip_write=False, target_throughput=22.0, testfile=None):
@@ -62,7 +173,7 @@ class DummySource(object):
         if skip_write:
             self.test_data = BFArray(shape=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol], dtype='i8', space='system')
         else:
-            print("initializing random numbers")
+            #print("initializing random numbers")
             #TODO Can't get 'ci4' type to behave
             #self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
             #                    dtype='u8', space='system')
@@ -86,7 +197,8 @@ class DummySource(object):
         Get a single gulp from the test file,
         looping back to the beginning of the file when
         the end is reached.
-        Inputs: t (int) -- time index of gulp
+        Inputs: t (int) -- time index of gulp. I.e., increment
+            by 1 between gulps.
         """
         nbytes = self.gulp_size
         seekloc = (self.gulp_size * t) % self.testfile_nbytes

@@ -22,7 +22,169 @@ from .block_base import Block
 
 class BeamformVlbiOutput(Block):
     """
+    **Functionality**
+
+    Output a stream of UDP packets containing multiple beam voltages
+
+    **New Sequence Condition**
+
+    This block is a bifrost sink, and generates no downstream sequences.
+
+    **Input Header Requirements**
+
+    This block requires that the following header fields
+    be provided by the upstream data source:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +---------------+--------+-------+------------------------------------------------+
+        | Field         | Format | Units | Description                                    |
+        +===============+========+=======+================================================+
+        | ``seq0``      | int    |       | Spectra number for the first sample in the     |
+        |               |        |       | input sequence                                 |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``nchan``     | int    |       | The number of frequency channels in the input  |
+        |               |        |       | data buffer                                    |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``chan0``     | int    |       | The index of the first frequency channel in    |
+        |               |        |       | the input data buffer                          |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``nbeam``     | int    |       | The number of beams in the input data buffer   |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``nbit``      | int    |       | The number of bits (per real/imag part) of the |
+        |               |        |       | input data samples. Must be 32                 |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``complex``   | Bool   |       | True indicates that the input samples are      |
+        |               |        |       | complex, with real and imaginary parts both    |
+        |               |        |       | having ``nbit`` bits. Must be True.            |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``system_ncha | int    |       | The total number of frequency channels in the  |
+        | n``           |        |       | multi-pipeline system. Must be a multiple of   |
+        |               |        |       | ``nchan``.                                     |
+        +---------------+--------+-------+------------------------------------------------+
+        | ``npol``      | int    |       | The number of polarizations in the input data  |
+        |               |        |       | buffer. Must be 1                              |
+        +---------------+--------+-------+------------------------------------------------+
+
+    **Output Headers**
+
+    This is a bifrost sink block, and provides no data to an output ring.
+
+    **Data Buffers**
+
+    *Input Data Buffer*: A CPU- or GPU-side bifrost ring buffer of 32+32 bit complex
+    floating-point data containing beamformed voltages.
+    Data have dimensions (slowest to fastest):
+    ``time x channel x beams x complexity``. This buffer is read in blocks of
+    ``ntime_gulp`` samples.
+
+    *Output Data Buffer*: This block has no output data buffer.
+
+    **Instantiation**
+
+    :param log: Logging object to which runtime messages should be
+        emitted.
+    :type log: logging.Logger
+
+    :param iring: bifrost input data ring. This should be on the GPU.
+    :type iring: bifrost.ring.Ring
+
+    :param guarantee: If True, read data from the input ring in blocking "guaranteed"
+        mode, applying backpressure if necessary to ensure no data are missed by this block.
+    :type guarantee: Bool
+
+    :param core: CPU core to which this block should be bound. A value of -1 indicates no binding.
+    :type core: int
+
+    :parameter etcd_client: Etcd client object used to facilitate control of this block.
+        If ``None``, do not use runtime control.
+    :type etcd_client: etcd3.client.Etcd3Client
+
+    :param dest_port: Default destination port for UDP data. Can be overriden with the runtime
+        control interface.
+    :type dest_port: int
+
+    :param ntime_gulp: Number of time samples to read on each loop iteration.
+    :type ntime_gulp: int
+
+
+    **Runtime Control and Monitoring**
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +------------------+--------+---------+------------------------------+
+        | Field            | Format | Units   | Description                  |
+        +==================+========+=========+==============================+
+        | ``dest_ip``      | string |         | Destination IP for           |
+        |                  |        |         | transmitted packets, in      |
+        |                  |        |         | dotted-quad format. Eg.      |
+        |                  |        |         | ``"10.0.0.1"``. Use          |
+        |                  |        |         | ``"0.0.0.0"`` to skip        |
+        |                  |        |         | sending packets              |
+        +------------------+--------+---------+------------------------------+
+        | ``dest_port``    | int    |         | UDP port to which packets    |
+        |                  |        |         | should be transmitted.       |
+        +------------------+--------+---------+------------------------------+
+
+    **Output Data Format**
+
+    Each packet output  contains a single time sample of data from multiple channels
+    and multiple voltage beams.
+    The output data format complies with the LWA-SV "IBEAM"
+    spec This format comprises
+    a stream of UDP packets, each with a 32 byte header defined as follows:
+
+    .. code:: C
+    
+          struct ibeam {
+	          uint8_t  server;
+	          uint8_t  gbe;
+	          uint8_t  nchan;
+	          uint8_t  nbeam;
+	          uint8_t  nserver;
+	          uint16_t chan0;
+	          uint64_t seq;
+              float    data[nchan, nbeam, 2]; // Channel x Beam x Complexity x 32-bit float
+          };
+
+    Packet fields are as follows:
+
+    .. table::
+        :widths: 25 10 10 55
+
+        +---------------+------------+----------------+---------------------------------------------+
+        | Field         | Format     | Units          | Description                                 |
+        +===============+============+================+=============================================+
+        | server        | uint8      |                | One-based "pipeline number". Pipeline 1     |
+        |               |            |                | processes the first ``nchan`` channels,     |
+        |               |            |                | pipeline ``p`` processes the ``p``-th       |
+        |               |            |                | ``nchan`` channels.                         |
+        +---------------+------------+----------------+---------------------------------------------+
+        | gbe           | uint8      |                | AKA "tuning". Set to 0.                     |
+        +---------------+------------+----------------+---------------------------------------------+
+        | nchan         | uint8      |                | Number of frequency channels in this packet |
+        +---------------+------------+----------------+---------------------------------------------+
+        | nbeam         | uint8      |                | Number of beams in this packet              |
+        +---------------+------------+----------------+---------------------------------------------+
+        | nserver       | uint8      |                | The total number of pipelines in the        |
+        |               |            |                | system.                                     |
+        +---------------+------------+----------------+---------------------------------------------+
+        | chan0         | uint32     |                | Zero-indexed ID of the first frequency      |
+        |               |            |                | channel in this packet.                     |
+        +---------------+------------+----------------+---------------------------------------------+
+        | seq           | uint64     |                | Zero-indexed spectra number for the spectra |
+        |               |            |                | in this packet. Specified relative to the   |
+        |               |            |                | system synchronization time.                |
+        +---------------+------------+----------------+---------------------------------------------+
+        | data          | float      |                | Data payload. Beam voltages, in order       |
+        |               |            |                | (slowest to fastest) ``Channel x Beam x     |
+        |               |            |                | Complexity``                                |
+        +---------------+------------+----------------+---------------------------------------------+
+
     """
+
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
                  ntime_gulp=480,
@@ -32,7 +194,6 @@ class BeamformVlbiOutput(Block):
 
         self.sock = None
         self.dest_ip = '0.0.0.0'
-        self.new_dest_ip = '0.0.0.0'
         self.new_dest_ip = '0.0.0.0'
         self.dest_port = dest_port
         self.new_dest_port = dest_port
@@ -70,11 +231,8 @@ class BeamformVlbiOutput(Block):
             nchan = ihdr['nchan']
             nbeam = ihdr['nbeam']
             nbit  = ihdr['nbit']
-            nchan = ihdr['nchan']
             system_nchan = ihdr['system_nchan']
             chan0 = ihdr['chan0']
-            bw_hz = ihdr['bw_hz']
-            sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
             igulp_size = self.ntime_gulp * nbeam * nchan * npol * 2 * nbit // 8
             idata_cpu = BFArray(shape=[self.ntime_gulp, nchan, self.nbeam_send], dtype='cf64', space='cuda_host')

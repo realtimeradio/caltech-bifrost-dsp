@@ -187,3 +187,10 @@ sequences).
 
 .. autoclass:: lwa352_pipeline.blocks.beamform_vlbi_output_block.BeamformVlbiOutput
 
+``dummy_source``
+~~~~~~~~~~~~~~~~
+
+The Dummy Source block is not used in the default LWA pipeline, but can replace the
+``Capture`` block for testing purposes.
+
+.. autoclass:: lwa352_pipeline.blocks.dummy_source_block.DummySource
