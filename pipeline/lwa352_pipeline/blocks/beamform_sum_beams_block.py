@@ -105,10 +105,12 @@ class BeamformSumBeams(Block):
 
     *Output Data Buffer*: A CPU- or GPU-side bifrost ring buffer of 32 bit,
     floating-point, integrated, beam powers.
-    Data has dimensionality
-    ``time x channel x beams x beam-element``. This output buffer is written
+    Data has dimensionality ``time x channel x beams x beam-element``.
+
+    ``channel`` runs from 0 to ``nchan``.
     
-    ``channel`` runs from 0 to the output ``nbeam-1`` (equivalent to the input ``nbeam/2 - 1``).
+    ``beam`` runs from 0 to the output ``nbeam-1`` (equivalent to the input ``nbeam/2 - 1``).
+    
     ``beam-element`` runs from 0 to 3 with the following mapping:
 
       - index 0: The accumulated power of a beam's ``X`` polarization
