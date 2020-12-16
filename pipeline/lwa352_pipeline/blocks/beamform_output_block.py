@@ -80,7 +80,6 @@ class BeamformOutputPy(Block):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
-            ntime_per_block = ihdr['ntime_block']
             nchan = ihdr['nchan']
             nbit  = ihdr['nbit']
             nbeam = ihdr['nbeam']
@@ -167,7 +166,6 @@ class BeamformOutputBf(BeamformOutputPy):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
-            ntime_per_block = ihdr['ntime_block']
             nchan = ihdr['nchan']
             nbit  = ihdr['nbit']
             nbeam = ihdr['nbeam']
