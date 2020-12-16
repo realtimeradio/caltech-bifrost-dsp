@@ -177,13 +177,13 @@ sequences).
 
 .. autoclass:: lwa352_pipeline.blocks.beamform_sum_beams_block.BeamformSumBeams
 
-``beamform_vlbi_output``
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: lwa352_pipeline.blocks.beamform_vlbi_output_block.BeamformVlbiOutputBf
-
 ``beamform_output``
 ~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: lwa352_pipeline.blocks.beamform_output_block.BeamformOutputBf
+
+``beamform_vlbi_output``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: lwa352_pipeline.blocks.beamform_vlbi_output_block.BeamformVlbiOutput
 

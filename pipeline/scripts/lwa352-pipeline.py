@@ -48,8 +48,7 @@ def build_pipeline(args):
     from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
     #from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
     from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
-    from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
-    from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
+    from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
     from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
     from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
 
@@ -123,8 +122,6 @@ def build_pipeline(args):
         capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
-        #bf_power_output_ring = [Ring(name="bf-pow-output%d" %i, space='cuda_host') for i in range(NBEAM)]
-        #bf_acc_output_ring = [Ring(name="bf-acc-output%d" % i, space='system') for i in range(NBEAM)]
         bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
         bf_acc_output_ring = Ring(name="bf-acc-output", space='system')
         corr_output_ring = Ring(name="corr-output", space='cuda')
