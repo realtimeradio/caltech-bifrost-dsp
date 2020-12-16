@@ -139,13 +139,13 @@ class BeamformVlbiOutput(Block):
     .. code:: C
     
           struct ibeam {
-	          uint8_t  server;
-	          uint8_t  gbe;
-	          uint8_t  nchan;
-	          uint8_t  nbeam;
-	          uint8_t  nserver;
-	          uint16_t chan0;
-	          uint64_t seq;
+              uint8_t  server;
+              uint8_t  gbe;
+              uint8_t  nchan;
+              uint8_t  nbeam;
+              uint8_t  nserver;
+              uint16_t chan0;
+              uint64_t seq;
               float    data[nchan, nbeam, 2]; // Channel x Beam x Complexity x 32-bit float
           };
 

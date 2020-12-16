@@ -29,7 +29,7 @@ class DummySource(object):
     **Output Headers**
     
     .. table::
-        :widths: 25 10 10 10 45
+        :widths: 15 10 10 15 45
 
         +------------------+------------+---------------+-----------------+-------------------------------------+
         | Field            | Format     | Units         | Value           | Description                         |
