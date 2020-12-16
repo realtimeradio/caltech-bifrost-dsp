@@ -139,6 +139,7 @@ def build_pipeline(args):
     nstand = 352
     npol = 2
     nchan = 184
+    system_nchan = 184 * 16
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
     cores = CoreList(map(int, args.cores.split(',')))
@@ -154,7 +155,7 @@ def build_pipeline(args):
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
                            nsrc=nroach*nfreqblocks, src0=0, max_payload_size=7000,
-                           buffer_ntime=GSIZE, core=cores.pop(0),
+                           buffer_ntime=GSIZE, core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')

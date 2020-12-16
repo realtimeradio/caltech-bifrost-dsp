@@ -26,7 +26,7 @@ from lwa352_pipeline.blocks.beamform_block import Beamform
 from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
 from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
 from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
-from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutputBf as BeamformVlbiOutput
+from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
 from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
 from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
 from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump

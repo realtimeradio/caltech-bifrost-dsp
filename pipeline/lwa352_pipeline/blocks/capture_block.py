@@ -49,6 +49,9 @@ class Capture(object):
         +------------------+------------+--------------+--------------------------------------------------------------+
         | ``nchan``        | int        |              | Number of channels in the sequence                           |
         +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``system_nchan`` | int        |              | The total number of channels in the system (i.e., the number |
+        |                  |            |              | of channels across all pipelines)                            |
+        +------------------+------------+--------------+--------------------------------------------------------------+
         | ``fs_hz``        | double     | Hz           | Sampling frequency of ADCs                                   |
         +------------------+------------+--------------+--------------------------------------------------------------+
         | ``sfreq``        | double     | Hz           | Center frequency of first channel in the sequence            |
@@ -129,6 +132,11 @@ class Capture(object):
     :param src0: The first source to transmit to this block.
     :type src0: int
 
+    :param system_nchan: The total number of channels in the complete,
+        multi-pipeline system. This is only used to set sequence headers
+        for downstream packet header generators which require this information.
+    :type system_nchan: int
+
     :param max_payload_size: The maximum payload size, in bytes, of the
         UDP packets to be received.
     :type max_payload_size: int
@@ -149,7 +157,7 @@ class Capture(object):
     """
 
     def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125,
-                     input_to_ant=None, nstand=352, npol=2,
+                     input_to_ant=None, nstand=352, npol=2, system_nchan=182*16,
                      *args, **kwargs):
         self.log    = log
         self.fs_hz  = fs_hz # sampling frequency in Hz
@@ -160,6 +168,7 @@ class Capture(object):
         self.utc_start = self.kwargs['utc_start']
         self.nstand = nstand
         self.npol = npol
+        self.system_nchan = system_nchan
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
                 self.CaptureClass = UDPVerbsCapture
@@ -212,6 +221,9 @@ starts a new sequence.
         :type chan0: int
         :param nchan: The number of channels in this sequence.
         :type nchan: int
+        :param system_nchan: The number of channels in the complete,
+            multi-pipeline system.
+        :type system_nchan: int
         :param nsrc: The number of distinct sources in this sequence.
         :type nsrc: int
         :param time_tag_ptr: A pointer to the underlying time tag used
@@ -244,6 +256,7 @@ starts a new sequence.
                'seq0':     seq0, 
                'chan0':    chan0,
                'nchan':    nchan,
+               'system_nchan':    self.system_nchan,
                'fs_hz':    self.fs_hz,
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
