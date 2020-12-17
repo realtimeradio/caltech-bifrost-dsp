@@ -622,7 +622,6 @@ class CorrOutputFull(Block):
                 self.perf_proclog.update({'acquire_time': acquire_time, 
                                           'reserve_time': 0, 
                                           'process_time': process_time,})
-                self.stats['last_end_sample'] = this_gulp_time
                 self.update_stats()
                 # And, update overall time counter
                 this_gulp_time += upstream_acc_len
