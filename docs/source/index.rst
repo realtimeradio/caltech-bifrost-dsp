@@ -4,19 +4,19 @@
    contain the root `toctree` directive.
 
 Welcome to LWA Correlator's documentation!
-==========================================
+""""""""""""""""""""""""""""""""""""""""""
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    installation.rst
-   manual.rst
-   outputs.rst
+   pipeline.rst
+   control.rst
 
 
 Indices and tables
-==================
+""""""""""""""""""
 
 * :ref:`genindex`
 * :ref:`modindex`

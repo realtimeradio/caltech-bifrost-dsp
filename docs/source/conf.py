@@ -12,7 +12,10 @@
 #
 import os
 import sys
-sys.path.append(os.path.abspath('../pipeline'))
+import lwa352_pipeline
+import lwa352_pipeline_control
+from lwa352_pipeline_control.blocks.corr_output_full_control import CorrOutputFull as CorrOutputFullControl
+#sys.path.append(os.path.abspath('../pipeline'))
 #from lwa352_pipeline.blocks.block_base import Block
 #from lwa352_pipeline.blocks.corr_block import Corr
 #from lwa352_pipeline.blocks.dummy_source_block import DummySource
