@@ -2,7 +2,7 @@ import time
 
 from .block_control_base import BlockControl
 
-class Corr(BlockControl):
+class CorrControl(BlockControl):
     def set_start_time(self, start_time):
         assert isinstance(start_time, int)
         self._send_command(

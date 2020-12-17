@@ -3,7 +3,7 @@ import numpy as np
 
 from .block_control_base import BlockControl
 
-class Beamform(BlockControl):
+class BeamformControl(BlockControl):
     def update_coeffs(self):
         gains = np.zeros([32, 704]).tolist()
         delays = np.zeros([32, 704]).tolist()

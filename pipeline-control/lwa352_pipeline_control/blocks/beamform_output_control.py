@@ -1,6 +1,6 @@
 from .block_control_base import BlockControl
 
-class BeamformOutput(BlockControl):
+class BeamformOutputControl(BlockControl):
     def set_destination(self, dest_ip, dest_port):
         assert isinstance(dest_ip, str)
         assert isinstance(dest_port, int)
