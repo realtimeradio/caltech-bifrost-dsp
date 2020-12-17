@@ -45,11 +45,9 @@ def build_pipeline(args):
     from lwa352_pipeline.blocks.copy_block import Copy
     from lwa352_pipeline.blocks.capture_block import Capture
     from lwa352_pipeline.blocks.beamform_block import Beamform
-    from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
-    #from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
     from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
     from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
-    from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
+    from lwa352_pipeline.blocks.beamform_output_block import BeamformOutput
     from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
 
     if args.useetcd:

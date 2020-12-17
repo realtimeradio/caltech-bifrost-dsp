@@ -130,7 +130,7 @@ class BeamformVlbiOutput(Block):
 
     **Output Data Format**
 
-    Each packet output  contains a single time sample of data from multiple channels
+    Each packet output contains a single time sample of data from multiple channels
     and multiple voltage beams.
     The output data format complies with the LWA-SV "IBEAM"
     spec This format comprises
@@ -246,7 +246,7 @@ class BeamformVlbiOutput(Block):
                     self.dest_ip = self.new_dest_ip
                     self.dest_port = self.new_dest_port
                     self.update_pending = False
-                    self.log.info("VLBI OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.max_mbps))
+                    self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
                     if self.sock: del self.sock
                     if udt: del udt
                     self.sock = UDPSocket()

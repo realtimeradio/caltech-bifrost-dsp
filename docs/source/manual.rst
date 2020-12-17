@@ -180,7 +180,7 @@ sequences).
 ``beamform_output``
 ~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: lwa352_pipeline.blocks.beamform_output_block.BeamformOutputBf
+.. autoclass:: lwa352_pipeline.blocks.beamform_output_block.BeamformOutput
 
 ``beamform_vlbi_output``
 ~~~~~~~~~~~~~~~~~~~~~~~~

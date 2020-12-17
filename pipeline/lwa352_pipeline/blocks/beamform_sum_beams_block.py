@@ -87,9 +87,6 @@ class BeamformSumBeams(Block):
 
     **Data Buffers**
 
-    *Input Data Buffer*: A GPU-side bifrost ring buffer of 4+4 bit
-    complex data in order: ``time x channel x input``.
-
     *Input Data Buffer*: A GPU-side bifrost ring buffer of 32+32 bit complex
     floating-point data containing beamformed voltages.
     The input buffer has dimensionality (slowest varying to fastest varying)
