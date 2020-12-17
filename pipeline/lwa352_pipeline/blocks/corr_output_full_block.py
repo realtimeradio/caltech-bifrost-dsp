@@ -464,6 +464,8 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
+        self.stats.update({'output_gbps': gbps})
+        self.update_stats()
 
     def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg):
         cpu_affinity.set_core(self.core)
@@ -498,7 +500,10 @@ class CorrOutputFull(Block):
         del sdata
         stop_time = time.time()
         elapsed = stop_time - start_time
-        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
+        gbps = 8 * self.dump_size / elapsed / 1e9
+        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
+        self.stats.update({'output_gbps': gbps})
+        self.update_stats()
 
     def main(self):
         cpu_affinity.set_core(self.core)
