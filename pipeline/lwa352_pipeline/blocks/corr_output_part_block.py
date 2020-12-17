@@ -233,11 +233,11 @@ class CorrOutputPart(Block):
 
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.settimeout(0.01)
-        else:
             self.sock = None
             raise NotImplementedError
+        else:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sock.settimeout(0.01)
 
         self.dest_ip = "0.0.0.0"
         self.new_dest_ip = "0.0.0.0"
