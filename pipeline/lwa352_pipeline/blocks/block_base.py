@@ -74,7 +74,7 @@ class Block(object):
                                 pid=self.pipeline_id,
                                 block=self.name,
                                 id=self.instance_id)
-        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}/{id}'.format(
+        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}/{id}/status'.format(
                                 monroot=monitor_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,

@@ -5,6 +5,7 @@ import socket
 import glob
 import os
 import time
+import re
 
 import simplejson as json
 import etcd3 as etcd
@@ -65,7 +66,10 @@ def poll(base_dir):
             except KeyError:
                 ac, pr, re, gb = 0.0, 0.0, 0.0, 0.0
 
-            blockList['%i-%s' % (pipeline_id, block)] = {'pid': pid, 'name':block, 'cmd': cmd, 'core': cr, 'acquire': ac, 'process': pr, 'reserve': re, 'total':ac+pr+re, 'gbps':gb, 'time':time.time()}
+            blockList['%i-%s' % (pipeline_id, block)] = {
+                'pid': pid, 'name':block, 'cmd': cmd, 'core': cr,
+                'acquire': ac, 'process': pr, 'reserve': re, 'total':ac+pr+re,
+                'gbps':gb, 'time':time.time()}
 
             try:
                 log = contents[block]['sequence0']
@@ -99,11 +103,25 @@ def main(args):
            last_poll, d = poll(BIFROST_STATS_BASE_DIR)
            for k, v in d.items():
                pipeline_id, block = k.split('-')
-               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}'.format(
+               # If the block name ends in _<number> (which seem to be how
+               # bifrost handles multiple blocks of the same type, figure
+               # out the block id.
+               # Bifrost labels block 1: "Block", block 2: "Block_2" etc
+               # Seach for _<number> and if it exists, strip it off and
+               # use the value to calculate a block id.
+               x = re.search(r'_\d+$', block)
+               if x is not None:
+                   block_id = int(x.group()[1:]) - 1 # convert to 0-indexing
+                   block = block.rstrip(x.group())
+               else:
+                   block_id = 0
+               
+               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}/status'.format(
                           keybase=args.keybase,
                           hostbase=args.hostbase,
                           pipeline_id=pipeline_id,
-                          block=block
+                          block=block,
+                          block_id=block_id,
                       )
                ec.put(ekey, json.dumps(v))
            
@@ -113,15 +131,17 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Display perfomance of different blocks of Bifrost pipelines',
+        description='Display perfomance of blocks in Bifrost pipelines',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
-    parser.add_argument('--etcdhost', default='localhost',
+    parser.add_argument('--etcdhost', default='etcdhost',
                         help='etcd host to which stats should be published')
     parser.add_argument('--keybase', default='/mon/corr',
-                        help='Key to which stats should be published: <keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
+                        help='Key to which stats should be published: '
+                             '<keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
     parser.add_argument('--hostbase', default=socket.gethostname(),
-                        help='Key to which stats should be published: <keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
+                        help='Key to which stats should be published: '
+                        '<keybase>/x/<hostbase>/pipeline/<pipeline-id>/blockname/...')
     parser.add_argument('-t', '--polltime', type=int, default=10,
                         help='How often to poll stats, in seconds')
     args = parser.parse_args()
