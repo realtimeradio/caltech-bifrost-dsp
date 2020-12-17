@@ -1,6 +1,33 @@
 from .block_control_base import BlockControl
 
 class CorrOutputFull(BlockControl):
+    """
+    Control interface for the ``CorrOutputFull`` processing block.
+    Control keys:
+
+    +------------------+--------+---------+------------------------------+
+    | Field            | Format | Units   | Description                  |
+    +==================+========+=========+==============================+
+    | ``dest_ip``      | string |         | Destination IP for           |
+    |                  |        |         | transmitted packets, in      |
+    |                  |        |         | dotted-quad format. Eg.      |
+    |                  |        |         | ``"10.0.0.1"``. Use          |
+    |                  |        |         | ``"0.0.0.0"`` to skip        |
+    |                  |        |         | sending packets. See         |
+    |                  |        |         | ``set_destination()``.       |
+    +------------------+--------+---------+------------------------------+
+    | ``dest_port``    | int    |         | UDP port to which packets    |
+    |                  |        |         | should be transmitted. See   |
+    |                  |        |         | ``set_destination()``.       |
+    +------------------+--------+---------+------------------------------+
+    | ``max_mbps``     | int    | Mbits/s | The maximum output data rate |
+    |                  |        |         | to allow before throttling.  |
+    |                  |        |         | Set to ``-1`` to send as     |
+    |                  |        |         | fast as possible. See        |
+    |                  |        |         | ``set_max_mbps()``.          |
+    +------------------+--------+---------+------------------------------+
+
+    """
     def set_destination(self, dest_ip, dest_port):
         """
         Set the destination IP and UDP port for correlator
@@ -26,6 +53,7 @@ class CorrOutputFull(BlockControl):
        """
        Use the ``max_mbps`` key to throttle the correlator
        output to at most ``max_mbps`` megabits per second.
+       Throttle is approximate only.
 
        :param max_mbps: Output data rate cap, in megabits per second
        :type max_mbps: int
@@ -33,3 +61,68 @@ class CorrOutputFull(BlockControl):
 
        assert isinstance(max_mbps, int)
        self._send_command(max_mbps=max_mbps)
+
+    def get_status(self):
+        """
+        Get correlator full visibility output stats:
+
+        +----------------------+--------+---------+----------------------------+
+        | Field                | Type   | Unit    | Description                |
+        +======================+========+=========+============================+
+        | ``curr_sample``      | int    |         | The index of the last      |
+        |                      |        |         | sample to be processed     |
+        +----------------------+--------+---------+----------------------------+
+        | ``dest_ip``          | string |         | Current destination IP     |
+        |                      |        |         | address, in dotted-quad    |
+        |                      |        |         | notation.                  |
+        +----------------------+--------+---------+----------------------------+
+        | ``dest_port``        | int    |         | Current destination UDP    |
+        |                      |        |         | port                       |
+        +----------------------+--------+---------+----------------------------+
+        | ``last_cmd_time``    | float  | UNIX    | The last time a command    |
+        |                      |        | time    | was received               |
+        +----------------------+--------+---------+----------------------------+
+        | ``last_update_time`` | float  | UNIX    | The last time settings     |
+        |                      |        | time    | from a command were loaded |
+        +----------------------+--------+---------+----------------------------+
+        | ``max_mbps``         | int    | Mbits/s | The current throttle       |
+        |                      |        |         | setpoint for output data   |
+        +----------------------+--------+---------+----------------------------+
+        | ``new_dest_ip``      | string |         | The commanded destination  |
+        |                      |        |         | IP address, in dotted-quad |
+        |                      |        |         | notation. This IP will be  |
+        |                      |        |         | loaded on the next         |
+        |                      |        |         | visibility matrix to be    |
+        |                      |        |         | transmitted if             |
+        |                      |        |         | ``update_pending`` is      |
+        |                      |        |         | True.                      |
+        +----------------------+--------+---------+----------------------------+
+        | ``new_dest_port``    | int    |         | The commanded destination  |
+        |                      |        |         | UDP port, to be loaded on  |
+        |                      |        |         | the next visibility matrix |
+        |                      |        |         | to be transmitted if       |
+        |                      |        |         | ``update_pending`` is True |
+        +----------------------+--------+---------+----------------------------+
+        | ``new_max_mbps``     | int    | Mbits/s | The commanded throttle     |
+        |                      |        |         | setpoint for output data,  |
+        |                      |        |         | to be loaded on the next   |
+        |                      |        |         | visibility matrix to be    |
+        |                      |        |         | transmitted if             |
+        |                      |        |         | ``update_pending`` is True |
+        +----------------------+--------+---------+----------------------------+
+        | ``output_gbps``      | float  | Gbits/s | Measured output data rate  |
+        |                      |        |         | for the last visibility    |
+        |                      |        |         | matrix                     |
+        +----------------------+--------+---------+----------------------------+
+        | ``update_pending``   | bool   |         | Flag indicating that the   |
+        |                      |        |         | IP/port/throttle settings  |
+        |                      |        |         | have changed and should be |
+        |                      |        |         | updated on the next        |
+        |                      |        |         | visibility matrix          |
+        +----------------------+--------+---------+----------------------------+
+
+        :return: Block status dictionary
+        :rtype: dict
+        """
+
+        return self._get_status()

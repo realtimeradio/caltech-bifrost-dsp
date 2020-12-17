@@ -58,7 +58,21 @@ class BlockControl():
             **kwargs,
         )
 
-    def get_status(self, user_only=True):
+    def get_bifrost_status(self, user_only=False):
+        """
+        Get the stats stored in this block's status key
+
+        :param user_only: If True, only grab the ``stats`` sub-key of the
+            status dictionary, which contains block-specific information.
+            If False, return the full contents of the ``status`` key,
+            much of which is set by the bifrost pipeline engine.
+            In this case, ``stats`` are still available as a sub-dictionary
+            of the returned status.
+        :type user_only: Bool
+
+        :return: Block status dictionary
+        :rtype: dict
+        """
         return self._corr_interface.get_status(
                    self._host,
                    self._pipeline_id,
@@ -66,3 +80,19 @@ class BlockControl():
                    self.instance_id,
                    user_only=user_only,
                )
+
+    def _get_status(self):
+        """
+        Get the block stats (i.e., just the statistics that pipeline blocks
+        set with their ``updates_stats()`` method, not everything
+        bifrost sets behind the scenes.
+
+        This method mainly exists so that other blocks can call it from their 
+        own ``get_status`` method and add their own docstrings for
+        auto-generation.
+
+        :return: Block status dictionary
+        :rtype: dict
+        """
+
+        return self.get_bifrost_status(user_only=True)
