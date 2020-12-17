@@ -1,7 +1,7 @@
 import time
 import numpy as np
 
-from blocks.block_control_base import BlockControl
+from .block_control_base import BlockControl
 
 class Beamform(BlockControl):
     def update_coeffs(self):

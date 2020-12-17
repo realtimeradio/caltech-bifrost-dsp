@@ -1,6 +1,6 @@
 import time
 
-from blocks.block_control_base import BlockControl
+from .block_control_base import BlockControl
 
 class Corr(BlockControl):
     def set_start_time(self, start_time):

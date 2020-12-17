@@ -3,17 +3,17 @@ import time
 import sys
 import logging
 
-from etcd_control import EtcdCorrControl
+from .etcd_control import EtcdCorrControl
 
-from blocks.corr_output_full_control import CorrOutputFull
-from blocks.corr_output_part_control import CorrOutputPart
-from blocks.corr_acc_control import CorrAcc
-from blocks.corr_control import Corr
-from blocks.corr_subsel_control import CorrSubsel
-from blocks.triggered_dump_control import TriggeredDump
-from blocks.beamform_control import Beamform
-from blocks.beamform_output_control import BeamformOutput
-from blocks.beamform_vlbi_output_control import BeamformVlbiOutput
+from .blocks.corr_output_full_control import CorrOutputFull
+from .blocks.corr_output_part_control import CorrOutputPart
+from .blocks.corr_acc_control import CorrAcc
+from .blocks.corr_control import Corr
+from .blocks.corr_subsel_control import CorrSubsel
+from .blocks.triggered_dump_control import TriggeredDump
+from .blocks.beamform_control import Beamform
+from .blocks.beamform_output_control import BeamformOutput
+from .blocks.beamform_vlbi_output_control import BeamformVlbiOutput
 
 default_log = logging.getLogger(__name__)
 logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
@@ -25,7 +25,7 @@ logHandler.setLevel(logging.DEBUG)
 default_log.addHandler(logHandler)
 default_log.setLevel(logging.DEBUG)
 
-class Lwa352XControl():
+class Lwa352PipelineControl():
     """
     **Description**
     

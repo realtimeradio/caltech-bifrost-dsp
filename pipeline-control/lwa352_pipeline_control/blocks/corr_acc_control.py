@@ -1,6 +1,6 @@
 import time
 
-from blocks.corr_control import Corr
+from .corr_control import Corr
 
 class CorrAcc(Corr):
     def get_next_allowed_start(self, delay_s):

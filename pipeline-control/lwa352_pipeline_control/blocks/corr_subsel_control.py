@@ -1,4 +1,4 @@
-from blocks.block_control_base import BlockControl
+from .block_control_base import BlockControl
 import numpy as np
 
 class CorrSubsel(BlockControl):
