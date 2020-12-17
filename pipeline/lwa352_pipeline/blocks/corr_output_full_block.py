@@ -528,7 +528,7 @@ class CorrOutputFull(Block):
                     self.dest_port = self.new_dest_port
                     self.max_mbps = self.new_max_mbps
                     self.update_pending = False
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (packet delay %d ns)" % (self.dest_ip, self.dest_port, self.max_mbps))
+                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % (self.dest_ip, self.dest_port, self.max_mbps))
                     if self.use_cor_fmt:
                         if self.sock: del self.sock
                         if udt: del udt
