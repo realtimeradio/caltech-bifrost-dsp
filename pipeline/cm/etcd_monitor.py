@@ -171,7 +171,7 @@ def main(args):
                 host = hosts[hn % n_hosts]
                 d = {}
                 for (s, meta) in ec.get_prefix(args.keyroot + '/' + host + '/pipeline'):
-                    k = meta.key.decode()[len(args.keyroot):]
+                    k = meta.key.decode()[len(args.keyroot):].rstrip('/status')
                     try:
                         d[k] = json.loads(s)
                     except:
@@ -200,35 +200,40 @@ def main(args):
                                 if overflow:
                                     break
                                 kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "%s:"%block, std)
-                                for key, val in sorted(vblock.items()):
-                                    if isinstance(val, dict):
-                                        kk = _add_line(scr, kk, COL_WIDTH*col + 5*2, "%s:" % (key))
-                                        for key2, val2 in sorted(val.items()):
-                                            kk = _add_line(scr, kk, COL_WIDTH*col + 6*2, "%s: %s" % (key2, val2))
+                                for blockinst, vblockinst in sorted(vblock.items()):
+                                    if overflow:
+                                        break
+                                    kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, "%s:"%blockinst, std)
+
+                                    for key, val in sorted(vblockinst.items()):
+                                        if isinstance(val, dict):
+                                            kk = _add_line(scr, kk, COL_WIDTH*col + 5*2, "%s:" % (key))
+                                            for key2, val2 in sorted(val.items()):
+                                                kk = _add_line(scr, kk, COL_WIDTH*col + 6*2, "%s: %s" % (key2, val2))
+                                                if kk > (rows-10):
+                                                    kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
+                                                    overflow = True
+                                                    break
+                                        else:
+                                            if key in args.keyignorelist.split(','):
+                                                continue
                                             if kk > (rows-10):
-                                                kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
+                                                if not overflow:
+                                                    kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
                                                 overflow = True
                                                 break
-                                    else:
-                                        if key in args.keyignorelist.split(','):
-                                            continue
-                                        if kk > (rows-10):
-                                            if not overflow:
-                                                kk = _add_line(scr, kk, COL_WIDTH*col + 3*2, "#### EXPAND WINDOW TO SEE MORE ####", ORANGE)
-                                            overflow = True
-                                            break
-                                        s = "%s:" % key
-                                        if key == 'time':
-                                            s += ' %s' % time.ctime(val)
-                                        elif isinstance(val, float):
-                                            s += ' %.3f' % val
-                                        else:
-                                            val_s = str(val)
-                                            if len(val_s) > 15:
-                                                val_s = val_s[0:15]+"..."
-                                            s += ' %s' % val_s
-                                        mode = highlight_warnings({'key':key, 'val':val})
-                                        kk = _add_line(scr, kk, COL_WIDTH*col + 4*2, s, mode)
+                                            s = "%s:" % key
+                                            if key == 'time':
+                                                s += ' %s' % time.ctime(val)
+                                            elif isinstance(val, float):
+                                                s += ' %.3f' % val
+                                            else:
+                                                val_s = str(val)
+                                                if len(val_s) > 15:
+                                                    val_s = val_s[0:15]+"..."
+                                                s += ' %s' % val_s
+                                            mode = highlight_warnings({'key':key, 'val':val})
+                                            kk = _add_line(scr, kk, COL_WIDTH*col + 5*2, s, mode)
                             col += 1
                     else:
                         k = _add_line(scr, k, 4*2, "argh", mode)
@@ -283,7 +288,7 @@ if __name__ == "__main__":
         description='Display perfomance of different blocks of Bifrost pipelines',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
-    parser.add_argument('--etcdhost', default='localhost',
+    parser.add_argument('--etcdhost', default='etcdhost',
                         help='etcd host to which stats should be published')
     parser.add_argument('--keyroot', default='/mon/corr/x',
                         help='Base key directory to watch.')

@@ -6,4 +6,4 @@ class CorrSubsel(BlockControl):
     def set_baseline_select(self, subsel):
        subsel = np.array(subsel, dtype=np.int32)
        assert subsel.shape == (self.nvis_out, 2, 2)
-       self.send_command(subsel=subsel.tolist())
+       self._send_command(subsel=subsel.tolist())
