@@ -4,22 +4,34 @@ from .block_control_base import BlockControl
 
 class Corr(BlockControl):
     def set_start_time(self, start_time):
+        """
+        Set the block's accumulation start time.
+
+        :param start_time: Commanded start time, in units of spectra
+            since last synchronization (counter reset) event. Use -1 to
+            command the block to start immediately, on the next valid
+            integration boundary.
+        :type start_time: int
+        """
         assert isinstance(start_time, int)
         self._send_command(
             start_time=start_time,
         )
 
     def set_acc_length(self, acc_len):
+        """
+        Set the block's accumulation length.
+
+        :param acc_len: Commanded accumulation length, in units of spectra.
+            This should be a multiple of the blocks underlying accumulation
+            granularity.
+        :type acc_len: int
+        """
         assert isinstance(acc_len, int)
         self._send_command(
             acc_len=acc_len,
         )
 
-    def update_is_pending(self):
-        return self.get_status()['update_is_pending']
-
-    def get_curr_sample(self):
-        return self.get_status()['curr_sample']
 
     def get_next_allowed_start(self, delay_s):
         status = self.get_status(user_only=False)

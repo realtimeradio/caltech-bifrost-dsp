@@ -81,6 +81,27 @@ class BlockControl():
                    user_only=user_only,
                )
 
+    def update_is_pending(self):
+        """
+        Return True if new parameters are waiting to be loaded. Else, False.
+        Also returns False if the block has no command capabilities.
+
+        :return: update_is_pending
+        :rtype: Bool
+        """
+        self._get_status().get('update_is_pending', False)
+
+    def get_curr_sample(self):
+        """
+        Get the first sample of the last block of data to be processed,
+        in spectra counts. Returns -1 if this block is not capable of
+        reporting this quantity.
+
+        :return: spectra_count
+        :rtype: int
+        """
+        return self._get_status()['curr_sample']
+
     def _get_status(self):
         """
         Get the block stats (i.e., just the statistics that pipeline blocks
