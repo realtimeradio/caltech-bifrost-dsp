@@ -14,25 +14,6 @@ import os
 import sys
 import lwa352_pipeline
 import lwa352_pipeline_control
-from lwa352_pipeline_control.blocks.corr_output_full_control import CorrOutputFull as CorrOutputFullControl
-#sys.path.append(os.path.abspath('../pipeline'))
-#from lwa352_pipeline.blocks.block_base import Block
-#from lwa352_pipeline.blocks.corr_block import Corr
-#from lwa352_pipeline.blocks.dummy_source_block import DummySource
-#from lwa352_pipeline.blocks.corr_acc_block import CorrAcc
-#from lwa352_pipeline.blocks.corr_subsel_block import CorrSubsel
-#from lwa352_pipeline.blocks.corr_output_full_block import CorrOutputFull
-#from lwa352_pipeline.blocks.corr_output_part_block import CorrOutputPart
-#from lwa352_pipeline.blocks.copy_block import Copy
-#from lwa352_pipeline.blocks.capture_block import Capture
-#from lwa352_pipeline.blocks.beamform_block import Beamform
-#from lwa352_pipeline.blocks.beamform_sum_block import BeamformSum
-#from lwa352_pipeline.blocks.beamform_sum_single_beam_block import BeamformSumSingleBeam
-#from lwa352_pipeline.blocks.beamform_sum_beams_block import BeamformSumBeams
-#from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
-#from lwa352_pipeline.blocks.beamform_vacc_block import BeamVacc
-#from lwa352_pipeline.blocks.beamform_output_block import BeamformOutputBf as BeamformOutput
-#from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
 ####sys.path.insert(0, os.path.abspath('.'))
 
 
@@ -47,6 +28,8 @@ release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------
+
+add_module_names = False
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom

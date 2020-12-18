@@ -21,9 +21,9 @@ class BlockControl():
 
     :param name: The name of the pipeline block which this ``BlockControl``
         instance should control. By default this is the name of the control
-        class. The name given (or auto-assigned) here should match the
-        name of the pipeline block, which is generally the same as the
-        block class name
+        class, with the suffic 'Control' removed.
+        The name given (or auto-assigned) here should match the
+        name of the pipeline block.
     :type name: string
 
     """
@@ -43,7 +43,7 @@ class BlockControl():
 
     def __init__(self, log, corr_interface, host, pipeline_id=0, name=None):
         self._corr_interface = corr_interface
-        self._name = name or type(self).__name__
+        self._name = name or type(self).__name__.rstrip('Control')
         self._host = host
         self._pipeline_id = pipeline_id
         self.instance_id = self._get_instance_id()

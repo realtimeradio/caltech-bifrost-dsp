@@ -1,31 +1,34 @@
 from .block_control_base import BlockControl
 
-class CorrOutputFull(BlockControl):
+class CorrOutputFullControl(BlockControl):
     """
     Control interface for the ``CorrOutputFull`` processing block.
     Control keys:
 
-    +------------------+--------+---------+------------------------------+
-    | Field            | Format | Units   | Description                  |
-    +==================+========+=========+==============================+
-    | ``dest_ip``      | string |         | Destination IP for           |
-    |                  |        |         | transmitted packets, in      |
-    |                  |        |         | dotted-quad format. Eg.      |
-    |                  |        |         | ``"10.0.0.1"``. Use          |
-    |                  |        |         | ``"0.0.0.0"`` to skip        |
-    |                  |        |         | sending packets. See         |
-    |                  |        |         | ``set_destination()``.       |
-    +------------------+--------+---------+------------------------------+
-    | ``dest_port``    | int    |         | UDP port to which packets    |
-    |                  |        |         | should be transmitted. See   |
-    |                  |        |         | ``set_destination()``.       |
-    +------------------+--------+---------+------------------------------+
-    | ``max_mbps``     | int    | Mbits/s | The maximum output data rate |
-    |                  |        |         | to allow before throttling.  |
-    |                  |        |         | Set to ``-1`` to send as     |
-    |                  |        |         | fast as possible. See        |
-    |                  |        |         | ``set_max_mbps()``.          |
-    +------------------+--------+---------+------------------------------+
+    .. table::
+        :widths: 20 10 10 60
+
+        +------------------+--------+---------+------------------------------+
+        | Field            | Format | Units   | Description                  |
+        +==================+========+=========+==============================+
+        | ``dest_ip``      | string |         | Destination IP for           |
+        |                  |        |         | transmitted packets, in      |
+        |                  |        |         | dotted-quad format. Eg.      |
+        |                  |        |         | ``"10.0.0.1"``. Use          |
+        |                  |        |         | ``"0.0.0.0"`` to skip        |
+        |                  |        |         | sending packets. See         |
+        |                  |        |         | ``set_destination()``.       |
+        +------------------+--------+---------+------------------------------+
+        | ``dest_port``    | int    |         | UDP port to which packets    |
+        |                  |        |         | should be transmitted. See   |
+        |                  |        |         | ``set_destination()``.       |
+        +------------------+--------+---------+------------------------------+
+        | ``max_mbps``     | int    | Mbits/s | The maximum output data rate |
+        |                  |        |         | to allow before throttling.  |
+        |                  |        |         | Set to ``-1`` to send as     |
+        |                  |        |         | fast as possible. See        |
+        |                  |        |         | ``set_max_mbps()``.          |
+        +------------------+--------+---------+------------------------------+
 
     """
     def set_destination(self, dest_ip, dest_port):
@@ -66,60 +69,71 @@ class CorrOutputFull(BlockControl):
         """
         Get correlator full visibility output stats:
 
-        +----------------------+--------+---------+----------------------------+
-        | Field                | Type   | Unit    | Description                |
-        +======================+========+=========+============================+
-        | ``curr_sample``      | int    |         | The index of the last      |
-        |                      |        |         | sample to be processed     |
-        +----------------------+--------+---------+----------------------------+
-        | ``dest_ip``          | string |         | Current destination IP     |
-        |                      |        |         | address, in dotted-quad    |
-        |                      |        |         | notation.                  |
-        +----------------------+--------+---------+----------------------------+
-        | ``dest_port``        | int    |         | Current destination UDP    |
-        |                      |        |         | port                       |
-        +----------------------+--------+---------+----------------------------+
-        | ``last_cmd_time``    | float  | UNIX    | The last time a command    |
-        |                      |        | time    | was received               |
-        +----------------------+--------+---------+----------------------------+
-        | ``last_update_time`` | float  | UNIX    | The last time settings     |
-        |                      |        | time    | from a command were loaded |
-        +----------------------+--------+---------+----------------------------+
-        | ``max_mbps``         | int    | Mbits/s | The current throttle       |
-        |                      |        |         | setpoint for output data   |
-        +----------------------+--------+---------+----------------------------+
-        | ``new_dest_ip``      | string |         | The commanded destination  |
-        |                      |        |         | IP address, in dotted-quad |
-        |                      |        |         | notation. This IP will be  |
-        |                      |        |         | loaded on the next         |
-        |                      |        |         | visibility matrix to be    |
-        |                      |        |         | transmitted if             |
-        |                      |        |         | ``update_pending`` is      |
-        |                      |        |         | True.                      |
-        +----------------------+--------+---------+----------------------------+
-        | ``new_dest_port``    | int    |         | The commanded destination  |
-        |                      |        |         | UDP port, to be loaded on  |
-        |                      |        |         | the next visibility matrix |
-        |                      |        |         | to be transmitted if       |
-        |                      |        |         | ``update_pending`` is True |
-        +----------------------+--------+---------+----------------------------+
-        | ``new_max_mbps``     | int    | Mbits/s | The commanded throttle     |
-        |                      |        |         | setpoint for output data,  |
-        |                      |        |         | to be loaded on the next   |
-        |                      |        |         | visibility matrix to be    |
-        |                      |        |         | transmitted if             |
-        |                      |        |         | ``update_pending`` is True |
-        +----------------------+--------+---------+----------------------------+
-        | ``output_gbps``      | float  | Gbits/s | Measured output data rate  |
-        |                      |        |         | for the last visibility    |
-        |                      |        |         | matrix                     |
-        +----------------------+--------+---------+----------------------------+
-        | ``update_pending``   | bool   |         | Flag indicating that the   |
-        |                      |        |         | IP/port/throttle settings  |
-        |                      |        |         | have changed and should be |
-        |                      |        |         | updated on the next        |
-        |                      |        |         | visibility matrix          |
-        +----------------------+--------+---------+----------------------------+
+        .. table::
+            :widths: 25 10 10 55
+
+            +----------------------+--------+---------+------------------------+
+            | Field                | Type   | Unit    | Description            |
+            +======================+========+=========+========================+
+            | ``curr_sample``      | int    |         | The index of the last  |
+            |                      |        |         | sample to be processed |
+            +----------------------+--------+---------+------------------------+
+            | ``dest_ip``          | string |         | Current destination IP |
+            |                      |        |         | address, in dotted-    |
+            |                      |        |         | quad notation.         |
+            +----------------------+--------+---------+------------------------+
+            | ``dest_port``        | int    |         | Current destination    |
+            |                      |        |         | UDP port               |
+            +----------------------+--------+---------+------------------------+
+            | ``last_cmd_time``    | float  | UNIX    | The last time a        |
+            |                      |        | time    | command was received   |
+            +----------------------+--------+---------+------------------------+
+            | ``last_update_time`` | float  | UNIX    | The last time settings |
+            |                      |        | time    | from a command were    |
+            |                      |        |         | loaded                 |
+            +----------------------+--------+---------+------------------------+
+            | ``max_mbps``         | int    | Mbits/s | The current throttle   |
+            |                      |        |         | setpoint for output    |
+            |                      |        |         | data                   |
+            +----------------------+--------+---------+------------------------+
+            | ``new_dest_ip``      | string |         | The commanded          |
+            |                      |        |         | destination IP         |
+            |                      |        |         | address, in dotted-    |
+            |                      |        |         | quad notation. This IP |
+            |                      |        |         | will be loaded on the  |
+            |                      |        |         | next visibility matrix |
+            |                      |        |         | to be transmitted if   |
+            |                      |        |         | ``update_pending`` is  |
+            |                      |        |         | True.                  |
+            +----------------------+--------+---------+------------------------+
+            | ``new_dest_port``    | int    |         | The commanded          |
+            |                      |        |         | destination UDP port,  |
+            |                      |        |         | to be loaded on the    |
+            |                      |        |         | next visibility matrix |
+            |                      |        |         | to be transmitted if   |
+            |                      |        |         | ``update_pending`` is  |
+            |                      |        |         | True                   |
+            +----------------------+--------+---------+------------------------+
+            | ``new_max_mbps``     | int    | Mbits/s | The commanded throttle |
+            |                      |        |         | setpoint for output    |
+            |                      |        |         | data, to be loaded on  |
+            |                      |        |         | the next visibility    |
+            |                      |        |         | matrix to be           |
+            |                      |        |         | transmitted if         |
+            |                      |        |         | ``update_pending`` is  |
+            |                      |        |         | True                   |
+            +----------------------+--------+---------+------------------------+
+            | ``output_gbps``      | float  | Gbits/s | Measured output data   |
+            |                      |        |         | rate for the last      |
+            |                      |        |         | visibility matrix      |
+            +----------------------+--------+---------+------------------------+
+            | ``update_pending``   | bool   |         | Flag indicating that   |
+            |                      |        |         | the IP/port/throttle   |
+            |                      |        |         | settings have changed  |
+            |                      |        |         | and should be updated  |
+            |                      |        |         | on the next visibility |
+            |                      |        |         | matrix                 |
+            +----------------------+--------+---------+------------------------+
 
         :return: Block status dictionary
         :rtype: dict

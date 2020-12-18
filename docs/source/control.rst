@@ -60,17 +60,15 @@ The full correlator visibility output packet stream is controlled by the
 Control
 +++++++
 
-.. autoclass:: lwa352_pipeline_control.blocks.corr_output_full_control.CorrOutputFull
+.. autoclass:: lwa352_pipeline_control.blocks.corr_output_full_control.CorrOutputFullControl
   :no-show-inheritance:
-  :no-members: get_status
+  :members:
+  :exclude-members: get_status
 
 Status
 ++++++
 
-.. autoclass:: lwa352_pipeline_control.blocks.corr_output_full_control.CorrOutputFull
-  :noindex:
-  :no-show-inheritance:
-  :members: get_status
+.. automethod:: lwa352_pipeline_control.blocks.corr_output_full_control.CorrOutputFullControl.get_status
 
 .. [1]
    See `etcd.io <etcd.io>`__

@@ -5,7 +5,7 @@ import logging
 
 from .etcd_control import EtcdCorrControl
 
-from .blocks.corr_output_full_control import CorrOutputFull
+from .blocks.corr_output_full_control import CorrOutputFullControl
 from .blocks.corr_output_part_control import CorrOutputPart
 from .blocks.corr_acc_control import CorrAcc
 from .blocks.corr_control import Corr
@@ -81,15 +81,15 @@ class Lwa352PipelineControl():
 
         args = [self.log, self.corr_interface, self.host, self.pipeline_id]
 
-        self.corr_output_full = CorrOutputFull(*args)
-        self.corr_output_part = CorrOutputPart(*args)
-        self.corr = Corr(*args)
-        self.corr_acc = CorrAcc(*args)
-        self.corr_subsel = CorrSubsel(*args)
-        self.triggered_dump = TriggeredDump(*args)
-        self.beamform = Beamform(*args)
-        self.beamform_output = BeamformOutput(*args)
-        self.beamform_vlbi_output = BeamformVlbiOutput(*args)
+        self.corr_output_full = CorrOutputFullControl(*args)
+        self.corr_output_part = CorrOutputPartControl(*args)
+        self.corr = CorrControl(*args)
+        self.corr_acc = CorrAccControl(*args)
+        self.corr_subsel = CorrSubselControl(*args)
+        self.triggered_dump = TriggeredDumpControl(*args)
+        self.beamform = BeamformControl(*args)
+        self.beamform_output = BeamformOutputControl(*args)
+        self.beamform_vlbi_output = BeamformVlbiOutputControl(*args)
         
 
 

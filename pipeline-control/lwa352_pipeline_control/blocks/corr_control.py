@@ -2,7 +2,7 @@ import time
 
 from .block_control_base import BlockControl
 
-class Corr(BlockControl):
+class CorrControl(BlockControl):
     def set_start_time(self, start_time):
         """
         Set the block's accumulation start time.
