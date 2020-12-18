@@ -183,8 +183,9 @@ class EtcdCorrControl():
 
         key = self._get_mon_key(host, pipeline, block, inst_id)
         val, meta = self.ec.get(key)
-        print(val, meta)
-        print(type(val), type(meta))
+        if val is None:
+            self.log.warning("Etcd key %s returned no data" % key)
+            return val
         val = json.loads(val)
         if user_only:
             return val.get("stats", {})

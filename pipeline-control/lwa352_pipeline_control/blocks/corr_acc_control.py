@@ -1,8 +1,8 @@
 import time
 
-from .corr_control import Corr
+from .corr_control import CorrControl
 
-class CorrAccControl(Corr):
+class CorrAccControl(CorrControl):
     def get_next_allowed_start(self, delay_s):
         status = self.get_status(user_only=False)
         sync_time = status['sync_time']
