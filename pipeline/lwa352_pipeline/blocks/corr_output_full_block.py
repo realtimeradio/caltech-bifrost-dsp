@@ -13,7 +13,7 @@ from bifrost.address import Address
 
 import os
 import time
-import simplejson as json
+import ujson as json
 import socket
 import struct
 import numpy as np
@@ -379,34 +379,11 @@ class CorrOutputFull(Block):
         else:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.setblocking(0)
-        self.dest_ip = "0.0.0.0"
-        self.new_dest_ip = "0.0.0.0"
-        self.dest_port = dest_port
-        self.new_dest_port = dest_port
-        self.max_mbps = -1
-        self.new_max_mbps = -1
-        self.update_pending = True
 
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decodes integration start time and accumulation length and
-        preps to update the pipeline at the end of the next integration.
-        """
-        v = json.loads(watchresponse.events[0].value)
-        if 'dest_ip' in v:
-            self.new_dest_ip = v['dest_ip']
-        if 'dest_port' in v:
-            self.new_dest_port = v['dest_port']
-        if 'max_mbps' in v:
-            self.new_max_mbps = v['max_mbps']
-        self.update_pending = True
-        self.stats.update({'new_dest_ip': self.new_dest_ip,
-                           'new_dest_port': self.new_dest_port,
-                           'new_max_mbps': self.new_max_mbps,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.define_command_key('dest_ip', type=str, initial_val='0.0.0.0')
+        self.define_command_key('dest_port', type=int, initial_val=dest_port)
+        self.define_command_key('max_mbps', type=int, initial_val=-1)
+        self.update_command_vals()
 
     def get_checkfile_corr(self, t):
         """
@@ -448,14 +425,14 @@ class CorrOutputFull(Block):
         for s0 in range(self.nstand):
             for s1 in range(s0, self.nstand):
                 header_dyn = struct.pack(">2I", s0, s1)
-                self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.dest_ip, self.dest_port))
-                if self.max_mbps > 0:
+                self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                if self.command_vals['max_mbps'] > 0:
                     block_bits_sent += pkt_payload_bits
                     # Apply throttle every 1MByte -- every >~100 packets
                     if block_bits_sent > 8000000:
                         block_elapsed = time.time() - block_start
                         # Minimum allowed time to satisfy max rate
-                        min_time = block_bits_sent / (1.e6 * self.max_mbps)
+                        min_time = block_bits_sent / (1.e6 * self.command_vals['max_mbps'])
                         delay = min_time - block_elapsed
                         if delay > 0:
                             time.sleep(delay)
@@ -464,8 +441,7 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, 8* self.dump_size / elapsed / 1e9))
-        self.stats.update({'output_gbps': gbps})
-        self.update_stats()
+        self.update_stats({'output_gbps': gbps})
 
     def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg):
         cpu_affinity.set_core(self.core)
@@ -485,13 +461,13 @@ class CorrOutputFull(Block):
             # reshape and send
             sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
             udt.send(desc, this_gulp_time, 0, i*(2*self.nstand + 1 - i) // 2 + i, 1, sdata)      
-            if self.max_mbps > 0:
+            if self.command_vals['max_mbps'] > 0:
                 block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
                 # Apply throttle every 1MByte -- every >~100 packets
                 if block_bits_sent > 8000000:
                     block_elapsed = time.time() - block_start
                     # Minimum allowed time to satisfy max rate
-                    min_time = block_bits_sent / (1.e6 * self.max_mbps)
+                    min_time = block_bits_sent / (1.e6 * self.command_vals['max_mbps'])
                     delay = min_time - block_elapsed
                     if delay > 0:
                         time.sleep(delay)
@@ -502,8 +478,7 @@ class CorrOutputFull(Block):
         elapsed = stop_time - start_time
         gbps = 8 * self.dump_size / elapsed / 1e9
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
-        self.stats.update({'output_gbps': gbps})
-        self.update_stats()
+        self.update_stats({'output_gbps': gbps})
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -511,8 +486,9 @@ class CorrOutputFull(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
-        udt = None
         for iseq in self.iring.read(guarantee=self.guarantee):
+            udt = None
+            self.update_pending = True # Reprocess commands on each new sequence
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
@@ -527,28 +503,22 @@ class CorrOutputFull(Block):
             if 'bl_is_conj' in ihdr:
                 self.bl_is_conj[...] = ihdr['bl_is_conj']
             for ispan in iseq.read(self.igulp_size):
+                if ispan.size < self.igulp_size:
+                    continue # skip last gulp
                 # Update destinations if necessary
                 if self.update_pending:
-                    self.dest_ip = self.new_dest_ip
-                    self.dest_port = self.new_dest_port
-                    self.max_mbps = self.new_max_mbps
-                    self.update_pending = False
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % (self.dest_ip, self.dest_port, self.max_mbps))
+                    self.update_command_vals()
+                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % 
+                                  (self.command_vals['dest_ip'], self.command_vals['dest_port'], self.command_vals['max_mbps']))
                     if self.use_cor_fmt:
                         if self.sock: del self.sock
                         if udt: del udt
                         self.sock = UDPSocket()
-                        self.sock.connect(Address(self.dest_ip, self.dest_port))
+                        self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
                         
                         udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                         desc = HeaderInfo()
-                    self.stats.update({'dest_ip': self.dest_ip,
-                                       'dest_port': self.dest_port,
-                                       'max_mbps': self.max_mbps,
-                                       'update_pending': self.update_pending,
-                                       'last_update_time': time.time()})
-                self.stats['curr_sample'] = this_gulp_time
-                self.update_stats()
+                self.update_stats({'curr_sample':this_gulp_time})
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
@@ -609,7 +579,7 @@ class CorrOutputFull(Block):
                     else:
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
-                if self.dest_ip != "0.0.0.0":
+                if self.command_vals['dest_ip'] != "0.0.0.0":
                     if self.use_cor_fmt:
                         self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
                     else:

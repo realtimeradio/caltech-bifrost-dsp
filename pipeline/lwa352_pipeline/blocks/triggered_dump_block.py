@@ -6,7 +6,7 @@ from bifrost.ring import WriteSpan
 from bifrost.packet_writer import DiskWriter, HeaderInfo
 
 import time
-import simplejson as json
+import ujson as json
 import numpy as np
 import os
 import mmap
@@ -159,30 +159,14 @@ class TriggeredDump(Block):
         self.ntime_gulp = ntime_gulp
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = self.ntime_gulp*nbyte_per_time
-        self.command = None
-        self.ntime_per_file = ntime_per_file
-        self.nfile = 1
-        self.dump_path = dump_path
         self.nbyte_per_time = nbyte_per_time
 
-    def _etcd_callback(self, watchresponse):
-        v = json.loads(watchresponse.events[0].value)
-        self.acquire_control_lock()
-        if 'command' in v and isinstance(v['command'], str):
-            if v['command'] in ['trigger', 'abort', 'stop']:
-                self.command = v['command']
-            else:
-                self.log.error("TRIGGERED DUMP >> Unknown command %s" % v['command'])
-        if 'ntime_per_file' in v and isinstance(v['ntime_per_file'], int):
-            self.ntime_per_file = v['ntime_per_file']
-        if 'nfile' in v and isinstance(v['nfile'], int):
-            self.nfile = v['nfile']
-        if 'dump_path' in v and isinstance(v['dump_path'], str):
-            if os.path.isdir(v['dump_path']):
-                self.dump_path = v['dump_path']
-            else:
-                self.log.error("TRIGGERED DUMP >> Path %s is not a valid directory" % v['dump_path'])
-        self.release_control_lock()
+        self.define_command_key('command', type=str,
+                                condition=lambda x: x in ['trigger', 'abort', 'stop'])
+        self.define_command_key('ntime_per_file', type=int, initial_val=ntime_per_file)
+        self.define_command_key('nfile', type=int, initial_val=1)
+        self.define_command_key('dump_path', type=str, initial_val=dump_path,
+                                condition=lambda x: os.path.isdir(x))
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -195,31 +179,27 @@ class TriggeredDump(Block):
         hinfo = mmap.mmap(-1, HEADER_SIZE)
         start = False
         last_trigger_time = None
-        dump_path = self.dump_path
+        dump_path = self.command_vals['dump_path']
         ntime_per_file = 0
         nfile = 1
         this_time = 0
         filename = None
         ofile = None
         while not self.iring.writing_ended():
-            # parse trigger
-            if self.command == 'trigger':
+            # Check trigger every few ms
+            time.sleep(0.05)
+            self.update_command_vals()
+            if self.command_vals['command'] == 'trigger':
                 self.acquire_control_lock()
-                ntime_per_file = self.ntime_per_file
-                nfile = self.nfile
-                dump_path = self.dump_path
-                self.command = None
-                self.release_control_lock()
+                ntime_per_file = self.command_vals['ntime_per_file']
+                nfile = self.command_vals['nfile']
+                dump_path = self.command_vals['dump_path']
+                self.command_vals['trigger'] = None # reset the trigger
                 last_trigger_time = time.time()
                 filename = os.path.join(dump_path, "lwa-dump-%.2f.tbf" % last_trigger_time)
-                self.stats.update({'last_trigger_time' : last_trigger_time,
-                                   'last_command' : 'trigger',
-                                   'ntime_per_file' : ntime_per_file,
-                                   'nfile' : nfile,
-                                   'dump_path' : dump_path,
+                self.update_stats({'last_trigger_time' : last_trigger_time,
                                    'state' : 'triggering'})
                 start = True
-                self.update_stats()
             if start:
                 # Once we make it out of here, go back to idle
                 start = False
@@ -249,8 +229,7 @@ class TriggeredDump(Block):
                             # We can only write to such a file with 512-byte aligned
                             # access. Bifrost should guarantee this if it was compiled with
                             # such an option
-                            self.stats.update({'status' : 'writing'})
-                            self.update_stats()
+                            self.update_stats({'status' : 'writing'})
                             self.log.info("TRIGGERED DUMP >> Opening %s" % (filename + '.%d' % file_num))
                             file_ndumped = 0
                             ofile = os.open(
@@ -268,20 +247,17 @@ class TriggeredDump(Block):
                         total_bytes += self.igulp_size
                         if self.command == 'stop':
                             self.log.info("TRIGGERED DUMP >> Stopped")
-                            self.stats.update({'last_command' : 'stop',
+                            self.update_stats({'last_command' : 'stop',
                                                'status'       : 'stopped'})
-                            self.update_stats()
                             break
                         if self.command == 'abort':
                             self.log.info("TRIGGERED DUMP >> Aborted")
-                            self.stats.update({'last_command' : 'abort',
+                            self.update_stats({'last_command' : 'abort',
                                                'status'       : 'aborted'})
-                            self.update_stats()
                             break
                         if ispan.size < self.igulp_size:
                             self.log.info("TRIGGERED DUMP >> Stopped because stream ended")
-                            self.stats.update({'status'       : 'stream end'})
-                            self.update_stats()
+                            self.update_stats({'status'       : 'stream end'})
                             # ignore final gulp and stop
                             break
                     # Try closing
@@ -292,5 +268,4 @@ class TriggeredDump(Block):
                     elapsed = stop_time - start_time
                     gbytesps = total_bytes / 1e9 / elapsed
                     self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
-                    self.stats.update({'status' : 'finished'})
-                    self.update_stats()
+                    self.update_stats({'status' : 'finished'})

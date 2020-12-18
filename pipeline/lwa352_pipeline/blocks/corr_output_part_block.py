@@ -9,7 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
-import simplejson as json
+import ujson as json
 import socket
 import struct
 import numpy as np
@@ -239,30 +239,9 @@ class CorrOutputPart(Block):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.settimeout(0.01)
 
-        self.dest_ip = "0.0.0.0"
-        self.new_dest_ip = "0.0.0.0"
-        self.dest_port = dest_port
-        self.new_dest_port = dest_port
-        self.update_pending = True
-
-
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decodes integration start time and accumulation length and
-        preps to update the pipeline at the end of the next integration.
-        """
-        v = json.loads(watchresponse.events[0].value)
-        if 'dest_ip' in v:
-            self.new_dest_ip = v['dest_ip']
-        if 'dest_port' in v:
-            self.new_dest_port = v['dest_port']
-        self.update_pending = True
-        self.stats.update({'new_dest_ip': self.new_dest_ip,
-                           'new_dest_port': self.new_dest_port,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.define_command_key('dest_ip', type=str, initial_val='0.0.0.0')
+        self.define_command_key('dest_port', type=int, initial_val=dest_port)
+        self.update_command_vals()
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -288,19 +267,14 @@ class CorrOutputPart(Block):
             for ispan in iseq.read(igulp_size):
                 # Update destinations if necessary
                 if self.update_pending:
-                    self.dest_ip = self.new_dest_ip
-                    self.dest_port = self.new_dest_port
-                    self.update_pending = False
-                    self.log.info("CORR PART OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
-                    self.stats.update({'dest_ip': self.dest_ip,
-                                       'dest_port': self.dest_port,
-                                       'update_pending': self.update_pending,
-                                       'last_update_time': time.time()})
+                    self.update_command_vals()
+                    self.log.info("CORR PART OUTPUT >> Updating destination to %s:%s" %
+                                  (self.command_vals['dest_ip'], self.command_vals['dest_port']))
                     if self.use_cor_fmt:
                         if self.sock: del self.sock
                         if udt: del udt
                         self.sock = UDPSocket()
-                        self.sock.connect(Address(self.dest_ip, self.dest_port))
+                        self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
                         
                         udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                         desc = HeaderInfo()
@@ -309,7 +283,7 @@ class CorrOutputPart(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                if self.dest_ip != "0.0.0.0":
+                if self.command_vals['dest_ip'] != "0.0.0.0":
                     idata = ispan.data_view('i32').reshape([nchan, nvis, 2]).transpose([1,0,2]) # baseline x chan x complexity
                     dout[...] = idata;
                     if self.use_cor_fmt:
@@ -328,7 +302,8 @@ class CorrOutputPart(Block):
                                                  ) + baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet].tobytes()
                             #print(baselines_flat[vn*4*self.nvis_per_packet : (vn+1)*4*self.nvis_per_packet])
                             #print(dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet])
-                            self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].tobytes(), (self.dest_ip, self.dest_port))
+                            self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].tobytes(),
+                                             (self.command_vals['dest_ip'], self.command_vals['dest_port']))
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

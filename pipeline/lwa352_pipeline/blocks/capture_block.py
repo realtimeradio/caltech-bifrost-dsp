@@ -3,7 +3,7 @@ import bifrost.affinity as cpu_affinity
 from bifrost.packet_capture import PacketCaptureCallback, UDPCapture, UDPVerbsCapture
 
 import time
-import simplejson as json
+import ujson as json
 import threading
 import ctypes
 import numpy as np

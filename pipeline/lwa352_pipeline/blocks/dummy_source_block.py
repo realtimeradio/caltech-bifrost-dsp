@@ -4,7 +4,7 @@ import bifrost.affinity as cpu_affinity
 
 import os
 import time
-import simplejson as json
+import ujson as json
 import threading
 import numpy as np
 

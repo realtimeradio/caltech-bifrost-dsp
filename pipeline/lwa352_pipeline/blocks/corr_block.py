@@ -8,7 +8,7 @@ from bifrost.ring import WriteSpan
 from bifrost.device import set_device as BFSetGPU
 
 import time
-import simplejson as json
+import ujson as json
 import numpy as np
 
 from .block_base import Block
@@ -240,15 +240,11 @@ class Corr(Block):
         self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
         self.ogulp_size = self.matlen * 8 # complex64
 
-        self.new_start_time = autostartat
-        self.new_acc_len = acc_len
-        self.update_pending=True
-        self.stats.update({'xgpu_acc_len': self.ntime_gulp,
-                           'new_acc_len': self.new_acc_len,
-                           'new_start_sample': self.new_start_time,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.define_command_key('start_time', type=int, initial_val=autostartat,
+                                condition=lambda x: (x == -1) or (x % self.ntime_gulp == 0))
+        self.define_command_key('acc_len', type=int, initial_val=acc_len,
+                                condition=lambda x: x % self.ntime_gulp == 0)
+        self.update_stats({'xgpu_acc_len': self.ntime_gulp})
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
@@ -318,35 +314,6 @@ class Corr(Block):
                     ok = ok and np.all(din[0,i0,i1,:]==gpu_reorder[0,i0,i1,:])
         print("MATCH?", ok)
 
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decodes integration start time and accumulation length and
-        preps to update the pipeline at the end of the next integration.
-        """
-        cpu_affinity.set_core(self.core)
-        v = json.loads(watchresponse.events[0].value)
-        self.acquire_control_lock()
-        if 'acc_len' in v and isinstance(v['acc_len'], int):
-            self.log.info("CORR: received new acc len: %d" % v['acc_len'])
-            if v['acc_len'] % self.ntime_gulp != 0:
-                self.log.error("CORR: Acc length must be a multiple of %d" % self.ntime_gulp)
-            else:
-                self.new_acc_len = v['acc_len']
-        if 'start_time' in v and isinstance(v['start_time'], int):
-            self.log.info("CORR: received new start time: %d" % v['start_time'])
-            if (v['start_time'] != -1) and (v['start_time'] % self.ntime_gulp != 0):
-                self.log.error("CORR: Start time must be a multiple of %d" % self.ntime_gulp)
-            else:
-                self.new_start_time = v['start_time']
-        self.update_pending = True
-        self.stats.update({'new_acc_len': self.new_acc_len,
-                           'new_start_sample': self.new_start_time,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
-        self.release_control_lock()
-
     def update_baseline_indices(self, ant_to_input):
         """
         Using a map of stand,pol -> correlator ID, create an array mapping
@@ -374,15 +341,16 @@ class Corr(Block):
 
         self.oring.resize(self.ogulp_size)
         time_tag = 1
+        self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
+                process_time = 0
                 oseq = None
                 ospan = None
                 start = False
-                self.acquire_control_lock()
+                # Reload commands on each new sequence
                 self.update_pending = True
-                self.release_control_lock()
                 self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
                 this_gulp_time = ihdr['seq0']
@@ -404,26 +372,19 @@ class Corr(Block):
                 # ohdr.update({'ant_to_bl_id': self.antpol_to_bl.tolist(), 'bl_is_conj': self.bl_is_conj.tolist()})
                 for ispan in iseq.read(self.igulp_size):
                     if self.update_pending:
-                        self.acquire_control_lock()
-                        start_time = self.new_start_time
-                        acc_len = self.new_acc_len
+                        self.update_command_vals()
                         # Use start_time = -1 as a special condition to start on the next sample
                         # which is a multiple of the accumulation length
-                        if start_time == -1:
+                        acc_len = self.command_vals['acc_len']
+                        if self.command_vals['start_time'] == -1:
                             start_time = (this_gulp_time - (this_gulp_time % acc_len) + acc_len)
+                        else:
+                            start_time = self.command_vals['start_time']
                         start = False
-                        self.log.info("CORR >> New start time set to %d. Accumulating %d samples" % (self.new_start_time, self.new_acc_len))
-                        self.update_pending = False
-                        self.release_control_lock()
+                        self.log.info("CORR >> New start time set to %d. Accumulating %d samples" % (start_time, acc_len))
                         ohdr['acc_len'] = acc_len
                         ohdr['seq0'] = start_time
-                        self.stats.update({'acc_len': acc_len,
-                                           'start_sample': start_time,
-                                           'curr_sample': this_gulp_time,
-                                           'update_pending': self.update_pending,
-                                           'last_update_time': time.time()})
-                    self.stats.update({'curr_sample': this_gulp_time})
-                    self.update_stats()
+                    self.update_stats({'curr_sample': this_gulp_time})
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
                         self.log.info("CORR >> Start time %d reached." % start_time)
@@ -437,11 +398,15 @@ class Corr(Block):
                         oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                         time_tag += 1
                     if not start:
+                        self.update_stats({'state': 'waiting'})
                         this_gulp_time += self.ntime_gulp
                         continue
+                    self.update_stats({'state': 'running'})
                     # Use acc_len = 0 as a special stop condition
                     if acc_len == 0:
+                        self.update_stats({'state': 'stopped'})
                         if oseq: oseq.end()
+                        oseq = None
                         start = False
 
                     curr_time = time.time()
@@ -461,19 +426,18 @@ class Corr(Block):
                         test_out += self._test(ispan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                     _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(this_gulp_time==last))
                     curr_time = time.time()
-                    process_time = curr_time - prev_time
+                    process_time += curr_time - prev_time
                     prev_time = curr_time
                     if this_gulp_time == last:
                         if self.test:
                             self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                         ospan.close()
-                        throughput_gbps = 8*self.igulp_size / process_time / 1e9
+                        throughput_gbps = 8 * acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / process_time / 1e9
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
                                                   'gbps': throughput_gbps})
-                        self.stats.update({'last_end_sample': this_gulp_time, 'throughput': throughput_gbps})
-                        self.update_stats()
+                        self.update_stats({'last_end_sample': this_gulp_time, 'throughput': throughput_gbps})
                         process_time = 0
                         # Update integration boundary markers
                         first = last + self.ntime_gulp

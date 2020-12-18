@@ -9,7 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
-import simplejson as json
+import ujson as json
 import numpy as np
 
 from .block_base import Block
@@ -187,34 +187,8 @@ class CorrAcc(Block):
         self.accdata = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda')
         self.bfbf = LinAlg()
 
-        self.new_start_time = autostartat
-        self.new_acc_len = acc_len
-        self.update_pending=True
-        self.stats.update({'new_acc_len': self.new_acc_len,
-                           'new_start_sample': self.new_start_time,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
-
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decodes integration start time and accumulation length and
-        preps to update the pipeline at the end of the next integration.
-        """
-        v = json.loads(watchresponse.events[0].value)
-        self.acquire_control_lock()
-        if 'start_time' in v and isinstance(v['start_time'], int):
-            self.new_start_time = v['start_time']
-        if 'acc_len' in v and isinstance(v['acc_len'], int):
-            self.new_acc_len = v['acc_len']
-        self.update_pending = True
-        self.release_control_lock()
-        self.stats.update({'new_acc_len': self.new_acc_len,
-                           'new_start_sample': self.new_start_time,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.define_command_key('start_time', type=int, initial_val=autostartat)
+        self.define_command_key('acc_len', type=int, initial_val=acc_len)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -229,9 +203,12 @@ class CorrAcc(Block):
         start = False
         process_time = 0
         time_tag = 1
+        self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
+                # Reload commands on each new sequence
+                self.update_pending = True
                 ihdr = json.loads(iseq.header.tostring())
                 ohdr = ihdr.copy()
                 this_gulp_time = ihdr['seq0']
@@ -240,23 +217,19 @@ class CorrAcc(Block):
                 upstream_start_time = this_gulp_time
                 self.sequence_proclog.update(ohdr)
                 for ispan in iseq.read(self.igulp_size):
+                    if ispan.size < self.igulp_size:
+                        continue # skip last gulp
                     if self.update_pending:
-                        self.acquire_control_lock()
-                        start_time = self.new_start_time
-                        acc_len = self.new_acc_len
+                        self.update_command_vals()
+                        acc_len = self.command_vals['acc_len']
                         # Use start_time = -1 as a special condition to start on the next sample
-                        if start_time == -1:
+                        if self.command_vals['start_time'] == -1:
                             start_time = this_gulp_time
+                        else:
+                            start_time = self.command_vals['start_time']
                         start = False
-                        self.log.info("CORRACC >> New start time at %d. Accumulation: %d samples" % (self.new_start_time, self.new_acc_len))
+                        self.log.info("CORRACC >> New start time at %d. Accumulation: %d samples" % (start_time, acc_len))
                         self.update_pending = False
-                        self.stats.update({'acc_len': acc_len,
-                                           'start_sample': start_time,
-                                           'curr_sample': this_gulp_time,
-                                           'update_pending': self.update_pending,
-                                           'last_update_time': time.time()})
-                        self.update_stats()
-                        self.release_control_lock()
                         if acc_len % upstream_acc_len != 0:
                             self.log.error("CORRACC >> Requested acc_len %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
                         if acc_len != 0 and ((start_time - upstream_start_time) % upstream_acc_len != 0):
@@ -267,7 +240,9 @@ class CorrAcc(Block):
                     self.update_stats()
                     # Use acc_len = 0 as a special stop condition
                     if acc_len == 0:
+                        self.update_stats({'state': 'stopped'})
                         if oseq: oseq.end()
+                        oseq = None
                         start = False
                         this_gulp_time += upstream_acc_len
                         continue
@@ -290,8 +265,11 @@ class CorrAcc(Block):
 
                     # If we're still waiting for a start, spin the wheels
                     if not start:
+                        self.update_stats({'state': 'waiting'})
                         this_gulp_time += upstream_acc_len
                         continue
+
+                    self.update_stats({'state': 'running'})
 
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
@@ -325,8 +303,7 @@ class CorrAcc(Block):
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,})
-                        self.stats.update({'last_end_sample': this_gulp_time})
-                        self.update_stats()
+                        self.update_stats({'last_end_sample': this_gulp_time})
                         process_time = 0
                         # Update integration boundary markers
                         first = last + upstream_acc_len

@@ -9,7 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
-import simplejson as json
+import ujson as json
 import numpy as np
 
 from .block_base import Block
@@ -148,7 +148,7 @@ class CorrSubsel(Block):
         +------------------+--------+---------+------------------------------+
         | Field            | Format | Units   | Description                  |
         +==================+========+=========+==============================+
-        | ``subsel``       | 3D     |         | A list of baselines for      |
+        | ``baselines``    | 3D     |         | A list of baselines for      |
         |                  | list   |         | subselection. This field     |
         |                  | of int |         | should be provided as a      |
         |                  |        |         | multidimensional list with   |
@@ -207,8 +207,6 @@ class CorrSubsel(Block):
         # if the size changed. Leave static for now, which is all the requirements call for.
         self._subsel      = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
         self._subsel_next = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda_host')
-        self._baselines = np.zeros([self.nvis_out, 2, 2], dtype=np.int32)
-        self._baselines_next = np.zeros([self.nvis_out, 2, 2], dtype=np.int32)
         self._conj      = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda')
         self._conj_next = BFArray(shape=[self.nvis_out], dtype='i32', space='cuda_host')
 
@@ -227,47 +225,27 @@ class CorrSubsel(Block):
         # update subselection map to a default initial value of
         # pol 0 autos
         # This can't be called until the bl_is_conj and antpol_to_bl maps have been set above
-        self.update_subsel([[[i % nstand,0], [i % nstand,0]] for i in range(self.nvis_out)])
-        
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run when the etcd baseline order key is updated.
-        Json-decodes the value of the etcd key, and calls update_subsel with
-        this list of baseline indices.
-        """
-        v = json.loads(watchresponse.events[0].value)
-        if 'subsel' not in v or not isinstance(v['subsel'], list):
-            self.log.error("CORR SUBSEL >> Incorrect or missing subsel")
-        else:
-            self.update_subsel(v['subsel'])
+        subsel = [[[i % nstand,0], [i % nstand,0]] for i in range(self.nvis_out)]
 
+        self.define_command_key('baselines', type=list, initial_val=subsel,
+                                condition=lambda x: len(x) == self.nvis_out)
+        # Load the subselection indices
+        self.update_subsel(subsel)
+        
     def update_subsel(self, baselines):
         """
         Update the baseline index list which should be subselected.
         Updates are not applied immediately, but are transferred to the
         GPU at the end of the current data block.
         """
-        if len(baselines) != self.nvis_out:
-            self.log.error("Tried to update baseline subselection with an array of length %d" % len(baselines))
-            return
-        else:
-            self.acquire_control_lock()
-            self._baselines_next[...] = baselines
-            for v in range(self.nvis_out):
-                i0, i1 = baselines[v]
-                s0, p0 = i0
-                s1, p1 = i1
-                # index as S0, S1, P0, P1
-                self._subsel_next.data[v] = self._antpol_to_bl[s0, s1, p0, p1]
-                self._conj_next.data[v] = self._bl_is_conj[s0, s1, p0, p1]
-            self._subsel_pending = True
-            self.stats.update({'new_subsel': self._subsel_next,
-                               'new_baselines': self._baselines_next,
-                               'update_pending': self._subsel_pending,
-                               'last_cmd_time': time.time()})
-            self.update_stats()
-            self.release_control_lock()
-            self.log.info("CORR SUBSEL >> New subselect map received")
+        cpu_affinity.set_core(self.core)
+        for v in range(self.nvis_out):
+            i0, i1 = baselines[v]
+            s0, p0 = i0
+            s1, p1 = i1
+            # index as S0, S1, P0, P1
+            self._subsel_next.data[v] = self._antpol_to_bl[s0, s1, p0, p1]
+            self._conj_next.data[v] = self._bl_is_conj[s0, s1, p0, p1]
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -294,21 +272,13 @@ class CorrSubsel(Block):
                 chan_width = ihdr['bw_hz'] / ihdr['nchan']
                 ohdr['sfreq'] = (ihdr['sfreq'] + ((self.nchan_sum - 1) * chan_width)) / self.nchan_sum
                 # On a start of sequence, always grab new subselection
-                self.acquire_control_lock()
                 self.log.info("Updating baseline subselection indices")
+                self.update_command_vals()
+                self.update_subsel(self.command_vals['baselines'])
                 # copy to GPU
-                #self._subsel[...] = self._subsel_next
-                #self._conj[...] = self._conj_next
                 copy_array(self._subsel, self._subsel_next)
                 copy_array(self._conj, self._conj_next)
-                self._baselines[...] = self._baselines_next
-                self.stats.update({'subsel': self._subsel_next,
-                                   'baselines': self._baselines_next,
-                                   'update_pending': False,
-                                   'last_update_time': time.time()})
-                ohdr['baselines'] = self._baselines.tolist()
-                self.update_stats()
-                self.release_control_lock()
+                ohdr['baselines'] = self.command_vals['baselines']
                 ohdr_str = json.dumps(ohdr)
                 oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                 time_tag += 1
@@ -318,9 +288,6 @@ class CorrSubsel(Block):
                     prev_time = curr_time
                     self.log.debug("Grabbing subselection")
                     idata = ispan.data_view('ci32').reshape(self.matlen)
-                    self.acquire_control_lock()
-                    self._subsel_pending = False
-                    self.release_control_lock()
                     with oseq.reserve(self.ogulp_size) as ospan:
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
@@ -344,17 +311,14 @@ class CorrSubsel(Block):
                     this_gulp_time += acc_len
                     # If a baseline change is pending start a new sequence
                     # with an updated header
-                    if self._subsel_pending:
+                    if self.update_pending:
                         oseq.end()
-                        self.acquire_control_lock()
                         self.log.info("Updating baseline subselection indices")
-                        self._subsel[...] = self._subsel_next
-                        ohdr['baselines'] = self._baselines.tolist()
-                        self.stats.update({'subsel': self._subsel_next,
-                                           'update_pending': False,
-                                           'last_update_time': time.time()})
-                        self.release_control_lock()
-                        self.update_stats()
+                        self.update_command_vals()
+                        self.udpate_subsel(self.command_vals['baselines'])
+                        copy_array(self._subsel, self._subsel_next)
+                        copy_array(self._conj, self._conj_next)
+                        ohdr['baselines'] = self.command_vals['baselines']
                         #update time tag based on what has already been processed
                         ohdr['seq0'] = this_gulp_time
                         ohdr_str = json.dumps(ohdr)

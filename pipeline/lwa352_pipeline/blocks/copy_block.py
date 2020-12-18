@@ -9,7 +9,7 @@ from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
 
 import time
-import simplejson as json
+import ujson as json
 import numpy as np
 
 from .block_base import Block

@@ -13,7 +13,7 @@ from bifrost.packet_writer import HeaderInfo, DiskWriter, UDPTransmit
 
 import os
 import time
-import simplejson as json
+import ujson as json
 import socket
 import struct
 import numpy as np
