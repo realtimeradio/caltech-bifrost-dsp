@@ -41,13 +41,15 @@ if len(sys.argv) > 2:
 
 seq_stat_period = 3e3
 tick = 0
+sync_time = int(time.time())
+print(sync_time, hex(sync_time))
 while(True):
     for chan_block_id in range(nchan_blocks):
        for pol in range(npol_blocks):
-           header = struct.pack('>QLHHHHLLL', seq, magic, npol, npol_total, nchan, nchan_total, chan_block_id, chan_block_id*nchan, pol)
+           header = struct.pack('>QLHHHHLLL', seq, sync_time, npol, npol_total, nchan, nchan_total, chan_block_id, chan_block_id*nchan, pol)
            data = header + payload
            sock.sendto(data, (sys.argv[1], port))
-           #time.sleep(0.00001)
+           #time.sleep(0.0001)
     seq += 1
     if seq % seq_stat_period == 0:
         tock = time.time()
