@@ -10,6 +10,12 @@ if os.path.isfile(desc_file):
     with open(desc_file, "r") as fh:
         long_description = fh.read()
 
+req_file = "requirements.txt"
+install_requires = []
+if os.path.isfile(req_file):
+    with open(req_file, "r") as fh:
+        install_requires = fh.read().splitlines()
+
 setuptools.setup(
     name="lwa352-pipeline-control",
     version=VERSION,
@@ -27,5 +33,6 @@ setuptools.setup(
         "Operating System :: Ubuntu 18.04",
     ],
     python_requires='>=3.5',
+    install_requires=install_requires,
 )
 
