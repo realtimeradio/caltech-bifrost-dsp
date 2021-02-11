@@ -175,9 +175,9 @@ class Block(object):
         
         if initial_val:
             if type:
-                assert isinstance(initial_val, type), "Initial value type check fail!"
+                assert isinstance(initial_val, type), "%s: key %s: Initial value type check fail!" % (self.name, name)
             if condition:
-                assert condition(initial_val), "Intial value failed condition check!"
+                assert condition(initial_val), "%s: key %s: Intial value failed condition check! (%s)" % (self.name, name, condition)
         self.command_vals[name] = initial_val
         self._pending_command_vals[name] = initial_val
         self._command_types[name] = type
