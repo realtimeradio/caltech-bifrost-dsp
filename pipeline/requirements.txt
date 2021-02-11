@@ -1,0 +1,3 @@
+etcd3
+numpy
+ujson
