@@ -153,7 +153,7 @@ class TriggeredDump(Block):
     """
 
     def __init__(self, log, iring, ntime_gulp=2500, ntime_per_file=1000000,
-                 guarantee=True, core=-1, nbyte_per_time=192*352*2, etcd_client=None, dump_path='/fastdata'):
+                 guarantee=True, core=-1, nbyte_per_time=192*352*2, etcd_client=None, dump_path='/tmp'):
 
         super(TriggeredDump, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
         self.ntime_gulp = ntime_gulp
