@@ -19,6 +19,11 @@ class CorrOutputFullControl(BlockControl):
         |                  |        |         | sending packets. See         |
         |                  |        |         | ``set_destination()``.       |
         +------------------+--------+---------+------------------------------+
+        | ``dest_file``    | string |         | If not `""`, overrides       |
+        |                  |        |         | ``dest_ip`` and causes the   |
+        |                  |        |         | output data to be written to |
+        |                  |        |         | the supplied file            |
+        +------------------+--------+---------+------------------------------+
         | ``dest_port``    | int    |         | UDP port to which packets    |
         |                  |        |         | should be transmitted. See   |
         |                  |        |         | ``set_destination()``.       |
@@ -31,7 +36,7 @@ class CorrOutputFullControl(BlockControl):
         +------------------+--------+---------+------------------------------+
 
     """
-    def set_destination(self, dest_ip, dest_port):
+    def set_destination(self, dest_ip="0.0.0.0", dest_port=10000, dest_file=""):
         """
         Set the destination IP and UDP port for correlator
         packets, using the ``dest_ip`` and ``dest_port`` keys.
@@ -43,13 +48,19 @@ class CorrOutputFullControl(BlockControl):
         :param dest_port: Desired destination UDP port
         :type dest_port: int
 
+        :param dest_file: If provided, write data output packets to this
+            file, rather than the destination IP. Useful for testing.
+        :type dest_file: str
+
         """
 
         assert isinstance(dest_ip, str)
         assert isinstance(dest_port, int)
+        assert isinstance(dest_file, str)
         self._send_command(
             dest_ip = dest_ip,
             dest_port = dest_port,
+            dest_file = dest_file,
         )
 
     def set_max_mbps(self, max_mbps):

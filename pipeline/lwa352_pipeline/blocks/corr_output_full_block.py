@@ -178,6 +178,11 @@ class CorrOutputFull(Block):
         |                  |        |         | ``"0.0.0.0"`` to skip        |
         |                  |        |         | sending packets              |
         +------------------+--------+---------+------------------------------+
+        | ``dest_file``    | string |         | If not `""`, overrides       |
+        |                  |        |         | ``dest_ip`` and causes the   |
+        |                  |        |         | output data to be written to |
+        |                  |        |         | the supplied file            |
+        +------------------+--------+---------+------------------------------+
         | ``dest_port``    | int    |         | UDP port to which packets    |
         |                  |        |         | should be transmitted.       |
         +------------------+--------+---------+------------------------------+
@@ -255,14 +260,13 @@ class CorrOutputFull(Block):
         |               |            |                | stand_j conjugated. Data are a              |
         |               |            |                | multidimensional array of 32-bit integers,  |
         |               |            |                | with dimensions ``[nchans, npols, npols,    |
-        |               |            |                | nchans, 2]``. The first axis is frequency   |
-        |               |            |                | channel. The second axis is the             |
-        |               |            |                | polatizaioon of the antenna at stand_i. The |
-        |               |            |                | second axis is the polarization of the      |
-        |               |            |                | antenna at stand_j.| The fourth axis is     |
-        |               |            |                | complexity, with index 0 the real part of   |
-        |               |            |                | the visibility, and index 1 the imaginary   |
-        |               |            |                | part.                                       |
+        |               |            |                | 2]``. The first axis is frequency channel.  |
+        |               |            |                | The second axis is the polatizaion of the   |
+        |               |            |                | antenna at stand_i. The second axis is the  |
+        |               |            |                | polarization of the antenna at stand_j.|    |
+        |               |            |                | The fourth axis is complexity, with index 0 |
+        |               |            |                | the real part of the visibility, and index  |
+        |               |            |                | 1 the imaginary part.                       |
         +---------------+------------+----------------+---------------------------------------------+
 
     If ``use_cor_fmt=False``, this block outputs a stream of UDP packets, with each comprising
@@ -374,6 +378,7 @@ class CorrOutputFull(Block):
             self.log.info("CORR OUTPUT >> Checkfile length: %d bytes" % self.checkfile_nbytes)
             self.log.info("CORR OUTPUT >> Checkfile accumulation length: %d" % self.checkfile_acc_len)
         self.use_cor_fmt = use_cor_fmt
+        self.output_file = None
         if self.use_cor_fmt:
             self.sock = None
         else:
@@ -381,6 +386,7 @@ class CorrOutputFull(Block):
             self.sock.setblocking(0)
 
         self.define_command_key('dest_ip', type=str, initial_val='0.0.0.0')
+        self.define_command_key('dest_file', type=str, initial_val='')
         self.define_command_key('dest_port', type=int, initial_val=dest_port)
         self.define_command_key('max_mbps', type=int, initial_val=-1)
         self.update_command_vals()
@@ -508,15 +514,29 @@ class CorrOutputFull(Block):
                 # Update destinations if necessary
                 if self.update_pending:
                     self.update_command_vals()
-                    self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % 
-                                  (self.command_vals['dest_ip'], self.command_vals['dest_port'], self.command_vals['max_mbps']))
+                    if self.command_vals['dest_file'] is not None:
+                        self.log.info("CORR OUTPUT >> Updating destination to file %s (max Mbps %.1f ns)" % 
+                                      (self.command_vals['dest_file'], self.command_vals['max_mbps']))
+                    else:
+                        self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % 
+                                      (self.command_vals['dest_ip'], self.command_vals['dest_port'], self.command_vals['max_mbps']))
                     if self.use_cor_fmt:
                         if self.sock: del self.sock
                         if udt: del udt
-                        self.sock = UDPSocket()
-                        self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                        
-                        udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+                        if self.output_file: self.output_file.close()
+                        if self.command_vals['dest_file'] != "":
+                            try:
+                                 filename = self.command_vals['dest_file']
+                                 self.log.info("CORR OUTPUT >> Trying to open file %s for output" % filename)
+                                 self.output_file = open(filename, "wb")
+                            except:
+                                 self.log.error("CORR OUTPUT >> Tried to open file %s for output but failed" % filename)
+                            self.sock = None
+                            udt = DiskWriter('cor_%i' % self.nchan, self.output_file, core=self.core)
+                        else:
+                            self.sock = UDPSocket()
+                            self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                            udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                         desc = HeaderInfo()
                 self.update_stats({'curr_sample':this_gulp_time})
                 curr_time = time.time()
@@ -579,7 +599,7 @@ class CorrOutputFull(Block):
                     else:
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
-                if self.command_vals['dest_ip'] != "0.0.0.0":
+                if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     if self.use_cor_fmt:
                         self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
                     else:
