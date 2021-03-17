@@ -134,7 +134,7 @@ class DummySource(object):
         self.core = core
         self.nchan = nchan
         self.npol = npol
-        self.nstand = 352
+        self.nstand = nstand
         self.ninputs = nstand * npol
         self.skip_write = skip_write
         self.target_throughput = target_throughput
