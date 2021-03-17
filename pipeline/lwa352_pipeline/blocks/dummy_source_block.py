@@ -234,6 +234,8 @@ class DummySource(object):
         acquire_time = 0 # this block doesn't have an input ring
         gbps = 0
         extra_delay = 0
+        total_bytes = 0
+        total_time = 0
         with self.oring.begin_writing() as oring:
             tick = time.time()
             ohdr_str = json.dumps(hdr)
@@ -262,7 +264,10 @@ class DummySource(object):
                         tock = time.time()
                         dt = tock - tick
                         gbps = 8*bytes_per_report / dt / 1e9
-                        self.log.info('%d: Sent %d bytes in %.2f seconds (%.2f Gb/s)' % (time_tag // REPORT_PERIOD, bytes_per_report, dt, gbps))
+                        total_bytes += bytes_per_report
+                        total_time += dt
+                        average_gbps = 8*total_bytes / total_time / 1e9
+                        self.log.info('%d: Sent %d bytes in %.2f seconds (%.2f Gb/s; average %.2f)' % (time_tag // REPORT_PERIOD, bytes_per_report, dt, gbps, average_gbps))
                         target_time = 8*bytes_per_report / self.target_throughput / 1e9
                         extra_delay = target_time - dt + extra_delay
                         tick = tock
