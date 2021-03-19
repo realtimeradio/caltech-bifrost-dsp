@@ -7,3 +7,6 @@
 [submodule "romein-tensor-x"]
 	path = romein-tensor-x
 	url = https://github.com/realtimeradio/romein-tensor-x
+[submodule "caltech_blocks/bifrost-cpu-pipeline"]
+	path = caltech_blocks/bifrost-cpu-pipeline
+	url = https://github.com/Radio-Camera-Initiative/bifrost-cpu-pipeline
