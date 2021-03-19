@@ -52,6 +52,8 @@ def build_pipeline(args):
     from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
     from lwa352_pipeline.blocks.beamform_output_block import BeamformOutput
     from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
+
+    from lwa352_pipeline.blocks.romein import RomeinNoFFT
     print('Done')
 
     if args.useetcd:
@@ -123,16 +125,11 @@ def build_pipeline(args):
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='cuda_host')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
-        bf_output_ring = Ring(name="bf-output", space='cuda')
-        bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
-        bf_acc_output_ring = Ring(name="bf-acc-output", space='system')
         corr_output_ring = Ring(name="corr-output", space='cuda')
-        corr_slow_output_ring = Ring(name="corr-slow-output", space='cuda_host')
-        corr_fast_output_ring = Ring(name="corr-fast-output", space='cuda_host')
+        grid_output_ring = Ring(name="grid-output", space='cuda_host')
     else:
         capture_ring = Ring(name="capture", space='system')
 
-    trigger_capture_ring = Ring(name="trigger_capture", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
@@ -179,12 +176,8 @@ def build_pipeline(args):
                           nchan=nchan, npol=npol, nstand=nstand,
                           core=cores.pop(0), guarantee=True, acc_len=512*256, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=512*8*8, ant_to_input=ant_to_input))
 
-        # Get the conjugation conventions and baseline IDs provided by the correlator block.
-        # Again, these could be handed downstream through headers, but this way we
-        # save some potential throughput issues. This means the pipeline needs restarting if the
-        # input antenna configuration changes, which doesn't seem too heinous a requirement
-        antpol_to_bl = ops[-1].antpol_to_bl # antpol_to_bl[ant0, pol0, ant1, pol1] is the baseline index of (ant0, pol0) * (ant1, pol1)
-        bl_is_conj = ops[-1].bl_is_conj # bl_is_conj[ant0, pol0, ant1, pol1] is 1 if this baseline is conjugated by xGPU
+        ops.append(RomeinNoFFT(log, iring=corr_output_ring, oring=grid_output_ring,
+                               conv=5, grid=1024, core=cores.pop(0), nant=nstand, gpu=args.gpu))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     
