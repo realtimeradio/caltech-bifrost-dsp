@@ -53,21 +53,25 @@ class RomeinNoFFT(Block):
         illum[:, :, :, int(self.conv_grid/2), int(self.conv_grid/2)] = 1
         gpu_illum = BFArray(illum, space="cuda")
 
+        # Axes: 1 x CHAN [1] x UVW [3] x BASELINES x pol [4]
         uvw = np.zeros(
-            shape=(1, 1, 3, (self.nant*(self.nant-1)) // 2, 2),
+            shape=(1, 1, 3, (self.nant*(self.nant-1)) // 2, 4),
             dtype=np.int32
         )
         gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
+        #gpu_uvw = BFArray(uvw, space="cuda")
 
         # out data in shape of (channels, polarisations, grid_size, grid_size)
         self.log.info("Attempting to allocate %d bytes of GPU memory for gridder output" % self.ogulp_size)
         out_data = BFArray(np.zeros(
-            shape=(1, self.npol, self.grid_size, self.grid_size),
+            shape=(1, 1, self.npol**2, self.grid_size, self.grid_size),
             dtype=np.complex64),
             space="cuda",
         )
 
         romein_kernel = Romein()
+        print(gpu_uvw.shape)
+        print(gpu_illum.shape)
         romein_kernel.init(
             gpu_uvw,
             gpu_illum,
@@ -87,19 +91,22 @@ class RomeinNoFFT(Block):
                 self.log.info("Starting output sequence with nringlet %d" % iseq.nringlet)
                 #with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                 for ispan in iseq.read(self.igulp_size):
-                    idata = ispan.data_view("ci32").reshape(1, 1, (self.nant * (self.nant-1))//2, self.npol**2).transpose(0,1,3,2)
-                    self.log.info("Input buffer shape: %s" % str(idata.shape))
-                    self.log.info("Output buffer shape: %s" % str(out_data.shape))
+                    idata = ispan.data_view("ci32").reshape(1, 1, (self.nant * (self.nant-1))//2, self.npol**2)#.transpose(0,1,3,2)
+                    #self.log.info("Input buffer shape: %s" % str(idata.shape))
+                    #self.log.info("Output buffer shape: %s" % str(out_data.shape))
                     if ispan.size < self.igulp_size:
                         continue # Ignore final gulp
                     curr_time = time.time()
                     acquire_time = curr_time - prev_time
                     prev_time = curr_time
+                    # idata: 1 x chan (1) x baselines(4)  x pols (4)
+                    # odata: 1 x chan (1) x pols (4) x gridx x gridy
+                    # 10 GB/s
                     romein_kernel.execute(idata, out_data)
                     chan_id += 1
                     if chan_id == nchan:
                         chan_id = 0
-                        self.log("Gridding completed for %d channels" % nchan)
+                        self.log.info("Gridding completed for %d channels" % nchan)
                         #with oseq.reserve(self.ogulp_size) as ospan:
                         #    copy_array(ospan.data, out_data)
                         #if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
