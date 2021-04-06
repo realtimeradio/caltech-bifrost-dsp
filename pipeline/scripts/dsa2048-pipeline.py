@@ -177,7 +177,7 @@ def build_pipeline(args):
                           core=cores.pop(0), guarantee=True, acc_len=512*256, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=512*8*8, ant_to_input=ant_to_input))
 
         ops.append(RomeinNoFFT(log, iring=corr_output_ring, oring=grid_output_ring,
-                               conv=5, grid=4096, core=cores.pop(0), nant=nstand, gpu=args.gpu))
+                               conv=5, grid=16000, core=cores.pop(0), nant=nstand, gpu=args.gpu))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     

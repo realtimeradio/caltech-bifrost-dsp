@@ -47,15 +47,15 @@ class RomeinNoFFT(Block):
 
         ## TODO: have the npol, nant be passed in as well to avoid magic numbers
         illum = np.zeros(
-            shape=(1, 1, (self.nant*(self.nant-1)) // 2, 4, self.conv_grid, self.conv_grid),
+            shape=(1, 1, (self.nant*(self.nant-1)) // 2, self.npol, self.conv_grid, self.conv_grid),
             dtype=np.complex64
         )
-        illum[:, :, :, int(self.conv_grid/2), int(self.conv_grid/2)] = 1
+        illum[:, :, :, :, int(self.conv_grid/2), int(self.conv_grid/2)] = 1
         gpu_illum = BFArray(illum, space="cuda")
 
         # Axes: 1 x CHAN [1] x UVW [3] x BASELINES x pol [4]
         uvw = np.zeros(
-            shape=(1, 1, 3, (self.nant*(self.nant-1)) // 2, 4),
+            shape=(1, 1, 3, (self.nant*(self.nant-1)) // 2, self.npol),
             dtype=np.int32
         )
         gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
@@ -64,7 +64,7 @@ class RomeinNoFFT(Block):
         # out data in shape of (channels, polarisations, grid_size, grid_size)
         self.log.info("Attempting to allocate %d bytes of GPU memory for gridder output" % self.ogulp_size)
         out_data = BFArray(np.zeros(
-            shape=(1, 1, self.npol**2, self.grid_size, self.grid_size),
+            shape=(1, 1, self.npol, self.grid_size, self.grid_size),
             dtype=np.complex64),
             space="cuda",
         )
@@ -72,6 +72,7 @@ class RomeinNoFFT(Block):
         romein_kernel = Romein()
         print(gpu_uvw.shape)
         print(gpu_illum.shape)
+        print(out_data.shape)
         romein_kernel.init(
             gpu_uvw,
             gpu_illum,
@@ -88,10 +89,12 @@ class RomeinNoFFT(Block):
                 ohdr_str = json.dumps(ohdr)
                 prev_time = time.time()
                 chan_id = 0
+                num_int = 0
                 self.log.info("Starting output sequence with nringlet %d" % iseq.nringlet)
+                process_time = 0
                 #with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                 for ispan in iseq.read(self.igulp_size):
-                    idata = ispan.data_view("ci32").reshape(1, 1, (self.nant * (self.nant-1))//2, self.npol**2)#.transpose(0,1,3,2)
+                    idata = ispan.data_view("ci32").reshape(1, 1, (self.nant * (self.nant-1))//2, self.npol**2)[:, :, :, :2]#.transpose(0,1,3,2)
                     #self.log.info("Input buffer shape: %s" % str(idata.shape))
                     #self.log.info("Output buffer shape: %s" % str(out_data.shape))
                     if ispan.size < self.igulp_size:
@@ -102,11 +105,20 @@ class RomeinNoFFT(Block):
                     # idata: 1 x chan (1) x baselines(4)  x pols (4)
                     # odata: 1 x chan (1) x pols (4) x gridx x gridy
                     # 10 GB/s
+                    perf = time.perf_counter()
                     romein_kernel.execute(idata, out_data)
+                    stream_synchronize()
+                    perf = time.perf_counter() - perf
+                    #self.log.info("channel %d: Timing for one channel gridding: %f" % (chan_id, perf))
                     chan_id += 1
+                    process_time += perf
                     if chan_id == nchan:
                         chan_id = 0
-                        self.log.info("Gridding completed for %d channels" % nchan)
+                        num_int += 1
+                        self.log.info("%d: Gridding completed for %d channels" % (num_int, nchan))
+                        total_bytes = 8 * nchan * self.npol * (self.nant*(self.nant-1)//2)
+                        self.log.info("%d bytes/%fs = throughput GBps: %f" % (total_bytes, process_time, (total_bytes/1024/1024/1024/process_time)))
+                        process_time = 0
                         #with oseq.reserve(self.ogulp_size) as ospan:
                         #    copy_array(ospan.data, out_data)
                         #if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):

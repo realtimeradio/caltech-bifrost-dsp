@@ -339,7 +339,7 @@ class Corr(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        self.oring.resize(self.ogulp_size)
+        self.oring.resize(self.ogulp_size, buffer_factor=1)
         time_tag = 1
         self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
@@ -433,6 +433,7 @@ class Corr(Block):
                             self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                         ospan.close()
                         throughput_gbps = 8 * acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / process_time / 1e9
+                        self.log.info("throughput Gbps: %f" % throughput_gbps)
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
