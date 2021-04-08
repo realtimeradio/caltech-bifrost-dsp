@@ -497,7 +497,7 @@ class Corr_Romein(Block):
                             romein_kernel.execute(chan_data, out_data)
                             stream_synchronize()
                         total_time = time.perf_counter() - total_time
-                        total_throughput_gbps = 8 * acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / total_time / 1e9
+                        total_throughput_gbps =  acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / total_time / 1024/1024/1024
                         self.log.info("Gridding complete for %d channels with total time %fs at throughput %f" % (self.nchan, total_time, total_throughput_gbps))
                         ospan.close()
                     # And, update overall time counter

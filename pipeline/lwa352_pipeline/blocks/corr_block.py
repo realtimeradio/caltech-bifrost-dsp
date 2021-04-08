@@ -433,7 +433,7 @@ class Corr(Block):
                             self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                         ospan.close()
                         throughput_gbps = 8 * acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / process_time / 1e9
-                        self.log.info("throughput Gbps: %f" % throughput_gbps)
+                        self.log.info("throughput GBps: %f" % (acc_len * ihdr['nchan'] * ihdr['nstand'] * ihdr['npol'] / process_time /1024/1024/1024))
                         self.perf_proclog.update({'acquire_time': acquire_time, 
                                                   'reserve_time': reserve_time, 
                                                   'process_time': process_time,
