@@ -27,7 +27,7 @@ class RomeinNoFFT(Block):
         self.nant = nant
         self.npol = 2
         self.igulp_size = (nant*(nant-1)) // 2 * self.npol * self.npol * 2 * 4 # one channel of vis data
-        self.ogulp_size = self.npol * self.grid_size * self.grid_size * 2 * 8 #complex64
+        self.ogulp_size = self.npol * self.grid_size * self.grid_size  * 8 #complex64
 
         self.gpu = gpu
 
@@ -38,7 +38,7 @@ class RomeinNoFFT(Block):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        self.sendToThreadListener("starting")
+        chan_num = 4
 
         # w-kernel convolutions: just 1s
         # convolution kernel shape: (channels, polarisations, baselines, conv_grid, conv_grid)
@@ -47,24 +47,32 @@ class RomeinNoFFT(Block):
 
         ## TODO: have the npol, nant be passed in as well to avoid magic numbers
         illum = np.zeros(
-            shape=(1, 1, (self.nant*(self.nant-1)) // 2, self.npol, self.conv_grid, self.conv_grid),
+            shape=(chan_num, 1, (self.nant*(self.nant-1)) // 2, self.npol, self.conv_grid, self.conv_grid),
             dtype=np.complex64
         )
         illum[:, :, :, :, int(self.conv_grid/2), int(self.conv_grid/2)] = 1
         gpu_illum = BFArray(illum, space="cuda")
+        illum_size = gpu_illum.dtype.itemsize
+        for x in gpu_illum.shape:
+            illum_size *= x
+        self.log.info("Illum_size: %d bytes, %d MB" % (illum_size, illum_size/1024/1024))
 
         # Axes: 1 x CHAN [1] x UVW [3] x BASELINES x pol [4]
         uvw = np.zeros(
-            shape=(1, 1, 3, (self.nant*(self.nant-1)) // 2, self.npol),
+            shape=(3, 1, chan_num, (self.nant*(self.nant-1)) // 2, self.npol),
             dtype=np.int32
         )
-        gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
-        #gpu_uvw = BFArray(uvw, space="cuda")
+        #gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
+        gpu_uvw = BFArray(uvw, space="cuda")
+        uvw_size = gpu_uvw.dtype.itemsize
+        for x in gpu_uvw.shape:
+            uvw_size *= x
+        self.log.info("uvw size: %d bytes, %d MB" % (uvw_size, uvw_size/1024/1024))
 
         # out data in shape of (channels, polarisations, grid_size, grid_size)
-        self.log.info("Attempting to allocate %d bytes of GPU memory for gridder output" % self.ogulp_size)
+        self.log.info("Attempting to allocate %d bytes of GPU memory for gridder output, %d MB" % (self.ogulp_size * chan_num, self.ogulp_size * chan_num/1024/1024))
         out_data = BFArray(np.zeros(
-            shape=(1, 1, self.npol, self.grid_size, self.grid_size),
+            shape=(1, chan_num, self.npol, self.grid_size, self.grid_size),
             dtype=np.complex64),
             space="cuda",
         )
@@ -93,8 +101,8 @@ class RomeinNoFFT(Block):
                 self.log.info("Starting output sequence with nringlet %d" % iseq.nringlet)
                 process_time = 0
                 #with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
-                for ispan in iseq.read(self.igulp_size):
-                    idata = ispan.data_view("ci32").reshape(1, 1, (self.nant * (self.nant-1))//2, self.npol**2)[:, :, :, :2]#.transpose(0,1,3,2)
+                for ispan in iseq.read(self.igulp_size * chan_num):
+                    idata = ispan.data_view("ci32").reshape(1, chan_num, (self.nant * (self.nant-1))//2, self.npol**2)[:, :, :, :2]#.transpose(0,1,3,2)
                     #self.log.info("Input buffer shape: %s" % str(idata.shape))
                     #self.log.info("Output buffer shape: %s" % str(out_data.shape))
                     if ispan.size < self.igulp_size:
@@ -109,8 +117,8 @@ class RomeinNoFFT(Block):
                     romein_kernel.execute(idata, out_data)
                     stream_synchronize()
                     perf = time.perf_counter() - perf
-                    #self.log.info("channel %d: Timing for one channel gridding: %f" % (chan_id, perf))
-                    chan_id += 1
+                    self.log.info("channel %d: Timing for %d channel gridding: %f" % (chan_id, chan_num, perf))
+                    chan_id += chan_num
                     process_time += perf
                     if chan_id == nchan:
                         chan_id = 0
