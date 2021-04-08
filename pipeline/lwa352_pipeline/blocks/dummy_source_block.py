@@ -175,10 +175,10 @@ class DummySource(object):
         else:
             #print("initializing random numbers")
             #TODO Can't get 'ci4' type to behave
-            #self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
-            #                    dtype='u8', space='system')
-            self.test_data = BFArray(np.zeros([NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
+            self.test_data = BFArray(np.random.randint(0, high=255, size=[NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
                                 dtype='u8', space='system')
+            #self.test_data = BFArray(np.zeros([NTEST_BLOCKS, ntime_gulp, nchan, nstand, npol]),
+           #                     dtype='u8', space='system')
             for i in range(nstand):
                 self.test_data[:,:,:,i,:] = i%8
 

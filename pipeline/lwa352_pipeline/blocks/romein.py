@@ -38,7 +38,7 @@ class RomeinNoFFT(Block):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        chan_num = 4
+        chan_num = 1
 
         # w-kernel convolutions: just 1s
         # convolution kernel shape: (channels, polarisations, baselines, conv_grid, conv_grid)
@@ -58,12 +58,11 @@ class RomeinNoFFT(Block):
         self.log.info("Illum_size: %d bytes, %d MB" % (illum_size, illum_size/1024/1024))
 
         # Axes: 1 x CHAN [1] x UVW [3] x BASELINES x pol [4]
-        uvw = np.zeros(
-            shape=(3, 1, chan_num, (self.nant*(self.nant-1)) // 2, self.npol),
-            dtype=np.int32
+        uvw = np.random.rand(
+            3, 1, chan_num, (self.nant*(self.nant-1)) // 2, self.npol
         )
         #gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
-        gpu_uvw = BFArray(uvw, space="cuda")
+        gpu_uvw = BFArray(uvw.astype(np.int32), space="cuda")
         uvw_size = gpu_uvw.dtype.itemsize
         for x in gpu_uvw.shape:
             uvw_size *= x
@@ -117,7 +116,7 @@ class RomeinNoFFT(Block):
                     romein_kernel.execute(idata, out_data)
                     stream_synchronize()
                     perf = time.perf_counter() - perf
-                    self.log.info("channel %d: Timing for %d channel gridding: %f" % (chan_id, chan_num, perf))
+                    #self.log.info("channel %d: Timing for %d channel gridding: %f" % (chan_id, chan_num, perf))
                     chan_id += chan_num
                     process_time += perf
                     if chan_id == nchan:
@@ -125,7 +124,7 @@ class RomeinNoFFT(Block):
                         num_int += 1
                         self.log.info("%d: Gridding completed for %d channels" % (num_int, nchan))
                         total_bytes = 8 * nchan * self.npol * (self.nant*(self.nant-1)//2)
-                        self.log.info("%d bytes/%fs = throughput GBps: %f" % (total_bytes, process_time, (total_bytes/1024/1024/1024/process_time)))
+                        self.log.info("%d bytes processed in %fs (average %fs per gridding stream) = throughput GBps: %f" % (total_bytes, process_time, (process_time/nchan*chan_num), (total_bytes/1024/1024/1024/process_time)))
                         process_time = 0
                         #with oseq.reserve(self.ogulp_size) as ospan:
                         #    copy_array(ospan.data, out_data)
