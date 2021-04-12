@@ -176,6 +176,7 @@ def build_pipeline(args):
                           nchan=nchan, npol=npol, nstand=nstand,
                           core=cores.pop(0), guarantee=True, acc_len=512*256, gpu=args.gpu, test=args.testcorr, etcd_client=etcd_client, autostartat=512*8*8, ant_to_input=ant_to_input))
 
+    if not (args.nogrid or args.nogpu):
         ops.append(RomeinNoFFT(log, iring=corr_output_ring, oring=grid_output_ring,
                                conv=5, grid=4096, core=cores.pop(0), nant=nstand, gpu=args.gpu))
 
@@ -210,7 +211,7 @@ def main(argv):
     parser.add_argument('--testdatacorr_acc_len', type=int, default=2400, help='Number of accumulations per sample in correlator test data file')
     #parser.add_argument('-a', '--corr_acc_len',   type=int, default=240000, help='Number of accumulations to start accumulating in the slow correlator')
     parser.add_argument('--nocorr',           action='store_true',       help='Don\'t use correlation threads')
-    #parser.add_argument('--nobeamform',       action='store_true',       help='Don\'t use beamforming threads')
+    parser.add_argument('--nogrid',           action='store_true',       help='Don\'t use griding threads')
     parser.add_argument('--nogpu',            action='store_true',       help='Don\'t use any GPU threads')
     parser.add_argument('--ibverbs',          action='store_true',       help='Use IB verbs for packet capture')
     parser.add_argument('-G', '--gpu',        type=int, default=0,       help='Which GPU device to use')
