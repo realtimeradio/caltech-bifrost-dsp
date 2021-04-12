@@ -38,7 +38,7 @@ class RomeinNoFFT(Block):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        chan_num = 1
+        chan_num = 4
 
         # w-kernel convolutions: just 1s
         # convolution kernel shape: (channels, polarisations, baselines, conv_grid, conv_grid)
