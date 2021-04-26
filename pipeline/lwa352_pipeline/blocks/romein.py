@@ -38,7 +38,7 @@ class RomeinNoFFT(Block):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        chan_num = 4
+        chan_num = 4 
 
         # w-kernel convolutions: just 1s
         # convolution kernel shape: (channels, polarisations, baselines, conv_grid, conv_grid)
@@ -124,7 +124,7 @@ class RomeinNoFFT(Block):
                         num_int += 1
                         self.log.info("%d: Gridding completed for %d channels" % (num_int, nchan))
                         total_bytes = 8 * nchan * self.npol * (self.nant*(self.nant-1)//2)
-                        self.log.info("%d bytes processed in %fs (average %fs per gridding stream) = throughput GBps: %f" % (total_bytes, process_time, (process_time/nchan*chan_num), (total_bytes/1024/1024/1024/process_time)))
+                        self.log.info("%d bytes processed in %fs (average %fs per execution, with %d bytes in every execution) = throughput GBps: %f" % (total_bytes, process_time, (process_time/nchan*chan_num), (total_bytes/nchan*chan_num), (total_bytes/1024/1024/1024/process_time)))
                         process_time = 0
                         #with oseq.reserve(self.ogulp_size) as ospan:
                         #    copy_array(ospan.data, out_data)

@@ -112,7 +112,7 @@ class Copy(Block):
 
         # Looking at bifrost's ring_impl.cpp the buffer will get rounded up to a power of 2
         buf_size_rounded = 2**int(np.ceil(np.log2(self.buf_size)))
-        self.log.info("COPY >> Allocating %.2f GB of memory (which will be rounded up by bifrost to %.2f GB" % (self.buf_size / 1e9, buf_size_rounded / 1e9))
+        self.log.info("COPY >> Allocating %.2f GB of memory (which will be rounded up by bifrost to %.2f GB (%f MiB)" % (self.buf_size / 1e9, buf_size_rounded / 1e9, self.buf_size / 1024/ 1024))
         self.oring.resize(self.buffer_multiplier*self.igulp_size, total_span=self.buf_size, buffer_factor=1)
         self.log.info("COPY >> Allocation complete")
 
