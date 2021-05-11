@@ -191,7 +191,7 @@ class Beamform(Block):
         
         self.nchan = nchan
         self.nbeam = nbeam
-        self.ninput = self.ninput
+        self.ninput = ninput
         
         # Setup the beamformer
         if self.gpu != -1:
