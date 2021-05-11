@@ -171,8 +171,10 @@ class Capture(object):
         self.system_nchan = system_nchan
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
+                self.log.info("Using IBVERBs")
                 self.CaptureClass = UDPVerbsCapture
             else:
+                self.log.info("Using Vanilla UDP Capture")
                 self.CaptureClass = UDPCapture
             del self.kwargs['ibverbs']
         else:
