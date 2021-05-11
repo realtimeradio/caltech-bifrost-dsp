@@ -244,7 +244,7 @@ class Beamform(Block):
                                   'ngpu': 1,
                                   'gpu0': BFGetGPU(),})
         
-        igulp_size = self.ntime_gulp   * self.nchan * self.ninputs       # 4+4
+        igulp_size = self.ntime_gulp   * self.nchan * self.ninput    # 4+4
         ogulp_size = self.ntime_blocks * self.nchan * self.nbeam * 8 # complex 64
 
         with self.oring.begin_writing() as oring:

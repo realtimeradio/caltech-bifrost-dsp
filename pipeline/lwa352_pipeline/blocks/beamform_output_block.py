@@ -214,7 +214,7 @@ class BeamformOutput(Block):
                  ):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
-        super(BeamformOutputPy, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
+        super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
         self.dest_ip = ['0.0.0.0']
         self.new_dest_ip = ['0.0.0.0']
