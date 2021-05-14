@@ -136,8 +136,8 @@ def build_pipeline(args):
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
-    nchan = 184
-    system_nchan = 184 * 16
+    nchan = 192 #184
+    system_nchan = nchan * 16
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
     cores = CoreList(map(int, args.cores.split(',')))
