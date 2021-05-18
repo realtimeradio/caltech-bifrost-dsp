@@ -242,10 +242,9 @@ class Block(object):
                 if not self._command_conditions[key](command_dict[key]):
                     self.log.error("%s: Command key %s failed requirements" % (self.name, key))
                     return COMMAND_INVALID
-            else:
-                self._pending_command_vals[key] = command_dict[key]
-                # Track the command status in the stats log
-                self.stats['new_' + key] = command_dict[key]
+            self._pending_command_vals[key] = command_dict[key]
+            # Track the command status in the stats log
+            self.stats['new_' + key] = command_dict[key]
         self.update_pending = True
         self.stats['update_pending'] = True
         self.stats['last_cmd_time'] = time.time()
