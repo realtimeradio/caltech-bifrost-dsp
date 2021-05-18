@@ -514,7 +514,7 @@ class CorrOutputFull(Block):
                 # Update destinations if necessary
                 if self.update_pending:
                     self.update_command_vals()
-                    if self.command_vals['dest_file'] is not None:
+                    if self.command_vals['dest_file'] != "":
                         self.log.info("CORR OUTPUT >> Updating destination to file %s (max Mbps %.1f ns)" % 
                                       (self.command_vals['dest_file'], self.command_vals['max_mbps']))
                     else:
