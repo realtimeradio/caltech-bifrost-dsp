@@ -136,8 +136,8 @@ def build_pipeline(args):
     GSIZE = 512
     nstand = 2048
     npol = 2
-    nchan = 16
-    system_nchan = 450 * 16
+    nchan = 8 
+    system_nchan = 450 * 8
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
     cores = CoreList(map(int, args.cores.split(',')))
