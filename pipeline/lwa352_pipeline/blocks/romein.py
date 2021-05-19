@@ -25,9 +25,10 @@ class RomeinNoFFT(Block):
         self.grid_size = grid
         self.conv_grid = conv
         self.nant = nant
-        self.npol = 2
-        self.igulp_size = (nant*(nant-1)) // 2 * self.npol * self.npol * 2 * 4 # one channel of vis data
-        self.ogulp_size = self.npol * self.grid_size * self.grid_size  * 8 #complex64
+        self.npol = 4
+        self.corr = 1
+        self.igulp_size = (nant*(nant-1)) // 2 * self.npol * 2 * 4 # one channel of vis data
+        self.ogulp_size = self.corr * self.grid_size * self.grid_size  * 8 #complex64
 
         self.gpu = gpu
 
@@ -38,7 +39,8 @@ class RomeinNoFFT(Block):
         cpu_affinity.set_core(self.core)
         if self.gpu != -1:
             BFSetGPU(self.gpu)
-        chan_num = 4 
+        chan_num = 8 # chan_num needs to be a factor of the total number of 
+                     # channels correlated (16 right now)
 
         # w-kernel convolutions: just 1s
         # convolution kernel shape: (channels, polarisations, baselines, conv_grid, conv_grid)
@@ -47,7 +49,7 @@ class RomeinNoFFT(Block):
 
         ## TODO: have the npol, nant be passed in as well to avoid magic numbers
         illum = np.zeros(
-            shape=(chan_num, 1, (self.nant*(self.nant-1)) // 2, self.npol, self.conv_grid, self.conv_grid),
+            shape=(1, chan_num, (self.nant*(self.nant-1)) // 2, self.corr, self.conv_grid, self.conv_grid),
             dtype=np.complex64
         )
         illum[:, :, :, :, int(self.conv_grid/2), int(self.conv_grid/2)] = 1
@@ -59,7 +61,7 @@ class RomeinNoFFT(Block):
 
         # Axes: 1 x CHAN [1] x UVW [3] x BASELINES x pol [4]
         uvw = np.random.rand(
-            3, 1, chan_num, (self.nant*(self.nant-1)) // 2, self.npol
+            3, 1, chan_num, (self.nant*(self.nant-1)) // 2, self.corr
         )
         #gpu_uvw = BFArray(uvw.transpose(2,0,1,3,4), space="cuda")
         gpu_uvw = BFArray(uvw.astype(np.int32), space="cuda")
@@ -71,7 +73,7 @@ class RomeinNoFFT(Block):
         # out data in shape of (channels, polarisations, grid_size, grid_size)
         self.log.info("Attempting to allocate %d bytes of GPU memory for gridder output, %d MB" % (self.ogulp_size * chan_num, self.ogulp_size * chan_num/1024/1024))
         out_data = BFArray(np.zeros(
-            shape=(1, chan_num, self.npol, self.grid_size, self.grid_size),
+            shape=(1, chan_num, self.corr, self.grid_size, self.grid_size),
             dtype=np.complex64),
             space="cuda",
         )
@@ -101,7 +103,7 @@ class RomeinNoFFT(Block):
                 process_time = 0
                 #with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
                 for ispan in iseq.read(self.igulp_size * chan_num):
-                    idata = ispan.data_view("ci32").reshape(1, chan_num, (self.nant * (self.nant-1))//2, self.npol**2)[:, :, :, :2]#.transpose(0,1,3,2)
+                    idata = ispan.data_view("ci32").reshape(1, chan_num, (self.nant * (self.nant-1))//2, self.npol)
                     #self.log.info("Input buffer shape: %s" % str(idata.shape))
                     #self.log.info("Output buffer shape: %s" % str(out_data.shape))
                     if ispan.size < self.igulp_size:
@@ -113,8 +115,9 @@ class RomeinNoFFT(Block):
                     # odata: 1 x chan (1) x pols (4) x gridx x gridy
                     # 10 GB/s
                     perf = time.perf_counter()
-                    romein_kernel.execute(idata, out_data)
-                    stream_synchronize()
+                    for corr in range(2):
+                        romein_kernel.execute(idata[:,:,:,corr].reshape(1, chan_num, (self.nant * (self.nant - 1))//2, self.corr), out_data)
+                        stream_synchronize()
                     perf = time.perf_counter() - perf
                     #self.log.info("channel %d: Timing for %d channel gridding: %f" % (chan_id, chan_num, perf))
                     chan_id += chan_num
@@ -123,7 +126,7 @@ class RomeinNoFFT(Block):
                         chan_id = 0
                         num_int += 1
                         self.log.info("%d: Gridding completed for %d channels" % (num_int, nchan))
-                        total_bytes = 8 * nchan * self.npol * (self.nant*(self.nant-1)//2)
+                        total_bytes = 8 * nchan * self.npol/2 * (self.nant*(self.nant-1)//2)
                         self.log.info("%d bytes processed in %fs (average %fs per execution, with %d bytes in every execution) = throughput GBps: %f" % (total_bytes, process_time, (process_time/nchan*chan_num), (total_bytes/nchan*chan_num), (total_bytes/1024/1024/1024/process_time)))
                         process_time = 0
                         
