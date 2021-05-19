@@ -183,7 +183,7 @@ class Capture(object):
         del self.kwargs['utc_start']
         # Add gulp size = slot_ntime requirement which is special
         # for the LWA352 receiver
-        self.kwargs['slot_ntime'] = kwargs['buffer_ntime']
+        #self.kwargs['slot_ntime'] = kwargs['buffer_ntime']
         self.shutdown_event = threading.Event()
 
         # make an array ninputs-elements long with [station, pol] IDs.

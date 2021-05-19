@@ -132,6 +132,8 @@ def build_pipeline(args):
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
+    NETGSIZE = 96
+    NET_NGULP = 5*4 # Number of Net block gulps collated in the first copy
     GSIZE = 480
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
@@ -139,6 +141,8 @@ def build_pipeline(args):
     nchan = 192 #184
     system_nchan = nchan * 16
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
+
+    assert ((NET_NGULP*NETGSIZE) % GSIZE == 0), "GSIZE must be a multiple of NETGSIZE*NET_NGULP"
 
     cores = CoreList(map(int, args.cores.split(',')))
     
@@ -152,12 +156,13 @@ def build_pipeline(args):
         isock.bind(iaddr)
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
-                           nsrc=nroach*nfreqblocks, src0=0, max_payload_size=7000,
-                           buffer_ntime=GSIZE, core=cores.pop(0), system_nchan=system_nchan,
+                           nsrc=nroach*nfreqblocks, src0=0, max_payload_size=6500,
+                           buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE,
+                           core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=GSIZE, core=cores.pop(0),
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE, core=cores.pop(0),
                    skip_write=args.nodata, target_throughput=args.target_throughput,
                    nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
@@ -167,8 +172,8 @@ def build_pipeline(args):
     ant_to_input = ops[-1].ant_to_input
 
     # capture_ring -> triggered buffer
-    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=GSIZE,
-                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP,
+    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE,
+                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
     ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
