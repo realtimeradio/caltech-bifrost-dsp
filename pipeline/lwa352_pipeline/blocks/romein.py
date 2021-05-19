@@ -126,6 +126,19 @@ class RomeinNoFFT(Block):
                         total_bytes = 8 * nchan * self.npol * (self.nant*(self.nant-1)//2)
                         self.log.info("%d bytes processed in %fs (average %fs per execution, with %d bytes in every execution) = throughput GBps: %f" % (total_bytes, process_time, (process_time/nchan*chan_num), (total_bytes/nchan*chan_num), (total_bytes/1024/1024/1024/process_time)))
                         process_time = 0
+                        
+                        # checking FFT is possible
+                        fft_time = time.perf_counter()
+                        prev_shape = out_data.shape
+                        image_size = 8 * self.corr * chan_num * self.grid_size * self.grid_size
+                        out_data.reshape(self.corr * chan_num, self.grid_size, self.grid_size)
+                        fft = Fft()
+                        fft.init(out_data, out_data, axes=(1, 2), apply_fftshift=False)
+                        fft.execute(out_data, out_data, inverse=True)
+                        fft_time = time.perf_counter() - fft_time
+                        self.log.info("%d bytes FFtd in %f seconds; %f GB/s" %(image_size, fft_time, image_size/fft_time/1e9))
+                        out_data.reshape(prev_shape)
+
                         #with oseq.reserve(self.ogulp_size) as ospan:
                         #    copy_array(ospan.data, out_data)
                         #if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
