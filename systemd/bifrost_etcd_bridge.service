@@ -1,0 +1,23 @@
+# Configuration file for systemd that keeps the LWA Bifrost <-> etcd
+# gateway running
+#
+# Copy this file to /etc/systemd/system/. Then run
+# `systemctl enable bifrost_etcd_bridge.service`
+# and `systemctl start bifrost_etcd_bridge.service`.
+
+[Unit]
+Description=Bifrost <-> etcd bridge service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=60
+User=ubuntu
+Group=ubuntu
+PIDFile=/var/run/bifrost_etcd_bridge.pid
+ExecStart=/usr/bin/taskset 0x1 /home/ubuntu/anaconda3/bin/bifrost_etcd_bridge.py --etcdhost etcdv3service.sas.pvt -t 3
+
+[Install]
+WantedBy=multi-user.target
+
+
