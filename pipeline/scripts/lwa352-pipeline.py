@@ -59,12 +59,6 @@ def build_pipeline(args):
     # Set the pipeline ID
     Block.set_id(args.pipelineid)
 
-    # Fork, if requested
-    tuning = 0
-    if args.fork:
-        stderr = '/tmp/%s_%i.stderr' % (os.path.splitext(os.path.basename(__file__))[0], tuning)
-        daemonize(stdin='/dev/null', stdout='/dev/null', stderr=stderr)
-        
     log = logging.getLogger(__name__)
     logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
                                   datefmt='%Y-%m-%d %H:%M:%S')
@@ -86,7 +80,6 @@ def build_pipeline(args):
     log.info("Cmdline args: \"%s\"", ' '.join(sys.argv[1:]))
     log.info("Version:      %s", __version__)
     log.info("Last changed: %s", short_date)
-    log.info("Config file:  %s", args.configfile)
     log.info("Log file:     %s", args.logfile)
     
     ops = []
@@ -212,7 +205,7 @@ def build_pipeline(args):
                           checkfile_acc_len=args.testdatacorr_acc_len,
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj=bl_is_conj,
-                          use_cor_fmt=False,
+                          use_cor_fmt=not args.pycorrout,
                   ))
 
         ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
@@ -260,8 +253,6 @@ def build_pipeline(args):
 def main(argv):
     parser = argparse.ArgumentParser(description='LWA352-OVRO Correlator-Beamformer Pipeline',
                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-f', '--fork',       action='store_true',       help='Fork and run in the background')
-    parser.add_argument('-c', '--configfile', default='adp_config.json', help='Specify config file')
     parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
@@ -280,6 +271,7 @@ def main(argv):
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     parser.add_argument('--testcorr',         action='store_true',       help='Compare the GPU correlation with CPU. SLOW!!')
     parser.add_argument('--useetcd',          action='store_true',       help='Use etcd control/monitoring server')
+    parser.add_argument('--pycorrout',        action='store_true',       help='Don\'t use CORR output packets, use custom format')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
     parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
