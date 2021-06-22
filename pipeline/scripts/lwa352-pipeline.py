@@ -212,6 +212,7 @@ def build_pipeline(args):
                           checkfile_acc_len=args.testdatacorr_acc_len,
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj=bl_is_conj,
+                          use_cor_fmt=False,
                   ))
 
         ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
