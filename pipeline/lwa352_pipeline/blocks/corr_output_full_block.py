@@ -450,13 +450,14 @@ class CorrOutputFull(Block):
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
         self.update_stats({'output_gbps': gbps})
 
-    def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg):
+    def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg, tuning):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
         desc.set_gain(gain)
         desc.set_decimation(navg)
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
+        desc.set_tuning(tuning)
         pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
         block_bits_sent = 0
         start_time = time.time()
@@ -503,10 +504,13 @@ class CorrOutputFull(Block):
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = this_gulp_time
             nchan = ihdr['nchan']
+            system_nchan = ihdr['system_nchan']
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
             sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
+            npipeline = system_nchan // nchan
+            this_pipeline = (chan0 // nchan) % npipeline
             if 'ant_to_bl_id' in ihdr:
                 self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
             if 'bl_is_conj' in ihdr:
@@ -608,7 +612,7 @@ class CorrOutputFull(Block):
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     if self.use_cor_fmt:
-                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
+                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len, (npipeline << 16) + (this_pipeline+1))
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
