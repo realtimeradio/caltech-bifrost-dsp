@@ -493,8 +493,10 @@ class CorrOutputFull(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
+        self.sock = UDPSocket()
+        self.sock.connect(Address('10.41.0.19', 10010))
+        udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
         for iseq in self.iring.read(guarantee=self.guarantee):
-            udt = None
             self.update_pending = True # Reprocess commands on each new sequence
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -522,26 +524,26 @@ class CorrOutputFull(Block):
                         self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % 
                                       (self.command_vals['dest_ip'], self.command_vals['dest_port'], self.command_vals['max_mbps']))
                     if self.use_cor_fmt:
-                        if self.sock:
-                            del self.sock
-                            self.sock = None
-                        if udt:
-                            del udt
-                            udt = None
-                        if self.output_file: self.output_file.close()
-                        if self.command_vals['dest_file'] != "":
-                            try:
-                                 filename = self.command_vals['dest_file']
-                                 self.log.info("CORR OUTPUT >> Trying to open file %s for output" % filename)
-                                 self.output_file = open(filename, "wb")
-                            except:
-                                 self.log.error("CORR OUTPUT >> Tried to open file %s for output but failed" % filename)
-                            self.sock = None
-                            #udt = DiskWriter('cor_%i' % self.nchan, self.output_file, core=self.core)
-                        else:
-                            self.sock = UDPSocket()
-                            self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                            #udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+                        #if self.sock:
+                        #    del self.sock
+                        #    self.sock = None
+                        #if udt:
+                        #    del udt
+                        #    udt = None
+                        #if self.output_file: self.output_file.close()
+                        #if self.command_vals['dest_file'] != "":
+                        #    try:
+                        #         filename = self.command_vals['dest_file']
+                        #         self.log.info("CORR OUTPUT >> Trying to open file %s for output" % filename)
+                        #         self.output_file = open(filename, "wb")
+                        #    except:
+                        #         self.log.error("CORR OUTPUT >> Tried to open file %s for output but failed" % filename)
+                        #    self.sock = None
+                        #    udt = DiskWriter('cor_%i' % self.nchan, self.output_file, core=self.core)
+                        #else:
+                        #    self.sock = UDPSocket()
+                        #    self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                        #    udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                         desc = HeaderInfo()
                 self.update_stats({'curr_sample':this_gulp_time})
                 curr_time = time.time()
@@ -606,14 +608,7 @@ class CorrOutputFull(Block):
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     if self.use_cor_fmt:
-                        if self.command_vals['dest_file'] == "":
-                            with UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core) as udt:
-                                self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
-                        else:
-                            with DiskWriter('cor_%i' % self.nchan, self.output_file, core=self.core) as udt:
-                                self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
-                        del udt
-                        udt = None
+                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len)
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
