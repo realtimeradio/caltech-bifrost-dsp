@@ -462,13 +462,15 @@ class CorrOutputFull(Block):
         block_bits_sent = 0
         start_time = time.time()
         block_start = time.time()
+        source_number = 0
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
             # copy a single baseline of data
             sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32') # packet format expects floats
             # reshape and send
             sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
-            udt.send(desc, this_gulp_time, 0, i*(2*self.nstand + 1 - i) // 2 + i, 1, sdata)      
+            udt.send(desc, this_gulp_time, 0, source_number, 1, sdata)
+            source_number += sdata.shape[1]
             if self.command_vals['max_mbps'] > 0:
                 block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
                 # Apply throttle every 1MByte -- every >~100 packets
@@ -485,7 +487,7 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         gbps = 8 * self.dump_size / elapsed / 1e9
-        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
+        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (this_gulp_time, elapsed, self.dump_size, gbps))
         self.update_stats({'output_gbps': gbps})
 
     def main(self):
@@ -522,10 +524,10 @@ class CorrOutputFull(Block):
                 if self.update_pending:
                     self.update_command_vals()
                     if self.command_vals['dest_file'] != "":
-                        self.log.info("CORR OUTPUT >> Updating destination to file %s (max Mbps %.1f ns)" % 
+                        self.log.info("CORR OUTPUT >> Updating destination to file %s (max rate %.1f Mbits/s)" % 
                                       (self.command_vals['dest_file'], self.command_vals['max_mbps']))
                     else:
-                        self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max Mbps %.1f ns)" % 
+                        self.log.info("CORR OUTPUT >> Updating destination to %s:%s (max rate %.1f Mbits/s)" % 
                                       (self.command_vals['dest_ip'], self.command_vals['dest_port'], self.command_vals['max_mbps']))
                     if self.use_cor_fmt:
                         #if self.sock:
@@ -612,7 +614,7 @@ class CorrOutputFull(Block):
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     if self.use_cor_fmt:
-                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len, (npipeline << 16) + (this_pipeline+1))
+                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len, (1 << 8) + (1))
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
