@@ -450,7 +450,7 @@ class CorrOutputFull(Block):
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
         self.update_stats({'output_gbps': gbps})
 
-    def send_packets_bf(self, udt, this_gulp_time, desc, chan0, gain, navg, tuning):
+    def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, tuning):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
@@ -469,7 +469,7 @@ class CorrOutputFull(Block):
             sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32') # packet format expects floats
             # reshape and send
             sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
-            udt.send(desc, this_gulp_time, 0, source_number, 1, sdata)
+            udt.send(desc, time_tag, 0, source_number, 1, sdata)
             source_number += sdata.shape[1]
             if self.command_vals['max_mbps'] > 0:
                 block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
@@ -487,7 +487,7 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         gbps = 8 * self.dump_size / elapsed / 1e9
-        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (this_gulp_time, elapsed, self.dump_size, gbps))
+        self.log.info("CORR OUTPUT >> Sending complete for time_tag %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (time_tag, elapsed, self.dump_size, gbps))
         self.update_stats({'output_gbps': gbps})
 
     def main(self):
@@ -509,6 +509,7 @@ class CorrOutputFull(Block):
             system_nchan = ihdr['system_nchan']
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
+            samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
             sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
             npipeline = system_nchan // nchan
@@ -614,7 +615,8 @@ class CorrOutputFull(Block):
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     if self.use_cor_fmt:
-                        self.send_packets_bf(udt, this_gulp_time, desc, chan0, 0, upstream_acc_len, (1 << 8) + (1))
+                        time_tag = this_gulp_time * samples_per_spectra
+                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len, (1 << 8) + (1))
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:
