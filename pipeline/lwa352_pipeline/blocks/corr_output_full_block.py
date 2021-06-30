@@ -261,7 +261,7 @@ class CorrOutputFull(Block):
         |               |            |                | multidimensional array of 32-bit integers,  |
         |               |            |                | with dimensions ``[nchans, npols, npols,    |
         |               |            |                | 2]``. The first axis is frequency channel.  |
-        |               |            |                | The second axis is the polatizaion of the   |
+        |               |            |                | The second axis is the polarization of the  |
         |               |            |                | antenna at stand_i. The second axis is the  |
         |               |            |                | polarization of the antenna at stand_j.|    |
         |               |            |                | The fourth axis is complexity, with index 0 |
@@ -450,6 +450,19 @@ class CorrOutputFull(Block):
         self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
         self.update_stats({'output_gbps': gbps})
 
+    def print_autos(self):
+        for i in range(4):
+            print("%d-X:"%i, self.reordered_data[i,i,0,0,0:5])
+            print("%d-Y:"%i, self.reordered_data[i,i,1,1,0:5])
+            # reordered_data has shape stand x stand x pol x pol x chan x complexity
+            sdata = self.reordered_data[i, i, :, :].copy(space='system')
+            print(sdata.shape)
+            sdata2 = sdata.transpose([2,0,1,3]) # stand x chan x pol x pol x complexity
+            print("%d-X-Reordered:"%i, sdata.reshape(192,2,2,2)[0:5,0,0])
+            print("%d-Y-Reordered:"%i, sdata.reshape(192,2,2,2)[0:5,1,1])
+            print("%d-X-ReorderedT:"%i, sdata2[0:5,0,0])
+            print("%d-Y-ReorderedT:"%i, sdata2[0:5,1,1])
+
     def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, tuning):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
@@ -464,11 +477,12 @@ class CorrOutputFull(Block):
         block_start = time.time()
         source_number = 0
         for i in range(self.nstand):
-            # `data` should be in order stand1 x stand0 x chan x pol1 x pol0
+            # `data` should be in order stand1 x stand0 x chan x pol1 x pol0 x complexity
             # copy a single baseline of data
-            sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32') # packet format expects floats
+            # reordered_data array has shape stand x stand x pol x pol x chan x complexity
+            sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32')
             # reshape and send
-            sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
+            sdata = sdata.transpose([0,3,1,2,4]).reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
             udt.send(desc, time_tag, 0, source_number, 1, sdata)
             source_number += sdata.shape[1]
             if self.command_vals['max_mbps'] > 0:
@@ -614,6 +628,7 @@ class CorrOutputFull(Block):
                         self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
+                    #self.print_autos()
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
                         self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len, (1 << 8) + (1))
