@@ -504,6 +504,61 @@ class CorrOutputFull(Block):
         self.log.info("CORR OUTPUT >> Sending complete for time_tag %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (time_tag, elapsed, self.dump_size, gbps))
         self.update_stats({'output_gbps': gbps})
 
+    def check_against_file(self, upstream_acc_len, upstream_start_time):
+        assert upstream_acc_len % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline acc len"
+        assert upstream_start_time % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline start time"
+        nblocks = (upstream_acc_len // self.checkfile_acc_len)
+        self.log.info("CORR OUTPUT >> Computing expected output from test file")
+        self.log.info("CORR OUTPUT >> Upstream accumulation %d" % upstream_acc_len)
+        self.log.info("CORR OUTPUT >> File accumulation %d" % self.checkfile_acc_len)
+        self.log.info("CORR OUTPUT >> Integrating %d blocks" % nblocks)
+        dtest = np.zeros([self.nchan, self.nstand, self.nstand, self.npol, self.npol], dtype=np.complex)
+        for i in range(nblocks):
+            dtest += self.get_checkfile_corr(this_gulp_time // self.checkfile_acc_len + i)
+        # check baseline by baseline
+        badcnt = 0
+        goodcnt = 0
+        nonzerocnt = 0
+        zerocnt = 0
+        now = time.time()
+        for s0 in range(self.nstand):
+            if time.time() - now > 15:
+                self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
+                now = time.time()
+            for s1 in range(s0, self.nstand):
+                for p0 in range(self.npol):
+                   for p1 in range(self.npol):
+                       if not np.all(self.reordered_data[s0, s1, p0, p1, :, 0] == 0):
+                           nonzerocnt += 1
+                       else:
+                           zerocnt += 1
+                       if not np.all(self.reordered_data[s0, s1, p0, p1, :, 1] == 0):
+                           nonzerocnt += 1
+                       else:
+                           zerocnt += 1
+                       if np.any(self.reordered_data[s0, s1, p0, p1, :, 0] != dtest[:, s0, s1, p0, p1].real):
+                           self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] real" %(s0,s1,p0,p1))
+                           print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
+                           print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
+                           print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 0])
+                           print("expected:", dtest[0:5, s0, s1, p0, p1].real)
+                           badcnt += 1
+                       else:
+                           goodcnt += 1
+                       if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
+                           self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] imag" %(s0,s1,p0,p1))
+                           print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
+                           print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
+                           print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 1])
+                           print("expected:", dtest[0:5, s0, s1, p0, p1].imag)
+                           badcnt += 1
+                       else:
+                           goodcnt += 1
+        if badcnt > 0:
+            self.log.error("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
+        else:
+            self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
+
     def main(self):
         cpu_affinity.set_core(self.core)
         self.bind_proclog.update({'ncore': 1, 
@@ -573,59 +628,7 @@ class CorrOutputFull(Block):
                 _bf.bfXgpuReorder(ispan.data.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
                 # Check against test data if a file is provided
                 if self.checkfile:
-                    assert upstream_acc_len % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline acc len"
-                    assert upstream_start_time % self.checkfile_acc_len == 0, "CORR OUTPUT >> Testfile acc len not compatible with pipeline start time"
-                    nblocks = (upstream_acc_len // self.checkfile_acc_len)
-                    self.log.info("CORR OUTPUT >> Computing expected output from test file")
-                    self.log.info("CORR OUTPUT >> Upstream accumulation %d" % upstream_acc_len)
-                    self.log.info("CORR OUTPUT >> File accumulation %d" % self.checkfile_acc_len)
-                    self.log.info("CORR OUTPUT >> Integrating %d blocks" % nblocks)
-                    dtest = np.zeros([self.nchan, self.nstand, self.nstand, self.npol, self.npol], dtype=np.complex)
-                    for i in range(nblocks):
-                        dtest += self.get_checkfile_corr(this_gulp_time // self.checkfile_acc_len + i)
-                    # check baseline by baseline
-                    badcnt = 0
-                    goodcnt = 0
-                    nonzerocnt = 0
-                    zerocnt = 0
-                    now = time.time()
-                    for s0 in range(self.nstand):
-                        if time.time() - now > 15:
-                            self.log.info("CORR OUTPUT >> Check complete for stand %d" % s0)
-                            now = time.time()
-                        for s1 in range(s0, self.nstand):
-                            for p0 in range(self.npol):
-                               for p1 in range(self.npol):
-                                   if not np.all(self.reordered_data[s0, s1, p0, p1, :, 0] == 0):
-                                       nonzerocnt += 1
-                                   else:
-                                       zerocnt += 1
-                                   if not np.all(self.reordered_data[s0, s1, p0, p1, :, 1] == 0):
-                                       nonzerocnt += 1
-                                   else:
-                                       zerocnt += 1
-                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 0] != dtest[:, s0, s1, p0, p1].real):
-                                       self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] real" %(s0,s1,p0,p1))
-                                       print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
-                                       print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
-                                       print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 0])
-                                       print("expected:", dtest[0:5, s0, s1, p0, p1].real)
-                                       badcnt += 1
-                                   else:
-                                       goodcnt += 1
-                                   if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
-                                       self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] imag" %(s0,s1,p0,p1))
-                                       print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
-                                       print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
-                                       print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 1])
-                                       print("expected:", dtest[0:5, s0, s1, p0, p1].imag)
-                                       badcnt += 1
-                                   else:
-                                       goodcnt += 1
-                    if badcnt > 0:
-                        self.log.error("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
-                    else:
-                        self.log.info("CORR OUTPUT >> test vector check complete. Good: %d, Bad: %d, Non-zero: %d, Zero: %d" % (goodcnt, badcnt, nonzerocnt, zerocnt))
+                    self.check_against_file(upstream_acc_len, upstream_start_time)
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
                     #self.print_autos()
