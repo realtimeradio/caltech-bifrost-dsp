@@ -612,7 +612,7 @@ class CorrOutputFull(Block):
                                  self.output_file = open(filename, "wb")
                             except:
                                  self.log.error("CORR OUTPUT >> Tried to open file %s for output but failed" % filename)
-                            if not isinstance(udt, Diskwriter):
+                            if not isinstance(udt, DiskWriter):
                                 udt = DiskWriter('cor_%i' % self.nchan, self.output_file, core=self.core)
                         else:
                             if self.sock is None:
