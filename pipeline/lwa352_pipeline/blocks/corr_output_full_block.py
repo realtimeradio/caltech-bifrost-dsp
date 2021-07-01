@@ -451,17 +451,18 @@ class CorrOutputFull(Block):
         self.update_stats({'output_gbps': gbps})
 
     def print_autos(self):
+        NCHAN_PRINT = 10
         for i in range(4):
-            print("%d-X:"%i, self.reordered_data[i,i,0,0,0:5])
-            print("%d-Y:"%i, self.reordered_data[i,i,1,1,0:5])
+            print("%d-X:"%i, self.reordered_data[i,i,0,0,0:NCHAN_PRINT])
+            print("%d-Y:"%i, self.reordered_data[i,i,1,1,0:NCHAN_PRINT])
             # reordered_data has shape stand x stand x pol x pol x chan x complexity
             sdata = self.reordered_data[i, i, :, :].copy(space='system')
             print(sdata.shape)
             sdata2 = sdata.transpose([2,0,1,3]) # stand x chan x pol x pol x complexity
-            print("%d-X-Reordered:"%i, sdata.reshape(192,2,2,2)[0:5,0,0])
-            print("%d-Y-Reordered:"%i, sdata.reshape(192,2,2,2)[0:5,1,1])
-            print("%d-X-ReorderedT:"%i, sdata2[0:5,0,0])
-            print("%d-Y-ReorderedT:"%i, sdata2[0:5,1,1])
+            print("%d-X-Reordered:"%i, sdata.reshape(192,2,2,2)[0:NCHAN_PRINT,0,0])
+            print("%d-Y-Reordered:"%i, sdata.reshape(192,2,2,2)[0:NCHAN_PRINT,1,1])
+            print("%d-X-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,0,0])
+            print("%d-Y-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,1,1])
 
     def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, tuning):
         cpu_affinity.set_core(self.core)

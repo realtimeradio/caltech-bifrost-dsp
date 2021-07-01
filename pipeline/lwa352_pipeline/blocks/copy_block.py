@@ -146,6 +146,8 @@ class Copy(Block):
                             # before committing this span
                             copy_array(ospan.data, ispan.data)
                             if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
+                                #idata = ispan.data_view('ci4').reshape(self.ntime_gulp, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
+                                #print(idata[0:10,0:10,0,0])
                                 stream_synchronize()
 
                         curr_time = time.time()
