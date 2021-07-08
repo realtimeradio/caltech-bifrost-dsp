@@ -34,7 +34,7 @@ class CorrControl(BlockControl):
 
 
     def get_next_allowed_start(self, delay_s):
-        status = self.get_status(user_only=False)
+        status = self.get_bifrost_status(user_only=False)
         sync_time = status['sync_time']
         self._log.debug("Detected sync time %s" % time.ctime(sync_time))
         spectra_rate = status['bw_hz'] / status['nchan']
