@@ -11,7 +11,7 @@ get_ip () {
 
 make_cmd () {
   IP=`get_ip ${IFACE[$1]}`
-  LOGFILE=~/`hostname`_$1.log
+  LOGFILE=~/`hostname`.$1.log
   COMMAND=" \
     taskset ${CPUMASK[$1]} \
     lwa352-pipeline.py \
