@@ -1,1 +1,1 @@
-killall lwa352-pipeline.py
+killall -9 lwa352-pipeline.py
