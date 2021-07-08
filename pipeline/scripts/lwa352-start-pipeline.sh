@@ -9,24 +9,29 @@ get_ip () {
   echo `ip addr show $1 | grep -o "inet [0-9]*\.[0-9]*\.[0-9]*\.[0-9]*" | grep -o "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"`
 }
 
-IP=`get_ip ${IFACE[$1]}`
-LOGFILE=~/`hostname`_$1.log
+make_cmd () {
+  IP=`get_ip ${IFACE[$1]}`
+  LOGFILE=~/`hostname`_$1.log
+  COMMAND=" \
+    taskset ${CPUMASK[$1]} \
+    lwa352-pipeline.py \
+    --nobeamform \
+    --ibverbs \
+    --gpu $1 \
+    --pipelineid $1 \
+    --useetcd \
+    --etcdhost $ETCDHOST \
+    --ip $IP \
+    --bufgbytes $BUFGBYTES \
+    --cores ${CORES[$1]}
+    --logfile $LOGFILE \
+  "
+  echo $COMMAND
+}
 
-COMMAND=\
-"taskset ${CPUMASK[$1]} \
-	lwa352-pipeline.py \
-	--nobeamform \
-	--ibverbs \
-	--gpu $1 \
-	--pipelineid $1 \
-	--useetcd \
-	--etcdhost $ETCDHOST \
-	--ip $IP \
-	--bufgbytes $BUFGBYTES \
-	--cores ${CORES[$1]}
-        --logfile $LOGFILE \
-"
-
-echo $COMMAND
-
-$COMMAND
+for v in "$@"
+do
+  cmd=`make_cmd $v`
+  echo $cmd
+  $cmd &
+done
