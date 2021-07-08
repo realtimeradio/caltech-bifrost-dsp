@@ -10,7 +10,7 @@ get_ip () {
 }
 
 IP=`get_ip ${IFACE[$1]}`
-LOGFILE=~/`hostname`_$1
+LOGFILE=~/`hostname`_$1.log
 
 COMMAND=\
 "taskset ${CPUMASK[$1]} \
