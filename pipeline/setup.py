@@ -22,7 +22,7 @@ setuptools.setup(
     author="Real-Time Radio Systems Ltd",
     author_email="jack@realtimeradio.co.uk",
     description="A correlator / beamformer pipeline for the LWA-352",
-    scripts=glob.glob('scripts/*.py'),
+    scripts=glob.glob('scripts/*.py')+glob.glob('scripts/*.sh'),
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/realtimeradio/caltech-bifrost-dsp",
