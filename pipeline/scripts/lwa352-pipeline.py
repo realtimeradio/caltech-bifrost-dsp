@@ -66,7 +66,7 @@ def build_pipeline(args):
     if args.logfile is None:
         logHandler = logging.StreamHandler(sys.stdout)
     else:
-        logHandler = Adp.AdpFileHandler(config, args.logfile)
+        logHandler = logging.FileHandler(args.logfile)
     logHandler.setFormatter(logFormat)
     log.addHandler(logHandler)
     verbosity = args.verbose - args.quiet
