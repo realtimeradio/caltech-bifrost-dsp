@@ -61,6 +61,8 @@ class DummySource(object):
         | ``npol``         | int        |               | ``npol``        | Number of polarizations per stand   |
         |                  |            |               |                 | in the sequence                     |
         +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``fs_hz``        | int        | Hz            | ``196608000``   | ADC Sample Rate                     |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
         | ``input_to_ant`` | list[int]  |               | entry ``i`` is  | List of input to stand/pol mappings |
         |                  |            |               | ``[i // npol, i | with dimensions ``[nstand x npol,   |
         |                  |            |               | % npol]``       | 2]``. E.g. if entry ``N`` of this   |
@@ -221,6 +223,7 @@ class DummySource(object):
         hdr['system_nchan'] = self.nchan
         hdr['chan0'] = 0
         hdr['bw_hz'] = 24e3 * self.nchan
+        hdr['fs_hz'] = 196608000
         hdr['sfreq'] = 0.0
         hdr['nstand'] = self.nstand
         hdr['npol'] = self.npol
