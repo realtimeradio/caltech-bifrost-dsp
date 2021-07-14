@@ -158,6 +158,7 @@ def main(args):
                 tLastPoll = time.time()
                 # Generate a list of hosts (assuming keys have format keyroot/<host>/...)
                 hosts = [_[1].key.decode()[len(args.keyroot):].lstrip('/').split('/')[0] for _ in ec.get_prefix(args.keyroot, keys_only=True)]
+                hosts = list(set(hosts))
                 n_hosts = len(hosts)
                 if n_hosts == 0:
                     _add_line(scr, 0, 0, "No hosts detected", std)
@@ -240,7 +241,7 @@ def main(args):
 
             k = kk + 4
             k = _add_line(scr, k, 0, time.ctime(), std)
-            _add_line(scr, k, 0, '%d'%hn, std)
+            _add_line(scr, k, 0, '%d of %d' % (hn, n_hosts), std)
             ### Clear to the bottom
             scr.clrtobot()
             ### Refresh

@@ -60,7 +60,7 @@ if __name__ == "__main__":
         description='Display perfomance of blocks in Bifrost pipelines',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
-    parser.add_argument('-p', '--pipelines', type=int, default='2',
+    parser.add_argument('-p', '--pipelines', type=int, default=4,
                         help='Number of pipelines per host')
     parser.add_argument('hosts', nargs='+',
                         help='Hostnames of servers running pipelines')
