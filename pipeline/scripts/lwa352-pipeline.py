@@ -125,6 +125,9 @@ def build_pipeline(args):
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
+    CHAN_PER_PACKET = 96
+    NSNAP = 11
+    SNAP0 = 0
     NETGSIZE = 96
     NET_NGULP = 5*4 # Number of Net block gulps collated in the first copy
     GSIZE = 480
@@ -139,17 +142,15 @@ def build_pipeline(args):
 
     cores = CoreList(map(int, args.cores.split(',')))
     
-    nroach = 11
-    nfreqblocks = 2
-    roach0 = 0
+    nfreqblocks = nchan // CHAN_PER_PACKET
     if not args.fakesource:
-        print("binding input to", args.ip)
-        iaddr = Address(args.ip, 10000)
+        print("binding input to %s:%d" %(args.ip, args.port))
+        iaddr = Address(args.ip, args.port)
         isock = UDPSocket()
         isock.bind(iaddr)
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
-                           nsrc=nroach*nfreqblocks, src0=0, max_payload_size=6500,
+                           nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=6500,
                            buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE,
                            core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
@@ -255,7 +256,7 @@ def main(argv):
                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
-    parser.add_argument('--nchan',            type=int, default=192      help='Number of frequency channels in the pipeline')
+    parser.add_argument('--nchan',            type=int, default=192,     help='Number of frequency channels in the pipeline')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
     parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
     parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
@@ -275,6 +276,7 @@ def main(argv):
     parser.add_argument('--pycorrout',        action='store_true',       help='Don\'t use CORR output packets, use custom format')
     parser.add_argument('--etcdhost',         default='etcdhost',        help='Host serving etcd functionality')
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
+    parser.add_argument('--port',             type=int, default=10000,   help='UDP port to which to bind')
     parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
