@@ -249,6 +249,8 @@ class CorrOutputPart(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
+        why2 = ProcLog("udp_transmit/cat")
+        why2.update("because")
         for iseq in self.iring.read(guarantee=self.guarantee):
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -271,12 +273,16 @@ class CorrOutputPart(Block):
                     self.log.info("CORR PART OUTPUT >> Updating destination to %s:%s" %
                                   (self.command_vals['dest_ip'], self.command_vals['dest_port']))
                     if self.use_cor_fmt:
-                        if self.sock: del self.sock
                         if udt: del udt
+                        if self.sock is None:
+                            self.sock = UDPSocket()
+                        else:
+                            self.sock.close()
                         self.sock = UDPSocket()
                         self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
                         
-                        udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+                        if not isinstance(udt, UDPTransmit):
+                            udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                         desc = HeaderInfo()
                 self.stats.update({'curr_sample': this_gulp_time})
                 self.update_stats()
