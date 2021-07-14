@@ -131,7 +131,7 @@ def build_pipeline(args):
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
-    nchan = 192 #184
+    nchan = args.nchan
     system_nchan = nchan * 16
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
 
@@ -255,6 +255,7 @@ def main(argv):
                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-l', '--logfile',    default=None,              help='Specify log file')
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
+    parser.add_argument('--nchan',            type=int, default=192      help='Number of frequency channels in the pipeline')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
     parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
     parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
