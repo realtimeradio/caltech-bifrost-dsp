@@ -216,8 +216,8 @@ class BeamformOutput(Block):
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
-        self.dest_ip = ['0.0.0.0']
-        self.new_dest_ip = ['0.0.0.0']
+        self.dest_ip = '0.0.0.0'
+        self.new_dest_ip = '0.0.0.0'
         self.dest_port = dest_port
         self.new_dest_port = dest_port
         self.packet_delay_ns = 1
@@ -253,7 +253,7 @@ class BeamformOutput(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
-        udts = None
+        udt = None
         socks = None
         for iseq in self.iring.read(guarantee=self.guarantee):
             # Update control each sequence
@@ -277,14 +277,12 @@ class BeamformOutput(Block):
                     self.dest_ip = self.new_dest_ip
                     self.dest_port = self.new_dest_port
                     self.update_pending = False
-                    self.log.info("BEAM OUTPUT %d >> Updating destination to %s:%s" % (beam_id, self.dest_ip, self.dest_port))
+                    self.log.info("BEAM OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
                     if socks: del socks
-                    if udts: del udts
-                    socks = [UDPSocket for _ in range(nbeam)]
-                    udts = []
-                    for sn, sock in enumerate(socks):
-                        sock.connect(Address(self.dest_ip[sn] % len(dest_ip)), self.dest_port)
-                        udts += [UDPTransmit('ibeam1_%i' % (nchan*(npol**2)//2), sock=sock, core=self.core)]
+                    if udt: del udt
+                    sock = UDPSocket()
+                    sock.connect(Address(self.dest_ip, self.dest_port))
+                    udt = UDPTransmit('ibeam1_%i' % (nchan*(npol**2)//2), sock=sock, core=self.core)
                     desc = HeaderInfo()
                     desc.set_nchan(system_nchan)
                     desc.set_chan0(chan0)
@@ -304,12 +302,11 @@ class BeamformOutput(Block):
                 idata = ispan.data.view('f32').reshape([self.ntime_gulp, nbeam, nchan, npol**2])
                 if self.dest_ip != '0.0.0.0':
                     start_time = time.time()
-                    for b in range(nbeam):
-                        idata_beam = idata[:,b,:,:].view('cf64').reshape(eslf.ntime_gulp, 1, nchan * npol**2 // 2)
-                        try:
-                            udts[b].send(dest, this_gulp_time, (system_chan // nchan) * b + chan0 // nchan, 1, idata_beam)
-                        except Exception as e:
-                            self.log.error("BEAM OUTPUT (beam %d) >> Sending error: %s" % (b, str(e)))
+                    idata_beam = idata[:,:,:,:].view('cf64').reshape(self.ntime_gulp, nbeam, nchan * npol**2 // 2)
+                    try:
+                        udt.send(dest, this_gulp_time, (system_chan // nchan) + chan0 // nchan, 1, idata_beam)
+                    except Exception as e:
+                        self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
                     stop_time = time.time()
                     elapsed = stop_time - start_time
                 curr_time = time.time()

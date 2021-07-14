@@ -269,7 +269,6 @@ class Beamform(Block):
                 
                 freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
 
-                ticksPerTime = int(FS) / int(CHAN_BW)
                 base_time_tag = iseq.time_tag
                 
                 ohdr = ihdr.copy()
@@ -314,7 +313,7 @@ class Beamform(Block):
                             BFSync()
                             
                         ## Update the base time tag
-                        base_time_tag += self.ntime_gulp*ticksPerTime
+                        base_time_tag += self.ntime_gulp
                         
                         curr_time = time.time()
                         process_time = curr_time - prev_time

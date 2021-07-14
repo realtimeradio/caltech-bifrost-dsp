@@ -206,7 +206,6 @@ class BeamformSumBeams(Block):
                 nbeam  = ihdr['nbeam']
                 assert nchan == self.nchan
                 
-                ticksPerTime = int(FS) / int(CHAN_BW)
                 base_time_tag = iseq.time_tag
                 
                 ohdr = ihdr.copy()
@@ -248,7 +247,7 @@ class BeamformSumBeams(Block):
                             BFSync()
                             
                         ## Update the base time tag
-                        base_time_tag += self.ntime_gulp*ticksPerTime
+                        base_time_tag += self.ntime_gulp
                         
                         curr_time = time.time()
                         process_time = curr_time - prev_time

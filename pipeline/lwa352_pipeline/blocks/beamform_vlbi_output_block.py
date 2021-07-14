@@ -199,6 +199,7 @@ class BeamformVlbiOutput(Block):
         self.new_dest_port = dest_port
         self.update_pending = True
         self.ntime_gulp = ntime_gulp
+        self.nbeam_send = 1
 
     def _etcd_callback(self, watchresponse):
         """
@@ -224,7 +225,6 @@ class BeamformVlbiOutput(Block):
 
         prev_time = time.time()
         for iseq in self.iring.read(guarantee=self.guarantee):
-            # Update control each sequence
             self.update_pending = True
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -247,11 +247,11 @@ class BeamformVlbiOutput(Block):
                     self.dest_port = self.new_dest_port
                     self.update_pending = False
                     self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
-                    if self.sock: del self.sock
-                    if udt: del udt
-                    self.sock = UDPSocket()
-                    self.sock.connect(Address(self.dest_ip, self.dest_port))
-                    udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
+                    #if self.sock: del self.sock
+                    #if udt: del udt
+                    #self.sock = UDPSocket()
+                    #self.sock.connect(Address(self.dest_ip, self.dest_port))
+                    #udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
                     desc = HeaderInfo()
                     desc.set_nchan(system_nchan)
                     desc.set_chan0(chan0)
@@ -287,4 +287,3 @@ class BeamformVlbiOutput(Block):
                 self.update_stats()
                 # And, update overall time counter
                 this_gulp_time += self.ntime_gulp
-            del udt
