@@ -126,17 +126,18 @@ def build_pipeline(args):
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
     CHAN_PER_PACKET = 96
+    NPIPELINE = 32
     NSNAP = 11
     SNAP0 = 0
     NETGSIZE = 96
     NET_NGULP = 5*4 # Number of Net block gulps collated in the first copy
+    CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
     GSIZE = 480
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
     nchan = args.nchan
-    system_nchan = nchan * 16
-    CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
+    system_nchan = nchan * NPIPELINE
 
     assert ((NET_NGULP*NETGSIZE) % GSIZE == 0), "GSIZE must be a multiple of NETGSIZE*NET_NGULP"
 
