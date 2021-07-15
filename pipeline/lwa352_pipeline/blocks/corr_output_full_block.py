@@ -38,31 +38,37 @@ class CorrOutputFull(Block):
     .. table::
         :widths: 25 10 10 55
 
-        +---------------+--------+-------+------------------------------------------------+
+        +-----------------+--------+-------+------------------------------------------------+
         | Field         | Format | Units | Description                                    |
-        +===============+========+=======+================================================+
+        +==================+========+=======+================================================+
         | ``seq0``      | int    |       | Spectra number for the first sample in the     |
         |               |        |       | input sequence                                 |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
         | ``acc_len``   | int    |       | Number of spectra integrated into each output  |
         |               |        |       | sample by upstream processing                  |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
         | ``nchan``     | int    |       | The number of frequency channels in the input  |
         |               |        |       | visibility matrices                            |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
+        | ``system_nchan``     | int    |       | The total number of frequency channels processed  |
+        |               |        |       | by the whole system.                           |
+        |               |        |       | Only required if ``use_cor_fmt=True``          |
+        +------------------+--------+-------+------------------------------------------------+
         | ``chan0``     | int    |       | The index of the first frequency channel in    |
         |               |        |       | the input visibility matrices                  |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
         | ``npol``      | int    |       | The number of polarizations per stand in the   |
         |               |        |       | input visibility matrices                      |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
         | ``bw_hz``     | double | Hz    | Bandwidth of the input visibility matrices.    |
-        |               |        |       | Only required if ``use_cor_fmt=False``         |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
+        | ``fs_hz``     | int    | Hz    | Bandwidth of the input visibility matrices.    |
+        |               |        |       | Only required if ``use_cor_fmt=True``          |
+        +------------------+--------+-------+------------------------------------------------+
         | ``sfreq``     | double | Hz    | Center frequency of the first channel in the   |
         |               |        |       | input visibility matrices. Only required if    |
         |               |        |       | ``use_cor_fmt=False``.                         |
-        +---------------+--------+-------+------------------------------------------------+
+        +------------------+--------+-------+------------------------------------------------+
 
     Optional header fields, which describe the input xGPU buffer contents. If not
     supplied as headers, these should be provided as keyword arguments when this
@@ -579,14 +585,16 @@ class CorrOutputFull(Block):
             upstream_acc_len = ihdr['acc_len']
             upstream_start_time = this_gulp_time
             nchan = ihdr['nchan']
-            system_nchan = ihdr['system_nchan']
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
-            samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
-            sfreq = ihdr['sfreq']
+            if self.use_cor_fmt:
+                samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
+                system_nchan = ihdr['system_nchan']
+                npipeline = system_nchan // nchan
+                this_pipeline = (chan0 // nchan) % npipeline
+            if not self.use_cor_fmt:
+                sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
-            npipeline = system_nchan // nchan
-            this_pipeline = (chan0 // nchan) % npipeline
             if 'ant_to_bl_id' in ihdr:
                 self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
             if 'bl_is_conj' in ihdr:
