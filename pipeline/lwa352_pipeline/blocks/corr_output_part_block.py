@@ -349,8 +349,8 @@ class CorrOutputPart(Block):
         desc.set_gain(gain)
         desc.set_decimation(navg)
         nvis_per_pkt = COR_NPOL**2 # 4 baselines per packet because assume dual pol
-        nvis = len(baselines) // nvis_per_pkt
-        desc.set_nsrc(nvis)
+        nvis = len(baselines)
+        desc.set_nsrc(nvis // nvis_per_pkt)
         nstand_virt = int((-1 + np.sqrt(1 + 2*nvis))/2) # effective number of stands
         desc.set_tuning(tuning)
         pkt_payload_bits = nchan * nvis_per_pkt * 8 * 8
