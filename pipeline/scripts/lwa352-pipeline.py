@@ -157,7 +157,7 @@ def build_pipeline(args):
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE, core=cores.pop(0),
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP, core=cores.pop(0),
                    skip_write=args.nodata, target_throughput=args.target_throughput,
                    nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
@@ -221,6 +221,7 @@ def build_pipeline(args):
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
                           nvis_per_packet=16,
+                          use_cor_fmt=not args.pycorrout,
                   ))
 
     if not (args.nobeamform or args.nogpu):

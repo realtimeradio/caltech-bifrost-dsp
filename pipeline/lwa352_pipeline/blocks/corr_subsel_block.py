@@ -94,7 +94,7 @@ class CorrSubsel(Block):
     *Output Data Buffer*: A bifrost ring buffer of 32+32 bit complex integer data.
     The output buffer may be in GPU or CPU memory, and has dimensions
     ``time x frequency channel x visibility x complexity``.
-    The output buffer is written in blocks of ``nchan // nchan_sum x nvis_out[=4656]``
+    The output buffer is written in blocks of ``nchan // nchan_sum x nvis_out[=4704]``
     64-bit words.
 
     **Instantiation**
@@ -154,7 +154,7 @@ class CorrSubsel(Block):
         |                  |        |         | multidimensional list with   |
         |                  |        |         | dimensions ``[nvis, 2, 2]``. |
         |                  |        |         | The first axis runs over the |
-        |                  |        |         | 4656 baselines which may be  |
+        |                  |        |         | 4704 baselines which may be  |
         |                  |        |         | selected. The second index   |
         |                  |        |         | is 0 for the first           |
         |                  |        |         | (unconjugated) input         |
@@ -170,17 +170,17 @@ class CorrSubsel(Block):
     To set the baseline subsection to choose:
 
       - visibility 0: the autocorrelation of antenna 0, polarization 0
-      -  visibility 1: the cross correlation of antenna 5, polarization 1 with antenna 6, polarization 0
+      - visibility 1: the cross correlation of antenna 5, polarization 1 with antenna 6, polarization 0
 
     use:
 
     ``subsel = [ [[0,0], [0,0]], [[5,1], [6,0]], ... ]``
 
-    Note that the uploaded selection list must always have 4656 entries.
+    Note that the uploaded selection list must always have 4704 entries.
 
     """
 
-    nvis_out = 4656
+    nvis_out = 48 * 49 * 4 // 2 # 48-stand, dual-pol
     def __init__(self, log, iring, oring, guarantee=True, core=-1, etcd_client=None,
                  nchan=192, npol=2, nstand=352, nchan_sum=4, gpu=-1,
                  antpol_to_bl=None, bl_is_conj=None):

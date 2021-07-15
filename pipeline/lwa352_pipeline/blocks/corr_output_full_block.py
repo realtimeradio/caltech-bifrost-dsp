@@ -644,7 +644,9 @@ class CorrOutputFull(Block):
                     #self.print_autos()
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
-                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len, (1 << 8) + (1))
+                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len,
+                                (1 << 8) + (1))
+                        #        (npipeline << 8) + (this_pipeline + 1))
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:

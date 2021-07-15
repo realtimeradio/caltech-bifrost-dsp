@@ -220,7 +220,7 @@ class DummySource(object):
         self.oring.resize(self.gulp_size, self.gulp_size*4)
         hdr = {}
         hdr['nchan'] = self.nchan
-        hdr['system_nchan'] = self.nchan
+        hdr['system_nchan'] = 32*self.nchan
         hdr['chan0'] = 0
         hdr['bw_hz'] = 24e3 * self.nchan
         hdr['fs_hz'] = 196608000
