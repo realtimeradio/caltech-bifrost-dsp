@@ -353,7 +353,7 @@ class CorrOutputPart(Block):
         desc.set_nsrc(nvis)
         nstand_virt = int((-1 + np.sqrt(1 + 2*nvis))/2) # effective number of stands
         desc.set_tuning(tuning)
-        pkt_payload_bits = nchan * n_vis_per_pkt * 8 * 8
+        pkt_payload_bits = nchan * nvis_per_pkt * 8 * 8
         start_time = time.time()
         source_number = 0
         dview = data.view('cf32').reshape([nchan, nstand_virt, nstand_virt, COR_NPOL, COR_NPOL])
