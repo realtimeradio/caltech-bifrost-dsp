@@ -430,7 +430,7 @@ class CorrOutputPart(Block):
                         # Read chan x baseline x complexity input data.
                         idata = ispan.data_view('i32').reshape([nchan, nvis, 2])
                         self.send_packets_bf(idata, baselines, udt, time_tag, desc, chan0, nchan, 0,
-                                upstream_acc_len, (npipline<<8) + (this_pipeline+1))
+                                upstream_acc_len, (npipeline<<8) + (this_pipeline+1))
                         pass
                     else:
                         # Read chan x baseline x complexity input data.
