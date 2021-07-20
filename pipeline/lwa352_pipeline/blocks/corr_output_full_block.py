@@ -573,10 +573,6 @@ class CorrOutputFull(Block):
 
         desc = HeaderInfo()
         prev_time = time.time()
-        why = ProcLog("disk_writer/cat")
-        why.update("because")
-        why2 = ProcLog("udp_transmit/cat")
-        why2.update("because")
         for iseq in self.iring.read(guarantee=self.guarantee):
             self.update_pending = True # Reprocess commands on each new sequence
             udt = None
