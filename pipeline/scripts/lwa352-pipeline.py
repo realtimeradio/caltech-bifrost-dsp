@@ -108,7 +108,6 @@ def build_pipeline(args):
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
     
-    NBEAM = 16
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
@@ -125,6 +124,7 @@ def build_pipeline(args):
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
+    NBEAM = 16
     CHAN_PER_PACKET = 96
     NPIPELINE = 32
     NSNAP = 11

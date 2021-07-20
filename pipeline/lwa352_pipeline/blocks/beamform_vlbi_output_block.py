@@ -193,30 +193,12 @@ class BeamformVlbiOutput(Block):
         cpu_affinity.set_core(self.core)
 
         self.sock = None
-        self.dest_ip = '0.0.0.0'
-        self.new_dest_ip = '0.0.0.0'
-        self.dest_port = dest_port
-        self.new_dest_port = dest_port
-        self.update_pending = True
+        self.define_command_key('dest_ip', type=str, initial_val='0.0.0.0')
+        self.define_command_key('dest_port', type=int, initial_val=dest_port)
+        self.update_command_vals()
         self.ntime_gulp = ntime_gulp
         self.nbeam_send = 1
-
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decode new destination_ip and port
-        """
-        v = json.loads(watchresponse.events[0].value)
-        if 'dest_ip' in v:
-            self.new_dest_ip = v['dest_ip']
-        if 'dest_port' in v:
-            self.new_dest_port = v['dest_port']
-        self.update_pending = True
-        self.stats.update({'new_dest_ip': self.new_dest_ip,
-                           'new_dest_port': self.new_dest_port,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.npol = 2 # If the upstream beamformer provides single pol data, we interpret pairs of beams as dual-pol
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -235,30 +217,30 @@ class BeamformVlbiOutput(Block):
             chan0 = ihdr['chan0']
             npol  = ihdr['npol']
             igulp_size = self.ntime_gulp * nbeam * nchan * npol * 2 * nbit // 8
-            idata_cpu = BFArray(shape=[self.ntime_gulp, nchan, self.nbeam_send], dtype='cf64', space='cuda_host')
             packet_cnt = 0
             udt = None
+            desc = HeaderInfo()
+            desc.set_nchan(system_nchan)
+            desc.set_chan0(chan0)
+            desc.set_nsrc(system_nchan // nchan)
+            desc.set_tuning(0)
             for ispan in iseq.read(igulp_size):
                 if ispan.size < igulp_size:
                     continue # ignore final gulp
                 # Update destinations if necessary
                 if self.update_pending:
-                    self.dest_ip = self.new_dest_ip
-                    self.dest_port = self.new_dest_port
-                    self.update_pending = False
-                    self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
-                    #if self.sock: del self.sock
-                    #if udt: del udt
-                    #self.sock = UDPSocket()
-                    #self.sock.connect(Address(self.dest_ip, self.dest_port))
-                    #udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
-                    desc = HeaderInfo()
-                    desc.set_nchan(system_nchan)
-                    desc.set_chan0(chan0)
-                    desc.set_nsrc(system_nchan // nchan)
-                    desc.set_tuning(0)
-                    self.stats.update({'dest_ip': self.dest_ip,
-                                       'dest_port': self.dest_port,
+                    self.update_command_vals()
+                    self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % 
+                            (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                    if self.sock is None:
+                        self.sock = UDPSocket()
+                    else:
+                        self.sock.close()
+                    self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                    if not isinstance(udt, UDPTransmit):
+                        udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
+                    self.stats.update({'dest_ip': self.command_vals['dest_ip'],
+                                       'dest_port': self.command_vals['dest_port'],
                                        'update_pending': self.update_pending,
                                        'last_update_time': time.time()})
                 self.stats['curr_sample'] = this_gulp_time
@@ -266,13 +248,13 @@ class BeamformVlbiOutput(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                if self.dest_ip != '0.0.0.0':
+                if self.command_vals['dest_ip'] != '0.0.0.0':
                     start_time = time.time()
-                    idata = ispan.data.view('cf64').reshape([self.ntime_gulp, nchan, nbeam])
-                    idata_cpu[...] = idata[:, :, 0:self.nbeam_send]
-                    idata_cpu = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send)
+                    idata = ispan.data.view('cf32').reshape([self.ntime_gulp, nchan, nbeam])
+                    idata_cpu = idata[:,:,0:(self.npol // npol) * self.nbeam_send].copy(space='system')
+                    idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
                     try:
-                        udt.send(desc, this_gulp_time, 1, chan0 // nchan, 1, idata_cpu)
+                        udt.send(desc, this_gulp_time, 1, chan0 // nchan, 1, idata_cpu_r)
                     except Exception as e:
                         self.log.error("VLBI OUTPUT >> Sending error: %s" % str(e))
                     stop_time = time.time()
