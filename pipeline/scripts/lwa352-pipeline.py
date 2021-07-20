@@ -136,6 +136,8 @@ def build_pipeline(args):
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
+    ninput_per_snap = nstand*npol // NSNAP
+    packet_buf_size = ninput_per_snap * CHAN_PER_PACKET + 128
     nchan = args.nchan
     system_nchan = nchan * NPIPELINE
 
@@ -151,7 +153,7 @@ def build_pipeline(args):
         isock.bind(iaddr)
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
-                           nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=6500,
+                           nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=packet_buf_size,
                            buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE,
                            core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
