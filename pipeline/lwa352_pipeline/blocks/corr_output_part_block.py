@@ -355,18 +355,25 @@ class CorrOutputPart(Block):
         desc.set_tuning(tuning)
         pkt_payload_bits = nchan * nvis_per_pkt * 8 * 8
         start_time = time.time()
-        source_number = 0
-        dview = data.view('cf32').reshape([nchan, nstand_virt, nstand_virt, COR_NPOL, COR_NPOL])
+        dview = data.view('cf32').reshape([nchan, nvis // nvis_per_pkt, COR_NPOL, COR_NPOL])
+        first_baseline = 0
+        baselines_sent = 0
         for i in range(nstand_virt):
             # `data` should be sent in order stand1 x stand0 x chan x pol1 x pol0 x complexity
-            # Input view is nchan x stand1 x stand0 x pol1 x pol0
+            # Input view is nchan x baselines x pol1 x pol0. Assume they are ordered
+            # So that all the stand0 baselines come first, then stand1, etc.
             # Read a single stand
-            sdata = self.reordered_data[:, i, i:, :, :].copy(space='system')
+            n_bl_this_stand = nstand_virt - i
+            last_baseline = first_baseline + n_bl_this_stand
+            sdata = dview[:, first_baseline:last_baseline, :, :].copy(space='system')
             # reshape and send
-            sdata = sdata.transpose([1,0,1,2]).reshape(1, -1, nchan*nvis_per_pkt)
-            udt.send(desc, time_tag, 0, source_number, 1, sdata)
-            source_number += sdata.shape[1]
+            sdata = sdata.transpose([1,0,2,3]).reshape(1, -1, nchan*nvis_per_pkt).view('cf32')
+            udt.send(desc, time_tag, 0, first_baseline, 1, sdata)
+            first_baseline += sdata.shape[1]
+            baselines_sent += n_bl_this_stand
         del sdata
+        assert first_baseline == baselines_sent
+        assert baselines_sent == nvis // 4
         stop_time = time.time()
         elapsed = stop_time - start_time
         gbps = 8 * 8 * nvis * nchan / elapsed / 1e9
@@ -379,8 +386,6 @@ class CorrOutputPart(Block):
 
         desc = HeaderInfo()
         prev_time = time.time()
-        why2 = ProcLog("udp_transmit_2/cat")
-        why2.update("because")
         for iseq in self.iring.read(guarantee=self.guarantee):
             self.update_pending = True # Reprocess commands on each new sequence
             udt = None
@@ -430,8 +435,7 @@ class CorrOutputPart(Block):
                         # Read chan x baseline x complexity input data.
                         idata = ispan.data_view('i32').reshape([nchan, nvis, 2])
                         self.send_packets_bf(idata, baselines, udt, time_tag, desc, chan0, nchan, 0,
-                                upstream_acc_len, (npipeline<<8) + (this_pipeline+1))
-                        pass
+                                upstream_acc_len, (1<<8) + (1))
                     else:
                         # Read chan x baseline x complexity input data.
                         # Transpose to baseline x chan x complexity
