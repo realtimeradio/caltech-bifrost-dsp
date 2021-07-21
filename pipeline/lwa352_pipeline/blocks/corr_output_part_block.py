@@ -53,10 +53,6 @@ class CorrOutputPart(Block):
         +---------------+--------+-------+------------------------------------------------+
         | ``chan0``     | int    |       | The index of the first frequency channel in    |
         |               |        |       | the input visibility matrices                  |
-        +------------------+--------+-------+------------------------------------------------+
-        | ``system_nchan``     | int    |       | The total number of frequency channels processed  |
-        |               |        |       | by the whole system.                           |
-        |               |        |       | Only required if ``use_cor_fmt=True``          |
         +---------------+--------+-------+------------------------------------------------+
         | ``npol``      | int    |       | The number of polarizations per stand in the   |
         |               |        |       | input visibility matrices                      |
@@ -410,7 +406,6 @@ class CorrOutputPart(Block):
                 sfreq = ihdr['sfreq']
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
-                system_nchan = ihdr['system_nchan']
                 this_pipeline = (chan0 // nchan) % self.npipeline
             igulp_size = nvis * nchan * 8
             dout = np.zeros(shape=[nvis, nchan, 2], dtype='>i')
