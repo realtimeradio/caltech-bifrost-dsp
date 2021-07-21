@@ -123,18 +123,20 @@ class BeamformOutput(Block):
         +------------------+-------------+---------+------------------------------+
         | Field            | Format      | Units   | Description                  |
         +==================+=============+=========+==============================+
-        | ``dest_ip``      | list of  |         | Destination IP addresses for |
+        | ``dest_ip``      | list of     |         | Destination IP addresses for |
         |                  | string      |         | transmitted packets, in      |
         |                  |             |         | dotted-quad format. Eg.      |
         |                  |             |         | ``"10.0.0.1"``. Use          |
         |                  |             |         | ``"0.0.0.0"`` to skip        |
-        |                  |             |         | sending packets.
-        |                  |             |         | Beam    |
-        |                  |             |         | ``i`` is sent to ``dest_ip[i |
-        |                  |             |         | % len(dest_ip)]``.           |
+        |                  |             |         | sending packets. Beam ``i``  |
+        |                  |             |         | is sent to ``dest_ip[i %     |
+        |                  |             |         | len(dest_ip)]``.             |
         +------------------+-------------+---------+------------------------------+
-        | ``dest_port``    | list of   |         | UDP port to which packets    |
-        |                  | int         |         | should be transmitted. Beam ``i`` is sent to ``dest_port[i] % len(dest_port)``  |
+        | ``dest_port``    | list of int |         | UDP port to which packets    |
+        |                  |             |         | should be transmitted. Beam  |
+        |                  |             |         | ``i`` is sent to             |
+        |                  |             |         | ``dest_port[i] %             |
+        |                  |             |         | len(dest_port)``             |
         +------------------+-------------+---------+------------------------------+
 
     **Output Data Format**
@@ -179,7 +181,7 @@ class BeamformOutput(Block):
         |               |            |        | packet, and 3 beams, ``server`` runs from 1 |
         |               |            |        | to 6.                                       |
         +---------------+------------+--------+---------------------------------------------+
-        | beam         | uint8      |        | One-based "beam number".
+        | beam          | uint8      |        | One-based "beam number".                    |
         +---------------+------------+--------+---------------------------------------------+
         | gbe           | uint8      |        | AKA "tuning". Set to 0.                     |
         +---------------+------------+--------+---------------------------------------------+
@@ -201,7 +203,8 @@ class BeamformOutput(Block):
         | data          | float      |        | Data payload. Beam powers, in order         |
         |               |            |        | (slowest to fastest) ``Channel x Beam x     |
         |               |            |        | Beam Element``. Beam elements are ``[XX,    |
-        |               |            |        | YY, real(XY), imag(XY)]``. Data are sent in native host endianness                 |
+        |               |            |        | YY, real(XY), imag(XY)]``. Data are sent in |
+        |               |            |        | native host endianness                      |
         +---------------+------------+--------+---------------------------------------------+
  
     """
