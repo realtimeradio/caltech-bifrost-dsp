@@ -123,45 +123,41 @@ class BeamformOutput(Block):
         +------------------+-------------+---------+------------------------------+
         | Field            | Format      | Units   | Description                  |
         +==================+=============+=========+==============================+
-        | ``dest_ip``      | [list of]   |         | Destination IP addresses for |
+        | ``dest_ip``      | list of  |         | Destination IP addresses for |
         |                  | string      |         | transmitted packets, in      |
         |                  |             |         | dotted-quad format. Eg.      |
         |                  |             |         | ``"10.0.0.1"``. Use          |
         |                  |             |         | ``"0.0.0.0"`` to skip        |
-        |                  |             |         | sending packets. If a single |
-        |                  |             |         | string is provided, all      |
-        |                  |             |         | packets will be sent to this |
-        |                  |             |         | address. If a list of        |
-        |                  |             |         | strings is provided, beam    |
+        |                  |             |         | sending packets.
+        |                  |             |         | Beam    |
         |                  |             |         | ``i`` is sent to ``dest_ip[i |
         |                  |             |         | % len(dest_ip)]``.           |
         +------------------+-------------+---------+------------------------------+
-        | ``dest_port``    | int         |         | UDP port to which packets    |
-        |                  |             |         | should be transmitted.       |
+        | ``dest_port``    | list of   |         | UDP port to which packets    |
+        |                  | int         |         | should be transmitted. Beam ``i`` is sent to ``dest_port[i] % len(dest_port)``  |
         +------------------+-------------+---------+------------------------------+
 
     **Output Data Format**
 
-    *TODO: This should be updated to a TBC "pbeam" format*
-
     Each packet output contains a single time sample of data from multiple channels
     and a single power beam.
-    The output data format complies with the LWA-SV "IBEAM"
-    spec, with slight meta-data overloading.
+    The output data format complies with bifrost's built-in "PBEAM" spec.
    
     This format comprises
-    a stream of UDP packets, each with a 32 byte header defined as follows:
+    a stream of UDP packets, each with a 18 byte header defined as follows:
 
     .. code:: C
     
           struct ibeam {
-              uint8_t  server;
-              uint8_t  gbe;
+              uint8_t  server; // 1-indexed
+              uint8_t  beam;   // 1-indexed
+              uint8_t  gbe;    // AKA "tuning"
               uint8_t  nchan;
               uint8_t  nbeam;
               uint8_t  nserver;
-              uint16_t chan0;
-              uint64_t seq;
+              uint16_t navg;   // Number of raw spectra averaged
+              uint16_t chan0;  // First channel index in a packet
+              uint64_t seq;    // 1-indexed: Really?
               float    data[nchan, nbeam, 4]; // Channel x Beam x Beam Element x 32-bit float
           };
 
@@ -183,6 +179,8 @@ class BeamformOutput(Block):
         |               |            |        | packet, and 3 beams, ``server`` runs from 1 |
         |               |            |        | to 6.                                       |
         +---------------+------------+--------+---------------------------------------------+
+        | beam         | uint8      |        | One-based "beam number".
+        +---------------+------------+--------+---------------------------------------------+
         | gbe           | uint8      |        | AKA "tuning". Set to 0.                     |
         +---------------+------------+--------+---------------------------------------------+
         | nchan         | uint8      |        | Number of frequency channels in this packet |
@@ -203,7 +201,7 @@ class BeamformOutput(Block):
         | data          | float      |        | Data payload. Beam powers, in order         |
         |               |            |        | (slowest to fastest) ``Channel x Beam x     |
         |               |            |        | Beam Element``. Beam elements are ``[XX,    |
-        |               |            |        | YY, real(XY), imag(XY)]``.                  |
+        |               |            |        | YY, real(XY), imag(XY)]``. Data are sent in native host endianness                 |
         +---------------+------------+--------+---------------------------------------------+
  
     """
@@ -212,40 +210,12 @@ class BeamformOutput(Block):
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
                  ntime_gulp=480,
                  ):
-        # TODO: Other things we could check:
-        # - that nchan/pols/gulp_size matches XGPU compilation
         super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
-        self.dest_ip = '0.0.0.0'
-        self.new_dest_ip = '0.0.0.0'
-        self.dest_port = dest_port
-        self.new_dest_port = dest_port
-        self.packet_delay_ns = 1
-        self.new_packet_delay_ns = 1
-        self.update_pending = True
         self.ntime_gulp = ntime_gulp
-
-    def _etcd_callback(self, watchresponse):
-        """
-        A callback to run whenever this block's command key is updated.
-        Decodes integration start time and accumulation length and
-        preps to update the pipeline at the end of the next integration.
-        """
-        v = json.loads(watchresponse.events[0].value)
-        if 'dest_ip' in v:
-            if isinstance('dest_ip', list):
-                self.new_dest_ip = v['dest_ip']
-            else:
-                self.new_dest_ip = [v['dest_ip']]
-        if 'dest_port' in v:
-            self.new_dest_port = v['dest_port']
-        self.update_pending = True
-        self.stats.update({'new_dest_ip': self.new_dest_ip,
-                           'new_dest_port': self.new_dest_port,
-                           'new_packet_delay_ns': self.new_packet_delay_ns,
-                           'update_pending': self.update_pending,
-                           'last_cmd_time': time.time()})
-        self.update_stats()
+        self.define_command_key('dest_ip', type=list, initial_val=['0.0.0.0'])
+        self.define_command_key('dest_port', type=list, initial_val=[dest_port])
+        self.update_command_vals()
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -253,8 +223,9 @@ class BeamformOutput(Block):
                                   'core0': cpu_affinity.get_core(),})
 
         prev_time = time.time()
-        udt = None
         socks = None
+        udts = None
+        desc = None
         for iseq in self.iring.read(guarantee=self.guarantee):
             # Update control each sequence
             self.update_pending = True
@@ -265,33 +236,47 @@ class BeamformOutput(Block):
             nbeam = ihdr['nbeam']
             nbit  = ihdr['nbit']
             system_nchan = ihdr['system_nchan']
+            npipeline = system_nchan // nchan
             chan0 = ihdr['chan0']
             npol  = ihdr['npol']
+            this_pipeline = (chan0 // nchan) % npipeline
             igulp_size = self.ntime_gulp * nchan * nbeam * npol**2 * nbit // 8
             packet_cnt = 0
+            if desc: del desc
+            if socks: del socks
+            if udts: del udts
+            desc = HeaderInfo()
+            socks = [UDPSocket() for beam in range(nbeam)]
+            # Seem to need to connect the sockets to _something_ prior
+            # to handing them to UDPTransmit. Can update their destinations
+            # later.
+            for sock in socks:
+                sock.connect(Address('0.0.0.0', 60000))
+            udts  = [UDPTransmit('pbeam1_%d' % (nchan), sock=socks[beam], core=self.core) for beam in range(nbeam)]
+            beam_ips = ['0.0.0.0' for beam in range(nbeam)]
             for ispan in iseq.read(igulp_size):
                 if ispan.size < igulp_size:
                     continue # ignore final gulp
                 # Update destinations if necessary
                 if self.update_pending:
-                    self.dest_ip = self.new_dest_ip
-                    self.dest_port = self.new_dest_port
-                    self.update_pending = False
-                    self.log.info("BEAM OUTPUT >> Updating destination to %s:%s" % (self.dest_ip, self.dest_port))
-                    if socks: del socks
-                    if udt: del udt
-                    sock = UDPSocket()
-                    sock.connect(Address(self.dest_ip, self.dest_port))
-                    udt = UDPTransmit('ibeam1_%i' % (nchan*(npol**2)//2), sock=sock, core=self.core)
-                    desc = HeaderInfo()
-                    desc.set_nchan(system_nchan)
+                    self.update_command_vals()
+                    self.log.info("BEAM OUTPUT >> Updating destination to %s:%s" 
+                        % (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                    for beam in range(nbeam):
+                        ip = self.command_vals['dest_ip'][beam % len(self.command_vals['dest_ip'])]
+                        port = self.command_vals['dest_port'][beam % len(self.command_vals['dest_port'])]
+                        beam_ips[beam] = ip # Needed to use '0.0.0.0' as per-beam disable
+                        if ip != '0.0.0.0':
+                            self.log.info("BEAM OUTPUT >> Will send beam %d to %s:%d" % (beam, ip, port))
+                        socks[beam].close()
+                        socks[beam].connect(Address(ip, port))
                     desc.set_chan0(chan0)
-                    desc.set_nsrc(nbeam * system_nchan // nchan)
                     desc.set_tuning(0)
- 
-                                 
-                    self.stats.update({'dest_ip': self.dest_ip,
-                                       'dest_port': self.dest_port,
+                    desc.set_nchan(nchan)
+                    desc.set_decimation(upstream_acc_len) # Sets navg field
+                    desc.set_nsrc(nbeam * npipeline)
+                    self.stats.update({'dest_ip': self.command_vals['dest_ip'],
+                                       'dest_port': self.command_vals['dest_port'],
                                        'update_pending': self.update_pending,
                                        'last_update_time': time.time()})
                 self.stats['curr_sample'] = this_gulp_time
@@ -300,15 +285,16 @@ class BeamformOutput(Block):
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
                 idata = ispan.data.view('f32').reshape([self.ntime_gulp, nbeam, nchan, npol**2])
-                if self.dest_ip != '0.0.0.0':
-                    start_time = time.time()
-                    idata_beam = idata[:,:,:,:].view('cf64').reshape(self.ntime_gulp, nbeam, nchan * npol**2 // 2)
-                    try:
-                        udt.send(dest, this_gulp_time, (system_chan // nchan) + chan0 // nchan, 1, idata_beam)
-                    except Exception as e:
-                        self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
-                    stop_time = time.time()
-                    elapsed = stop_time - start_time
+                start_time = time.time()
+                for beam in range(nbeam):
+                    if beam_ips[beam] != '0.0.0.0':
+                        idata_beam = idata[:,beam,:,:].copy('system').reshape(self.ntime_gulp, 1, nchan * npol**2)
+                        try:
+                            udts[beam].send(desc, this_gulp_time, 1, npipeline*nbeam + this_pipeline, 0, idata_beam)
+                        except Exception as e:
+                            self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
+                stop_time = time.time()
+                elapsed = stop_time - start_time
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time
