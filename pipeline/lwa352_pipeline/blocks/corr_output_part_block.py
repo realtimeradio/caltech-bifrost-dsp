@@ -127,6 +127,12 @@ class CorrOutputPart(Block):
         parameter has no effect.
     :type nvis_per_packet: int
 
+    :param npipeline: The number of pipelines in the system, as written to output COR packets.
+        This may or may not be the same as the number of actual pipelines present. The one-index of
+        this block's pipeline is computed from sequence header values as
+        ``((chan0 // nchan) % npipeline) + 1``.
+    :type npipeline: int
+
     **Runtime Control and Monitoring**
 
     .. table::
@@ -304,12 +310,13 @@ class CorrOutputPart(Block):
     """
 
     def __init__(self, log, iring, use_cor_fmt=False,
-                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16):
+                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputPart, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
         self.nvis_per_packet = nvis_per_packet
+        self.npipeline = npipeline
 
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
@@ -404,8 +411,7 @@ class CorrOutputPart(Block):
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
                 system_nchan = ihdr['system_nchan']
-                npipeline = system_nchan // nchan
-                this_pipeline = (chan0 // nchan) % npipeline
+                this_pipeline = (chan0 // nchan) % self.npipeline
             igulp_size = nvis * nchan * 8
             dout = np.zeros(shape=[nvis, nchan, 2], dtype='>i')
             for ispan in iseq.read(igulp_size):
@@ -435,7 +441,7 @@ class CorrOutputPart(Block):
                         # Read chan x baseline x complexity input data.
                         idata = ispan.data_view('i32').reshape([nchan, nvis, 2])
                         self.send_packets_bf(idata, baselines, udt, time_tag, desc, chan0, nchan, 0,
-                                upstream_acc_len, (1<<8) + (1))
+                                upstream_acc_len, (self.npipeline<<8) + (this_pipeline+1))
                     else:
                         # Read chan x baseline x complexity input data.
                         # Transpose to baseline x chan x complexity

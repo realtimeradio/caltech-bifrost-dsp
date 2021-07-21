@@ -169,6 +169,12 @@ class CorrOutputFull(Block):
         of data input to this block should be a multiple of ``checkfile_acc_len``.
     :type checkfile_acc_len: int
 
+    :param npipeline: The number of pipelines in the system, as written to output COR packets.
+        This may or may not be the same as the number of actual pipelines present. The one-index of
+        this block's pipeline is computed from sequence header values as
+        ``((chan0 // nchan) % npipeline) + 1``.
+    :type npipeline: int
+
     **Runtime Control and Monitoring**
 
     .. table::
@@ -353,10 +359,12 @@ class CorrOutputFull(Block):
     """
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
-                 checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True):
+                 checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True,
+                 npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
+        self.npipeline = npipeline
         self.nchan = nchan
         self.npol = npol
         self.nstand = nstand
@@ -586,8 +594,7 @@ class CorrOutputFull(Block):
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
                 system_nchan = ihdr['system_nchan']
-                npipeline = system_nchan // nchan
-                this_pipeline = (chan0 // nchan) % npipeline
+                this_pipeline = (chan0 // nchan) % self.npipeline
             if not self.use_cor_fmt:
                 sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
@@ -641,8 +648,7 @@ class CorrOutputFull(Block):
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
                         self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len,
-                                (1 << 8) + (1))
-                        #        (npipeline << 8) + (this_pipeline + 1))
+                                (self.npipeline << 8) + (this_pipeline + 1))
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
                 else:

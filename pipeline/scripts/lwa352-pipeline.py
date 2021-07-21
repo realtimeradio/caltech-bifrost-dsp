@@ -210,6 +210,7 @@ def build_pipeline(args):
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj=bl_is_conj,
                           use_cor_fmt=not args.pycorrout,
+                          npipeline=args.cor_npipeline,
                   ))
 
         ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
@@ -224,6 +225,7 @@ def build_pipeline(args):
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
                           nvis_per_packet=16,
                           use_cor_fmt=not args.pycorrout,
+                          npipeline=args.cor_npipeline,
                   ))
 
     if not (args.nobeamform or args.nogpu):
@@ -282,6 +284,7 @@ def main(argv):
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
     parser.add_argument('--port',             type=int, default=10000,   help='UDP port to which to bind')
     parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
+    parser.add_argument('--cor_npipeline',    type=int, default=2,       help='Number of pipelines per COR packet output stream')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
 
