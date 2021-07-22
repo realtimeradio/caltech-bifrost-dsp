@@ -67,7 +67,7 @@ class BeamformOutput(Block):
         | ``npol``      | int    |       | The number of polarizations in the input data  |
         |               |        |       | buffer. Must be 1                              |
         +---------------+--------+-------+------------------------------------------------+
-        | ``fs_hz``     | int    | Hz    | ADC sample rate.
+        | ``fs_hz``     | int    | Hz    | ADC sample rate.                               |
         +---------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
@@ -198,9 +198,10 @@ class BeamformOutput(Block):
         | chan0         | uint32     |        | Zero-indexed ID of the first frequency      |
         |               |            |        | channel in this packet.                     |
         +---------------+------------+--------+---------------------------------------------+
-        | seq           | uint64     | ADC sample     | Central sampling time since 1970-01-01      |
-        |               |            | period         | 00:00:00 UTC.                               |
-        +---------------+------------+----------------+---------------------------------------------+
+        | seq           | uint64     | ADC    | Central sampling time since 1970-01-01      |
+        |               |            | sample | 00:00:00 UTC.                               |
+        |               |            | period |                                             |
+        +---------------+------------+--------+---------------------------------------------+
         | data          | float      |        | Data payload. Beam powers, in order         |
         |               |            |        | (slowest to fastest) ``Channel x Beam x     |
         |               |            |        | Beam Element``. Beam elements are ``[XX,    |
