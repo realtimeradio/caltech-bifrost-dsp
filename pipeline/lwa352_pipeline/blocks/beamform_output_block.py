@@ -69,6 +69,8 @@ class BeamformOutput(Block):
         +---------------+--------+-------+------------------------------------------------+
         | ``fs_hz``     | int    | Hz    | ADC sample rate.                               |
         +---------------+--------+-------+------------------------------------------------+
+        | ``bw_hz``     | double | Hz    | Bandwidth of the input data.                   |
+        +---------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
@@ -244,7 +246,7 @@ class BeamformOutput(Block):
             npipeline = system_nchan // nchan
             chan0 = ihdr['chan0']
             npol  = ihdr['npol']
-            samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
+            samples_per_spectra = int(nchan * ihdr['fs_hz'] / ihdr['bw_hz'])
             this_pipeline = (chan0 // nchan) % npipeline
             igulp_size = self.ntime_gulp * nchan * nbeam * npol**2 * nbit // 8
             packet_cnt = 0
