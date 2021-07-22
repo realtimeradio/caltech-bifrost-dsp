@@ -67,6 +67,8 @@ class BeamformOutput(Block):
         | ``npol``      | int    |       | The number of polarizations in the input data  |
         |               |        |       | buffer. Must be 1                              |
         +---------------+--------+-------+------------------------------------------------+
+        | ``fs_hz``     | int    | Hz    | ADC sample rate.
+        +---------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
@@ -196,10 +198,9 @@ class BeamformOutput(Block):
         | chan0         | uint32     |        | Zero-indexed ID of the first frequency      |
         |               |            |        | channel in this packet.                     |
         +---------------+------------+--------+---------------------------------------------+
-        | seq           | uint64     |        | Zero-indexed spectra number for the spectra |
-        |               |            |        | in this packet. Specified relative to the   |
-        |               |            |        | system synchronization time.                |
-        +---------------+------------+--------+---------------------------------------------+
+        | seq           | uint64     | ADC sample     | Central sampling time since 1970-01-01      |
+        |               |            | period         | 00:00:00 UTC.                               |
+        +---------------+------------+----------------+---------------------------------------------+
         | data          | float      |        | Data payload. Beam powers, in order         |
         |               |            |        | (slowest to fastest) ``Channel x Beam x     |
         |               |            |        | Beam Element``. Beam elements are ``[XX,    |
@@ -242,6 +243,7 @@ class BeamformOutput(Block):
             npipeline = system_nchan // nchan
             chan0 = ihdr['chan0']
             npol  = ihdr['npol']
+            samples_per_spectra = int(nchan_sum * nchan * ihdr['fs_hz'] / bw_hz)
             this_pipeline = (chan0 // nchan) % npipeline
             igulp_size = self.ntime_gulp * nchan * nbeam * npol**2 * nbit // 8
             packet_cnt = 0
@@ -289,11 +291,13 @@ class BeamformOutput(Block):
                 prev_time = curr_time
                 idata = ispan.data.view('f32').reshape([self.ntime_gulp, nbeam, nchan, npol**2])
                 start_time = time.time()
+                time_tag = this_gulp_time * samples_per_spectra
                 for beam in range(nbeam):
                     if beam_ips[beam] != '0.0.0.0':
                         idata_beam = idata[:,beam,:,:].copy('system').reshape(self.ntime_gulp, 1, nchan * npol**2)
                         try:
-                            udts[beam].send(desc, this_gulp_time, 1, npipeline*nbeam + this_pipeline, 0, idata_beam)
+                            udts[beam].send(desc, this_gulp_time, samples_per_spectra,
+                                            npipeline*nbeam + this_pipeline, 0, idata_beam)
                         except Exception as e:
                             self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
                 stop_time = time.time()

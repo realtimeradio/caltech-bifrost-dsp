@@ -58,7 +58,7 @@ class CorrOutputFull(Block):
         +---------------+--------+-------+------------------------------------------------+
         | ``bw_hz``     | double | Hz    | Bandwidth of the input visibility matrices.    |
         +---------------+--------+-------+------------------------------------------------+
-        | ``fs_hz``     | int    | Hz    | Bandwidth of the input visibility matrices.    |
+        | ``fs_hz``     | int    | Hz    | ADC sample rate.
         |               |        |       | Only required if ``use_cor_fmt=True``          |
         +---------------+--------+-------+------------------------------------------------+
         | ``sfreq``     | double | Hz    | Center frequency of the first channel in the   |

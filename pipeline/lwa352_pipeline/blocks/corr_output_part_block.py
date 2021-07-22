@@ -66,7 +66,7 @@ class CorrOutputPart(Block):
         |               |        |       | input visibility matrices. Only required if    |
         |               |        |       | ``use_cor_fmt=False``.                         |
         +---------------+--------+-------+------------------------------------------------+
-        | ``fs_hz``     | int    | Hz    | Bandwidth of the input visibility matrices.    |
+        | ``fs_hz``     | int    | Hz    | ADC sample rate.
         |               |        |       | Only required if ``use_cor_fmt=True``          |
         +---------------+--------+-------+------------------------------------------------+
         | ``nvis``      | int    | -     | Number of visibilities in the output data      |
