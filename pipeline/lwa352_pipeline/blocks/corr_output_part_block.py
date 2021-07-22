@@ -51,6 +51,9 @@ class CorrOutputPart(Block):
         | ``nchan``     | int    |       | The number of frequency channels in the input  |
         |               |        |       | visibility matrices                            |
         +---------------+--------+-------+------------------------------------------------+
+        | ``nchan_sum`` | int    |       | The number of frequency channels summed by     |
+        |               |        |       | upstream processing                            |
+        +---------------+--------+-------+------------------------------------------------+
         | ``chan0``     | int    |       | The index of the first frequency channel in    |
         |               |        |       | the input visibility matrices                  |
         +---------------+--------+-------+------------------------------------------------+
@@ -399,13 +402,14 @@ class CorrOutputPart(Block):
             baselines = np.array(ihdr['baselines'], dtype='>i')
             baselines_flat = baselines.flatten()
             nchan = ihdr['nchan']
+            nchan_sum = ihdr['nchan_sum']
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
             nvis  = ihdr['nvis']
             if not self.use_cor_fmt:
                 sfreq = ihdr['sfreq']
             if self.use_cor_fmt:
-                samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
+                samples_per_spectra = int(nchan_sum * nchan * ihdr['fs_hz'] / bw_hz)
                 this_pipeline = (chan0 // nchan) % self.npipeline
             igulp_size = nvis * nchan * 8
             dout = np.zeros(shape=[nvis, nchan, 2], dtype='>i')

@@ -68,6 +68,8 @@ class CorrSubsel(Block):
         +-------------+----------------+---------+----------------------------------------------------+
         | nvis        | int            | -       | Number of visibilities in the output data stream   |
         +-------------+----------------+---------+----------------------------------------------------+
+        | nchan\_sum  | int            | -       | Number of frequency channels summed by this block  |
+        +-------------+----------------+---------+----------------------------------------------------+
         | baselines   | list of ints   | -       | A list of output stand/pols, with dimensions       |
         |             |                |         | ``[nvis, 2, 2]``. E.g. if entry :math:`[V]` of     |
         |             |                |         | this list has value ``[[N_0, P_0], [N_1, P_1]]``   |
@@ -279,6 +281,7 @@ class CorrSubsel(Block):
                 copy_array(self._subsel, self._subsel_next)
                 copy_array(self._conj, self._conj_next)
                 ohdr['baselines'] = self.command_vals['baselines']
+                ohdr['nchan_sum'] = self.nchan_sum
                 ohdr_str = json.dumps(ohdr)
                 oseq = oring.begin_sequence(time_tag=time_tag, header=ohdr_str, nringlet=iseq.nringlet)
                 time_tag += 1
