@@ -109,6 +109,7 @@ def build_pipeline(args):
         server_idx = int(server_idx, 10)
     except (AttributeError, ValueError):
         server_idx = 1 # HACK to allow testing on head node "adp"
+    # TODO: Is there a way to know how many pipelines to expect per server?
     pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
