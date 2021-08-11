@@ -240,7 +240,14 @@ class CorrOutputFull(Block):
         | id            | uint8      |                | Mark 5C ID, used to identify COR packet,    |
         |               |            |                | ``0x02``                                    |
         +---------------+------------+----------------+---------------------------------------------+
-        | frame_number  | uint24     |                | Mark 5C frame number. Unused.               |
+        | frame_number  | uint24     |                | Mark 5C frame number.  Used to store info.  |
+        |               |            |                | about how to order the output packets.  The |
+        |               |            |                | first 8 bits contain the channel decimation |
+        |               |            |                | fraction relative to the F-Engine output.   |
+        |               |            |                | The next 8 bits contain the total number of |
+        |               |            |                | subbands being transmitted.  The final 8    |
+        |               |            |                | contain which subband is contained in the   |
+        |               |            |                | packet.                                     |
         +---------------+------------+----------------+---------------------------------------------+
         | secs_count    | uint32     |                | Mark 5C seconds since 1970-01-01 00:00:00   |
         |               |            |                | UTC. Unused.                                |
@@ -356,10 +363,11 @@ class CorrOutputFull(Block):
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
                  checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True,
-                 npipeline=1):
+                 pipeline_idx=0, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
+        self.pipeline_idx = pipeline_idx
         self.npipeline = npipeline
         self.nchan = nchan
         self.npol = npol
@@ -475,14 +483,14 @@ class CorrOutputFull(Block):
             print("%d-X-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,0,0])
             print("%d-Y-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,1,1])
 
-    def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, tuning, verbose=False):
+    def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, verbose=False):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
         desc.set_gain(gain)
         desc.set_decimation(navg)
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
-        desc.set_tuning(tuning)
+        desc.set_tuning((1 << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline))
         pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
         block_bits_sent = 0
         start_time = time.time()
@@ -592,7 +600,6 @@ class CorrOutputFull(Block):
             print_on_send = True
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
-                this_pipeline = (chan0 // nchan) % self.npipeline
             if not self.use_cor_fmt:
                 sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
@@ -647,7 +654,7 @@ class CorrOutputFull(Block):
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
                         self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len,
-                                (self.npipeline << 8) + (this_pipeline + 1), verbose=print_on_send)
+                                verbose=print_on_send)
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq,
                                 upstream_acc_len, chan0, verbose=print_on_send)
