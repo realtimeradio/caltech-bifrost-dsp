@@ -373,6 +373,9 @@ class CorrOutputFull(Block):
         self.npol = npol
         self.nstand = nstand
         self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        
+        # Do this now since it doesn't change after the block is initialized
+        self.tuning = (1 << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline)
 
         self.igulp_size = self.matlen * 8 # complex64
 
@@ -490,7 +493,7 @@ class CorrOutputFull(Block):
         desc.set_gain(gain)
         desc.set_decimation(navg)
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
-        desc.set_tuning((1 << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline))
+        desc.set_tuning(self.tuning)
         pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
         block_bits_sent = 0
         start_time = time.time()

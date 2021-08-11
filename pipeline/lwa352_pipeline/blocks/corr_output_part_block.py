@@ -327,6 +327,9 @@ class CorrOutputPart(Block):
         self.pipeline_idx = pipeline_idx
         self.npipeline = npipeline
 
+        # Do this now since it doesn't change after the block is initialized
+        self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline)
+
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
             self.sock = None
@@ -368,7 +371,7 @@ class CorrOutputPart(Block):
         nvis = len(baselines)
         desc.set_nsrc(nvis // nvis_per_pkt)
         nstand_virt = int((-1 + np.sqrt(1 + 2*nvis))/2) # effective number of stands
-        desc.set_tuning((self.nchan_sum << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline))
+        desc.set_tuning(self.tuning)
         pkt_payload_bits = nchan * nvis_per_pkt * 8 * 8
         start_time = time.time()
         dview = data.view('cf32').reshape([nchan, nvis // nvis_per_pkt, COR_NPOL, COR_NPOL])
