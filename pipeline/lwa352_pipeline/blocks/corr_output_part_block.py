@@ -317,7 +317,7 @@ class CorrOutputPart(Block):
 
     def __init__(self, log, iring, use_cor_fmt=False,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16, 
-                 nchan_sum=1, pipeline_idx=0, npipeline=1):
+                 nchan_sum=1, pipeline_idx=1, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputPart, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)

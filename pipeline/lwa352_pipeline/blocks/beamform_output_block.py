@@ -215,7 +215,7 @@ class BeamformOutput(Block):
 
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
-                 ntime_gulp=480, pipeline_idx=0
+                 ntime_gulp=480, pipeline_idx=1
                  ):
         super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
