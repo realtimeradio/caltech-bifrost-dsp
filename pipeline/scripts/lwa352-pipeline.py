@@ -108,9 +108,11 @@ def build_pipeline(args):
         server_idx = hostname.split('.', 1)[0].replace('lxdlwagpu', '')
         server_idx = int(server_idx, 10)
     except (AttributeError, ValueError):
-        server_idx = 0 # HACK to allow testing on head node "adp"
+        server_idx = 1 # HACK to allow testing on head node "adp"
+    pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
+    log.info("Pipeline index: %i", pipeline_idx)
     
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='system')
@@ -148,8 +150,6 @@ def build_pipeline(args):
     assert ((NET_NGULP*NETGSIZE) % GSIZE == 0), "GSIZE must be a multiple of NETGSIZE*NET_NGULP"
 
     cores = CoreList(map(int, args.cores.split(',')))
-    
-    pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     
     nfreqblocks = nchan // CHAN_PER_PACKET
     if not args.fakesource:
