@@ -329,7 +329,8 @@ class CorrOutputPart(Block):
 
         # Do this now since it doesn't change after the block is initialized
         self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline)
-
+        self.tuning &= 0x00FFFFFF
+        
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
             self.sock = None

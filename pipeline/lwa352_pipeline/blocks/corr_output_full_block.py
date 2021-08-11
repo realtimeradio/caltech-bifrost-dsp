@@ -363,10 +363,11 @@ class CorrOutputFull(Block):
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
                  checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True,
-                 pipeline_idx=0, npipeline=1):
+                 nchan_sum=1, pipeline_idx=0, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
+        self.nchan_sum = nchan_sum
         self.pipeline_idx = pipeline_idx
         self.npipeline = npipeline
         self.nchan = nchan
@@ -375,7 +376,8 @@ class CorrOutputFull(Block):
         self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
         
         # Do this now since it doesn't change after the block is initialized
-        self.tuning = (1 << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline)
+        self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | (self.pipeline_idx % self.npipeline)
+        self.tuning &= 0x00FFFFFF
 
         self.igulp_size = self.matlen * 8 # complex64
 
