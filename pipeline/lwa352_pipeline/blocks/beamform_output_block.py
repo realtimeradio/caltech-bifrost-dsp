@@ -215,11 +215,12 @@ class BeamformOutput(Block):
 
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
-                 ntime_gulp=480,
+                 ntime_gulp=480, pipeline_idx=0
                  ):
         super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
         self.ntime_gulp = ntime_gulp
+        self.pipeline_idx = pipeline_idx
         self.define_command_key('dest_ip', type=list, initial_val=['0.0.0.0'])
         self.define_command_key('dest_port', type=list, initial_val=[dest_port])
         self.update_command_vals()
@@ -279,10 +280,10 @@ class BeamformOutput(Block):
                         socks[beam].close()
                         socks[beam].connect(Address(ip, port))
                     desc.set_chan0(chan0)
-                    desc.set_tuning(0)
+                    desc.set_tuning(self.pipeline_idx)
                     desc.set_nchan(nchan)
                     desc.set_decimation(upstream_acc_len) # Sets navg field
-                    desc.set_nsrc(nbeam * npipeline)
+                    desc.set_nsrc(npipeline)
                     self.stats.update({'dest_ip': self.command_vals['dest_ip'],
                                        'dest_port': self.command_vals['dest_port'],
                                        'update_pending': self.update_pending,
