@@ -187,7 +187,7 @@ class BeamformVlbiOutput(Block):
 
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
-                 ntime_gulp=480,
+                 ntime_gulp=480, pipeline_idx=0
                  ):
         super(BeamformVlbiOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
         cpu_affinity.set_core(self.core)
@@ -197,6 +197,7 @@ class BeamformVlbiOutput(Block):
         self.define_command_key('dest_port', type=int, initial_val=dest_port)
         self.update_command_vals()
         self.ntime_gulp = ntime_gulp
+        self.pipeline_idx = pipeline_idx
         self.nbeam_send = 1
         self.npol = 2 # If the upstream beamformer provides single pol data, we interpret pairs of beams as dual-pol
 
@@ -223,7 +224,7 @@ class BeamformVlbiOutput(Block):
             desc.set_nchan(system_nchan)
             desc.set_chan0(chan0)
             desc.set_nsrc(system_nchan // nchan)
-            desc.set_tuning(0)
+            desc.set_tuning(self.pipeline_idx)
             for ispan in iseq.read(igulp_size):
                 if ispan.size < igulp_size:
                     continue # ignore final gulp
