@@ -2,8 +2,10 @@ import argparse
 import time
 from lwa352_pipeline_control import Lwa352PipelineControl
 
+WAIT_DELAY = 5
+
 def arm_and_wait(blocks, delay):
-    assert delay > 5, "I won't arm <5 seconds in the future."
+    assert delay >= 5, "I won't arm <5 seconds in the future."
     corr_arm_time = blocks[0].get_next_allowed_start(delay)
 
     for b in blocks:
@@ -20,7 +22,7 @@ def arm_and_wait(blocks, delay):
     if ok:
         print("All pipelines in 'waiting' state as expected")
 
-    wait_time = delay + 3
+    wait_time = delay + WAIT_DELAY
     print("Waiting %d seconds for trigger" % wait_time)
     time.sleep(wait_time) # Trigger should have happened by now
                       
@@ -64,7 +66,7 @@ if __name__ == "__main__":
                         help='Number of pipelines per host')
     parser.add_argument('hosts', nargs='+',
                         help='Hostnames of servers running pipelines')
-    parser.add_argument('-d', '--delay', type=int, default=10,
+    parser.add_argument('-d', '--delay', type=int, default=5,
                         help='How long in future to arm correlator')
     parser.add_argument('--destip', type=str, default='10.41.0.19',
                         help='Destination IP for slow correlation data')

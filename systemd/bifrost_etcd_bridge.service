@@ -15,7 +15,7 @@ RestartSec=60
 User=ubuntu
 Group=ubuntu
 PIDFile=/var/run/bifrost_etcd_bridge.pid
-ExecStart=/usr/bin/taskset 0x1 /home/ubuntu/anaconda3/bin/bifrost_etcd_bridge.py --etcdhost etcdv3service.sas.pvt -t 3
+ExecStart=/usr/bin/taskset 0x1 /home/ubuntu/anaconda3/bin/bifrost_etcd_bridge.py --etcdhost etcdv3service.sas.pvt -t 2
 
 [Install]
 WantedBy=multi-user.target
