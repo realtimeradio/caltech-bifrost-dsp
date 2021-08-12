@@ -192,16 +192,17 @@ class Beamform(Block):
         self.nchan = nchan
         self.nbeam = nbeam
         self.ninput = ninput
+        self.freqs = np.zeros(self.nchan, dtype=np.float32)
         
         # Setup the beamformer
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         ## Delays and gains
-        self.delays = np.zeros((nbeam, ninput), dtype=np.float64)
-        self.gains = np.zeros((nbeam, ninput), dtype=np.float64)
-        self.new_cgains = np.zeros((nbeam,nchan,ninput), dtype=np.complex64)
-        self.cgains = BFArray(shape=(nbeam,nchan,ninput), dtype=np.complex64, space='cuda')
-        self.update_pending = True
+        self.cal_gains = np.zeros((nbeam, nchan, ninput), dtype=np.complex64) #: calibration gains
+        self.gains_cpu = np.zeros((nbeam,nchan,ninput), dtype=np.complex64) #: CPU-side beamformer coeffs to be copied
+        self.gains_gpu = BFArray(shape=(nbeam,nchan,ninput), dtype=np.complex64, space='cuda') #: GPU-side beamformer coeffs
+
+        self.define_command_key('coeffs', type=dict, initial_val={})
 
         # Initialize beamforming library
         if ntime_sum is not None:
@@ -210,30 +211,74 @@ class Beamform(Block):
         else:
             _bf.bfBeamformInitialize(self.gpu, self.ninput, self.nchan, self.ntime_gulp, self.nbeam, 0)
 
+    #def _compute_weights(self, sfreq, nchan, chan_bw):
+    #    """
+    #    Regenerate complex gains from
+    #    sfreq: Center freq of first channel in Hz
+    #    nchan: Number of frequencies
+    #    chan_bw: Channel bandwidth in Hz
+    #    """
+    #    cpu_affinity.set_core(self.core)
+    #    self.acquire_control_lock()
+    #    freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
+    #    phases = 2*np.pi*np.exp(1j*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
+    #    self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
+    #    self.release_control_lock()
 
     def _etcd_callback(self, watchresponse):
-        v = json.loads(watchresponse.events[0].value)
-        #self.acquire_control_lock()
-        if 'delays' in v and isinstance(v['delays'], list):
-            self.delays[...] = v['delays']
-        if 'gains' in v and isinstance(v['gains'], list):
-            self.gains[...] = v['gains']
-        self.update_pending = True
-        #self.release_control_lock()
+        """
+        A callback executed whenever this block's command key is modified.
 
-    def _compute_weights(self, sfreq, nchan, chan_bw):
+        This callback JSON decodes the key contents, and passes the
+        resulting dictionary to ``_process_commands``.
+        The ``last_cmd_response`` status value is set to the return value of
+        ``_process_commands`` to indicate any error conditions
+
+        :param watchresponse: A WatchResponse object used by the etcd
+            `add_watch_prefix_callback` as the calling argument.
+        :type watchresponse: WatchResponse
         """
-        Regenerate complex gains from
-        sfreq: Center freq of first channel in Hz
-        nchan: Number of frequencies
-        chan_bw: Channel bandwidth in Hz
-        """
+        # We expect update commands to come frequently, and commands
+        # all share the same command key. So, each command must be enacted
+        # immediately (i.e, update_command_vals() should be run) in order
+        # for newer commands not to overwrite older ones
         cpu_affinity.set_core(self.core)
         self.acquire_control_lock()
-        freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
-        phases = 2*np.pi*np.exp(1j*(freqs[:,None,None] * self.delays*1e-9)) #freq x beam x antpol
-        self.new_cgains[...] = (phases * self.gains).transpose([1,0,2])
+        for event in watchresponse.events:
+            v = json.loads(event.value)
+            self.update_stats({'last_cmd_response':self._process_commands(v)})
+            self.update_command_vals()
         self.release_control_lock()
+
+    def update_command_vals(self):
+        """
+        Copy command entries from the ``_pending_command_vals``
+        dictionary to the ``command_vals`` dictionary, to be used
+        by the block's runtime processing.
+        Set the ``update_pending`` flag to False, to indicate that 
+        there are no longer waiting commands. Set the status key
+        ``last_cmd_proc_time`` to ``time.time()`` to record the
+        time at which this method was called.
+        """
+        cpu_affinity.set_core(self.core)
+        self.command_vals.update(self._pending_command_vals)
+        for k, v in self._pending_command_vals.items():
+           try:
+               if v['type'] == 'gains':
+                   i = v['input_id']
+                   b = v['beam_id']
+                   self.log.debug("BEAMFORM >> Updating calibration gains for beam %d, input %d" % (b,i))
+                   data = np.array(v['data'])
+                   self.cal_gains[b, :, i] = data[0::2] + 1j*data[1::2]
+               if v['type'] == 'delays':
+                   b = v['beam_id']
+                   self.log.debug("BEAMFORM >> Updating delays for beam %d" % (b))
+                   data = np.array(v['data'])
+                   phases = 2*np.pi*np.exp(1j*self.freqs[:, None]*data*1e-9) # freq x pol
+                   self.gains_cpu[b] = phases * self.cal_gains[b]
+           except KeyError:
+               self.log.error("BEAMFORM >> Failed to parse command")
+        self.update_stats(self.command_vals)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -264,6 +309,7 @@ class Beamform(Block):
 
                 assert nchan == self.nchan
                 assert self.ninput == nstand * npol
+                self.freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
                 
                 oshape = (self.ntime_gulp,nchan,self.nbeam*2)
                 
@@ -287,13 +333,12 @@ class Beamform(Block):
                         if ispan.size < igulp_size:
                             continue # Ignore final gulp
                         if self.update_pending:
-                            self.log.info("BEAMFORM >> Updating coefficients")
-                            self._compute_weights(ohdr['sfreq'], ohdr['nchan'], ohdr['bw_hz']/ohdr['nchan'])
                             self.acquire_control_lock()
-                            # Copy data to GPU
-                            self.cgains[...] = self.new_cgains
-                            #self.cgains[0] = self.new_cgains[0]
                             self.update_pending = False
+                            self.stats['update_pending'] = False
+                            self.stats['last_cmd_proc_time'] = time.time()
+                            self.log.debug("BEAMFORM >> Copy coefficients to GPU")
+                            self.gains_gpu[...] = self.gains_cpu
                             self.release_control_lock()
                         
                         curr_time = time.time()
@@ -309,7 +354,7 @@ class Beamform(Block):
                             idata = ispan.data_view('i8')
                             odata = ospan.data_view(np.float32)
                             
-                            _bf.bfBeamformRun(idata.as_BFarray(), odata.as_BFarray(), self.cgains.as_BFarray())
+                            _bf.bfBeamformRun(idata.as_BFarray(), odata.as_BFarray(), self.gains_gpu.as_BFarray())
                             BFSync()
                             
                         ## Update the base time tag

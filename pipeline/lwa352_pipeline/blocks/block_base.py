@@ -197,9 +197,10 @@ class Block(object):
         :type watchresponse: WatchResponse
         """
         cpu_affinity.set_core(self.core)
-        v = json.loads(watchresponse.events[-1].value) # Get the latest command
         self._control_lock.acquire()
-        self.update_stats({'last_cmd_response':self._process_commands(v)})
+        for event in watchresponse.events:
+            v = json.loads(event.value)
+            self.update_stats({'last_cmd_response':self._process_commands(v)})
         self._control_lock.release()
 
     def _process_commands(self, command_dict):
