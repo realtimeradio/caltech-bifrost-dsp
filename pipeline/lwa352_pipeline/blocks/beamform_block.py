@@ -102,12 +102,12 @@ class Beamform(Block):
     *Output Data Buffer*: A GPU-side bifrost ring buffer of 32+32 bit complex
     floating-point  data containing beamformed data. With ``ntime_sum=None``, this is
     complex beamformer data with dimensionality
-    ``time x channel x beams x complexity``. This output buffer is written
+    ``channel x beams x time x complexity``. This output buffer is written
     in blocks of ``ntime_gulp`` samples, I.e. ``ntime_gulp x nchan x nbeam x 8`` bytes.
 
     With ``ntime_sum != None``, this block will generate dynamic power spectra
-    rather than voltages. This mode is experimental. See ``bifrost/beamform.h``
-    for details.
+    rather than voltages. This mode is experimental (aka probably doesn't work).
+    See ``bifrost/beamform.h`` for details.
 
 
     **Instantiation**
