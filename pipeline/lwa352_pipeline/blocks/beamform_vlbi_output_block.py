@@ -76,7 +76,7 @@ class BeamformVlbiOutput(Block):
     *Input Data Buffer*: A CPU- or GPU-side bifrost ring buffer of 32+32 bit complex
     floating-point data containing beamformed voltages.
     Data have dimensions (slowest to fastest):
-    ``time x channel x beams x complexity``. This buffer is read in blocks of
+    ``channel x beams x time x complexity``. This buffer is read in blocks of
     ``ntime_gulp`` samples.
 
     *Output Data Buffer*: This block has no output data buffer.
@@ -251,8 +251,8 @@ class BeamformVlbiOutput(Block):
                 prev_time = curr_time
                 if self.command_vals['dest_ip'] != '0.0.0.0':
                     start_time = time.time()
-                    idata = ispan.data.view('cf32').reshape([self.ntime_gulp, nchan, nbeam])
-                    idata_cpu = idata[:,:,0:(self.npol // npol) * self.nbeam_send].copy(space='system')
+                    idata = ispan.data.view('cf32').reshape([nchan, nbeam, self.ntime_gulp])
+                    idata_cpu = idata[:,0:(self.npol // npol) * self.nbeam_send,:].copy(space='system').transpose([2,1,0])
                     idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
                     try:
                         udt.send(desc, this_gulp_time, 1, chan0 // nchan, 1, idata_cpu_r)
