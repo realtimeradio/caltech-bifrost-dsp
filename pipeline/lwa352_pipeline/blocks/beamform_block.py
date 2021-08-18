@@ -198,9 +198,9 @@ class Beamform(Block):
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         ## Delays and gains
-        self.cal_gains = np.ones((nbeam, nchan, ninput), dtype=np.complex64) #: calibration gains
-        self.gains_cpu = np.zeros((nbeam,nchan,ninput), dtype=np.complex64) #: CPU-side beamformer coeffs to be copied
-        self.gains_gpu = BFArray(shape=(nbeam,nchan,ninput), dtype=np.complex64, space='cuda') #: GPU-side beamformer coeffs
+        self.cal_gains = np.ones((nchan, nbeam, ninput), dtype=np.complex64) #: calibration gains
+        self.gains_cpu = np.zeros((nchan, nbeam, ninput), dtype=np.complex64) #: CPU-side beamformer coeffs to be copied
+        self.gains_gpu = BFArray(shape=(nchan, nbeam, ninput), dtype=np.complex64, space='cuda') #: GPU-side beamformer coeffs
 
         self.define_command_key('coeffs', type=dict, initial_val={})
 
@@ -269,13 +269,13 @@ class Beamform(Block):
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating calibration gains for beam %d, input %d" % (b,i))
                    data = np.array(v['data'])
-                   self.cal_gains[b, :, i] = data[0::2] + 1j*data[1::2]
+                   self.cal_gains[:, b, i] = data[0::2] + 1j*data[1::2]
                if v['type'] == 'delays':
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating delays for beam %d" % (b))
                    data = np.array(v['data'])
                    phases = np.exp(1j*2*np.pi*self.freqs[:, None]*data*1e-9) # freq x pol
-                   self.gains_cpu[b] = phases * self.cal_gains[b]
+                   self.gains_cpu[:, b, :] = phases * self.cal_gains[:, b, :]
            except KeyError:
                self.log.error("BEAMFORM >> Failed to parse command")
         self.update_stats(self.command_vals)

@@ -48,22 +48,22 @@ class BeamPrinter(Block):
             #print(ihdr)
             igulp_size = self.ntime_gulp * nchan * nbeam * 2 * 4 # complex float32
             for ispan in iseq.read(igulp_size):
-                idata = ispan.data_view('cf32').reshape([self.ntime_gulp, nchan, nbeam])
+                idata = ispan.data_view('cf32').reshape([nchan, nbeam, self.ntime_gulp])
                 if time.time() - tick > 1:
                     print('Gulp: %d' % gulpi)
-                    print('Time (beam0, chan0):', idata[0:10,0,0])
-                    print('Chan (time 0, beam 0):', idata[0,:,0])
-                    print('Beam (time 0, chan0):', idata[0,0,:])
+                    print('Time (beam0, chan0):', idata[0, 0, 0:10])
+                    print('Chan (time 0, beam 0):', idata[:,0,0])
+                    print('Beam (time 0, chan0):', idata[0,:,0])
                     tick = time.time()
                 gulpi += 1
 
 def main():
-    test_data = np.zeros([NTIME_GULP, NCHAN, NSTAND, NPOL], dtype=np.uint8)
-    for s in range(NSTAND):
-        test_data[:, :, s, :] = NSTAND % 256
+    test_data = np.ones([NTIME_GULP, NCHAN, NSTAND, NPOL], dtype=np.uint8)
+    #for s in range(NSTAND):
+    #    test_data[:, :, s, :] = (NSTAND % 8) << 4
     with open(TESTFILE_NAME, 'wb') as fh:
+        print("Writing testfile: %s" % TESTFILE_NAME)
         fh.write(test_data.tobytes())
-
     
     etcd_client = etcd.client(ETCD_HOST)
 

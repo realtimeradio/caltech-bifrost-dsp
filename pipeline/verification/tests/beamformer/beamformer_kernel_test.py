@@ -42,12 +42,14 @@ def main():
     logHandler.setFormatter(logFormat)
     log.addHandler(logHandler)
 
-    gains = np.ones([NBEAM, NCHAN, NSTAND*NPOL], dtype=np.complex64)
-    #gains = np.ones([NCHAN, NBEAM, NSTAND*NPOL], dtype=np.complex64)
-    for i in range(NBEAM):
-        gains[i,:,:] = i+1
+    gains_cpu = np.zeros([NCHAN, NBEAM, NSTAND*NPOL], dtype=np.complex64)
+    gains_cpu[:,0,:] = 1
+    #gains_cpu = np.zeros([NCHAN, NSTAND*NPOL, NBEAM], dtype=np.complex64)
+    #gains_cpu[:,:,0] = 1
+    #for i in range(NBEAM):
+    #    gains[i,:,:] = i+1
 
-    gains = BFArray(gains, dtype='cf32', space='cuda')
+    gains = BFArray(gains_cpu, dtype='cf32', space='cuda')
     idata = BFArray(test_data, dtype='u8', space='cuda')
     #odata = BFArray(shape=(NCHAN, NTIME_GULP, NBEAM), dtype='cf32', space='cuda')
     #odata_cpu = BFArray(shape=(NCHAN, NTIME_GULP, NBEAM), dtype='cf32', space='cuda_host')
