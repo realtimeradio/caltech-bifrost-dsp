@@ -218,7 +218,7 @@ class BeamformSumBeams(Block):
 
                 # Block output
                 self.bf_output = BFArray(shape=(ohdr['nbeam'], self.ntime_blocks, nchan, 4), dtype=np.float32, space='cuda')
-                igulp_size = self.ntime_gulp * nchan * ihdr['nbeam'] * 2 * ihdr['nbit'] // 8
+                igulp_size = self.ntime_gulp * nchan * ihdr['nbeam'] * 2 * 32 // 8 # 32-bit only
                 ogulp_size = self.ntime_blocks * nchan * ohdr['nbeam'] * 4 * 4 # 4 x float32 per sample
                 # The output gulp size can be quite small if we base it on the input gulp size
                 # force the numper of times in the output span to match the input, which
