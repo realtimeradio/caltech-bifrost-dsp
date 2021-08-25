@@ -80,7 +80,7 @@ class BeamformOutput(Block):
 
     *Input Data Buffer*: A CPU-side bifrost ring buffer of 32 bit,
     floating-point, integrated, beam powers.
-    Data has dimensionality ``time x channel x beams x beam-element``.
+    Data has dimensionality ``beams x time x channel x beam-element``.
 
     ``channel`` runs from 0 to ``nchan``.
     
@@ -293,12 +293,12 @@ class BeamformOutput(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                idata = ispan.data.view('f32').reshape([self.ntime_gulp, nbeam, nchan, npol**2])
+                idata = ispan.data.view('f32').reshape([nbeam, self.ntime_gulp, nchan, npol**2])
                 start_time = time.time()
                 time_tag = this_gulp_time * samples_per_spectra
                 for beam in range(nbeam):
                     if beam_ips[beam] != '0.0.0.0':
-                        idata_beam = idata[:,beam,:,:].copy('system').reshape(self.ntime_gulp, 1, nchan * npol**2)
+                        idata_beam = idata[beam,:,:,:].reshape(self.ntime_gulp, 1, nchan * npol**2)
                         try:
                             udts[beam].send(desc, this_gulp_time, upstream_acc_len,
                                             self.pipeline_idx-1, 0, idata_beam)
