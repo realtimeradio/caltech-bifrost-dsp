@@ -1,0 +1,21 @@
+# Configuration file for systemd that keeps the LWA X-engine etcd services running
+#
+# Copy this file to /etc/systemd/system/. Then run
+# `systemctl enable lwa-xeng-etcd`
+# and `systemctl start lwa-xeng-etcd`.
+
+[Unit]
+Description=LWA etcd X-Engine command etcd service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=60
+User=ubuntu
+Group=ubuntu
+PIDFile=/var/run/lwa_xeng_etcd_service.pid
+ExecStart=/home/ubuntu/anaconda3/bin/lwa352_start_xeng_etcd_service.py
+
+[Install]
+WantedBy=multi-user.target
+

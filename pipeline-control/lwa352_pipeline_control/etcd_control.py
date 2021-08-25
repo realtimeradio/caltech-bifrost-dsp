@@ -64,9 +64,11 @@ class EtcdCorrControl():
 
     """
     def __init__(self, etcdhost='etcdhost', keyroot_cmd='/cmd/corr/x',
-                 keyroot_mon='/mon/corr/x', log=default_log):
+                 keyroot_mon='/mon/corr/x', keyroot_resp='/resp/corr/x',
+                 log=default_log):
         self.keyroot_cmd = keyroot_cmd
         self.keyroot_mon = keyroot_mon
+        self.keyroot_resp = keyroot_resp
         self.etcdhost = etcdhost
         self.log = log
         try:
@@ -153,6 +155,116 @@ class EtcdCorrControl():
         key = self._get_cmd_key(host, pipeline, block, inst_id)
         val = json.dumps(kwargs)
         self.ec.put(key, val)
+
+    def _send_command_etcd(self, xhost, block, cmd, kwargs={}, timeout=10.0):
+        """
+        Send a command to an X-Engine
+
+        :param xhost: X-engine hostname to which command should be sent.
+        :type xhost: int
+
+        :param block: Block to which command applies.
+        :type block: str
+
+        :param cmd: Command to be sent
+        :type cmd: str
+
+        :param kwargs: Dictionary of key word arguments to be forwarded
+            to the chosen command method
+        :type kwargs: dict
+
+        :param timeout: Time, in seconds, to wait for a response to the command.
+        :type timeout: float
+
+        :return: Dictionary of values, dependent on the command response.
+        """
+        cmd_key = self.keyroot_cmd + "/%s" % xhost
+        resp_key = self.keyroot_resp + "/%s" % xhost
+        timestamp = time.time()
+        sequence_id = str(int(timestamp * 1e6))
+        command_json = self._format_command(
+                           sequence_id,
+                           timestamp,
+                           block,
+                           cmd,
+                           kwargs = kwargs,
+                       )
+        if command_json is None:
+            return False
+
+        self._response_received = False
+        self._response = None
+
+        def response_callback(watchresponse):
+            for event in watchresponse.events:
+                self.log.debug("Got command response")
+                try:
+                    response_dict = json.loads(event.value.decode())
+                except:
+                    self.log.exception("Response JSON decode error")
+                    continue
+                self.log.debug("Response: %s" % response_dict)
+                resp_id = response_dict.get("id", None)
+                if resp_id == sequence_id:
+                    self._response = response_dict
+                    self._response_received = True
+                else:
+                    self.log.debug("Seq ID %s didn't match expected (%s)" % (resp_id, sequence_id))
+
+        # Begin watching response channel and then send message
+        watch_id = self.ec.add_watch_callback(resp_key, response_callback)
+        # send command
+        self.ec.put(cmd_key, command_json)
+        starttime = time.time()
+        while(True):
+            if self._response_received:
+                self.ec.cancel_watch(watch_id)
+                status = self._response['val']['status']
+                if status != 'normal':
+                    self.log.info("Command status returned: '%s'" % status)
+                return self._response['val']['response']
+            if time.time() > starttime + timeout:
+                self.ec.cancel_watch(watch_id)
+                return None
+            time.sleep(0.01)
+
+    def _format_command(self, sequence_id, timestamp, block, cmd, kwargs={}):
+        """
+        Format a command to be sent via ETCD
+
+        :param sequence_id: The ``id`` command field
+        :type block: int
+
+        :param timestamp: The ``timestamp`` command field
+        :type timestamp: float
+
+        :param block: The ``block`` command field
+        :type block: str
+
+        :param cmd: The ``cmd`` command field
+        :type cmd: str
+
+        :param kwargs: The ``kwargs`` command field
+        :type kwargs: dict
+
+        :return: JSON-encoded command string to be sent. Returns None if there
+            is an enoding error.
+        """
+        command_dict = {
+            "cmd": cmd,
+            "val": {
+                "block": block,
+                "timestamp": timestamp,
+                "kwargs": kwargs,
+                },
+            "id": sequence_id,
+        }
+        try:
+            command_json = json.dumps(command_dict)
+            return command_json
+        except:
+            self.log.exception("Failed to JSON-encode command")
+            return
 
     def get_status(self, host, pipeline, block, inst_id, user_only=True):
         """
