@@ -113,7 +113,8 @@ def build_pipeline(args):
     pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
-    log.info("Pipeline index: %i", pipeline_idx)
+    log.info("Pipeline index: %i", args.pipelineid)
+    log.info("Global index: %i", pipeline_idx)
     
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='system')

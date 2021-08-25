@@ -221,10 +221,10 @@ class BeamformVlbiOutput(Block):
             packet_cnt = 0
             udt = None
             desc = HeaderInfo()
-            desc.set_nchan(system_nchan)
+            desc.set_nchan(nchan)
             desc.set_chan0(chan0)
             desc.set_nsrc(system_nchan // nchan)
-            desc.set_tuning(self.pipeline_idx)
+            desc.set_tuning(1)
             for ispan in iseq.read(igulp_size):
                 if ispan.size < igulp_size:
                     continue # ignore final gulp
@@ -255,7 +255,7 @@ class BeamformVlbiOutput(Block):
                     idata_cpu = idata[:,:,0:(self.npol // npol) * self.nbeam_send].copy(space='system')
                     idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
                     try:
-                        udt.send(desc, this_gulp_time, 1, chan0 // nchan, 1, idata_cpu_r)
+                        udt.send(desc, this_gulp_time, 1, self.pipeline_idx-1, 0, idata_cpu_r)
                     except Exception as e:
                         self.log.error("VLBI OUTPUT >> Sending error: %s" % str(e))
                     stop_time = time.time()

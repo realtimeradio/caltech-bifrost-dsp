@@ -659,7 +659,7 @@ class CorrOutputFull(Block):
                     #self.print_autos()
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
-                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len,
+                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len * samples_per_spectra,
                                 verbose=print_on_send)
                     else:
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq,

@@ -280,7 +280,7 @@ class BeamformOutput(Block):
                         socks[beam].close()
                         socks[beam].connect(Address(ip, port))
                     desc.set_chan0(chan0)
-                    desc.set_tuning(self.pipeline_idx)
+                    desc.set_tuning(1)
                     desc.set_nchan(nchan)
                     desc.set_decimation(upstream_acc_len) # Sets navg field
                     desc.set_nsrc(npipeline)
@@ -300,8 +300,8 @@ class BeamformOutput(Block):
                     if beam_ips[beam] != '0.0.0.0':
                         idata_beam = idata[:,beam,:,:].copy('system').reshape(self.ntime_gulp, 1, nchan * npol**2)
                         try:
-                            udts[beam].send(desc, this_gulp_time, samples_per_spectra,
-                                            npipeline*nbeam + this_pipeline, 0, idata_beam)
+                            udts[beam].send(desc, this_gulp_time, upstream_acc_len,
+                                            self.pipeline_idx-1, 0, idata_beam)
                         except Exception as e:
                             self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
                 stop_time = time.time()
