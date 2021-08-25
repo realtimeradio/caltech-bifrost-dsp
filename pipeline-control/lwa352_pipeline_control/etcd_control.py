@@ -99,8 +99,63 @@ class EtcdCorrControl():
 
         """
 
-        key = '/%s/pipeline/%d/%s/%d/ctrl' % (host, pipeline, block, inst_id)
+        key = self._get_key(host, pipeline, block, inst_id)
         return self.keyroot_cmd + key
+
+    def _get_resp_key(self, host, pipeline, block, inst_id):
+        """
+        Generate a block's response key from the block instance specification.
+
+        :param host: The hostname of the server running the DSP pipeline
+            to be commanded
+        :type host: string
+        :param pipeline: The index of the pipeline on this server to be
+            commanded
+        :type pipeline: int
+        :param block: The name of the processing block in this pipeline
+            to be commanded
+        :type block: string
+        :param inst_id: The instance ID of the block of this type to be
+            commanded
+        :type inst_id: int
+
+        :return: The response key for this block
+        :rtype: string
+
+        """
+
+        key = self._get_key(host, pipeline, block, inst_id)
+        return self.keyroot_resp + key
+
+    def _get_key(self, host, pipeline, block, inst_id):
+        """
+        Generate a block's key suffix from the block instance specification.
+
+        :param host: The hostname of the server running the DSP pipeline
+            to be commanded
+        :type host: string
+        :param pipeline: The index of the pipeline on this server to be
+            commanded
+        :type pipeline: int
+        :param block: The name of the processing block in this pipeline
+            to be commanded
+        :type block: string
+        :param inst_id: The instance ID of the block of this type to be
+            commanded
+        :type inst_id: int
+
+        :return: The monitor key for this block
+        :rtype: string
+
+        """
+        key = '/%s' % (host)
+        if pipeline is not None:
+            key += '/pipeline/%d' % (pipeline)
+            if block is not None:
+                key += '/%s' % (block)
+                if inst_id is not None:
+                    key += '/%d' % (inst_id)
+        return key
 
     def _get_mon_key(self, host, pipeline, block, inst_id):
         """
@@ -123,11 +178,11 @@ class EtcdCorrControl():
         :rtype: string
 
         """
-
-        key = '/%s/pipeline/%d/%s/%d/status' % (host, pipeline, block, inst_id)
+        key = self._get_key(host, pipeline, block, inst_id)
         return self.keyroot_mon + key
 
-    def send_command(self, host, pipeline, block, inst_id, **kwargs):
+    def send_command(self, host, pipeline=None, block=None, inst_id=None,
+            cmd='update', timeout=10.0, **kwargs):
         """
         Send a command to a processing block
 
@@ -135,14 +190,18 @@ class EtcdCorrControl():
             to be commanded
         :type host: string
         :param pipeline: The index of the pipeline on this server to be
-            commanded
+            commanded. Use None for commands targetting a raw host.
         :type pipeline: int
         :param block: The name of the processing block in this pipeline
-            to be commanded
+            to be commanded. Use None for commands targetting a raw host
         :type block: string
         :param inst_id: The instance ID of the block of this type to be
-            commanded
+            commanded. Use None for commands targetting a raw host
         :type inst_id: int
+        :param cmd: Command name
+        :type cmd: str
+        :param timeout: Time, in seconds, to wait for a response to the command.
+        :type timeout: float
 
         :param **kwargs: Keyword arguments are used to specify which
             control values should be set. Any key names and JSON-serializable
@@ -152,34 +211,8 @@ class EtcdCorrControl():
 
         """
 
-        key = self._get_cmd_key(host, pipeline, block, inst_id)
-        val = json.dumps(kwargs)
-        self.ec.put(key, val)
-
-    def _send_command_etcd(self, xhost, block, cmd, kwargs={}, timeout=10.0):
-        """
-        Send a command to an X-Engine
-
-        :param xhost: X-engine hostname to which command should be sent.
-        :type xhost: int
-
-        :param block: Block to which command applies.
-        :type block: str
-
-        :param cmd: Command to be sent
-        :type cmd: str
-
-        :param kwargs: Dictionary of key word arguments to be forwarded
-            to the chosen command method
-        :type kwargs: dict
-
-        :param timeout: Time, in seconds, to wait for a response to the command.
-        :type timeout: float
-
-        :return: Dictionary of values, dependent on the command response.
-        """
-        cmd_key = self.keyroot_cmd + "/%s" % xhost
-        resp_key = self.keyroot_resp + "/%s" % xhost
+        cmd_key = self._get_cmd_key(host, pipeline, block, inst_id)
+        resp_key = self._get_resp_key(host, pipeline, block, inst_id)
         timestamp = time.time()
         sequence_id = str(int(timestamp * 1e6))
         command_json = self._format_command(

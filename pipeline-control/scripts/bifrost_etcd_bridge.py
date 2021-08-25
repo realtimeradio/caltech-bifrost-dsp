@@ -116,7 +116,7 @@ def main(args):
                else:
                    block_id = 0
                
-               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}/status'.format(
+               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}'.format(
                           keybase=args.keybase,
                           hostbase=args.hostbase,
                           pipeline_id=pipeline_id,

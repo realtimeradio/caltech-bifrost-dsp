@@ -90,6 +90,16 @@ class Lwa352PipelineControl():
         self.beamform = BeamformControl(*args)
         self.beamform_output = BeamformOutputControl(*args)
         self.beamform_vlbi_output = BeamformVlbiOutputControl(*args)
-        
 
+    def start_pipeline(self):
+        """
+        Start the pipeline, using the default configuration.
+        """
+        self.corr_interface.send_command(self.host, cmd='start_pipeline', block='xctrl', xid=self.pipeline_id)
+
+    def stop_pipeline(self):
+        """
+        Start the pipeline, using the default configuration.
+        """
+        self.corr_interface.send_command(self.host, cmd='stop_pipeline', block='xctrl', xid=self.pipeline_id)
 

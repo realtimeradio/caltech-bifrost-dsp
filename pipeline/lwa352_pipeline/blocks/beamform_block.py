@@ -13,7 +13,7 @@ import time
 import ujson as json
 import numpy as np
 
-from .block_base import Block
+from .block_base import Block, COMMAND_OK, COMMAND_INVALID
 
 class Beamform(Block):
     # Note: Input data are: [time,chan,ant,pol,cpx,8bit]
@@ -246,8 +246,29 @@ class Beamform(Block):
         self.acquire_control_lock()
         for event in watchresponse.events:
             v = json.loads(event.value)
-            self.update_stats({'last_cmd_response':self._process_commands(v)})
+            seq_id = v.get('id', None)
+            if seq_id is None:
+                self._send_command_response("0", False, "Missing ID field")
+                continue
+            cmd = v.get('cmd', None)
+            if cmd != "update":
+                self._send_command_response("0", False, "Invalid command")
+                continue
+            val = v.get("val", None)
+            if not isinstance(val, dict):
+                self._send_command_response(seq_id, False, "`val` field should be a dictionary")
+                continue
+            update_keys = val.get("kwargs", None)
+            if not isinstance(update_keys, dict):
+                self._send_command_response(seq_id, False, "`val[kwargs]` field should be a dictionary")
+                continue
+            try:
+                proc_ok = self._process_commands(update_keys)
+            except:
+                proc_ok = COMMAND_INVALID
+            self.update_stats({'last_cmd_response':proc_ok})
             self.update_command_vals()
+            self._send_command_response(seq_id, proc_ok==COMMAND_OK, str(proc_ok))
         self.release_control_lock()
 
     def update_command_vals(self):
