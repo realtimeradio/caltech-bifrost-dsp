@@ -15,6 +15,7 @@ User=ubuntu
 Group=ubuntu
 PIDFile=/var/run/lwa_xeng_etcd_service.pid
 ExecStart=/home/ubuntu/anaconda3/bin/lwa352_start_xeng_etcd_service.py
+LimitMEMLOCK=infinity
 
 [Install]
 WantedBy=multi-user.target
