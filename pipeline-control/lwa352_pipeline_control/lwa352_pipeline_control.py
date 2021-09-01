@@ -22,7 +22,7 @@ logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s',
 logFormat.converter = time.gmtime
 logHandler = logging.StreamHandler(sys.stdout)
 logHandler.setFormatter(logFormat)
-logHandler.setLevel(logging.DEBUG)
+logHandler.setLevel(logging.INFO)
 default_log.addHandler(logHandler)
 default_log.setLevel(logging.DEBUG)
 
