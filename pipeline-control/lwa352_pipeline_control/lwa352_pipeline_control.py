@@ -85,6 +85,7 @@ class Lwa352CorrelatorControl():
         """
         for pl in self.pipelines:
             pl.start_pipeline()
+        time.sleep(10)
 
     def stop_pipelines(self):
         """
@@ -92,7 +93,7 @@ class Lwa352CorrelatorControl():
         """
         for pl in self.pipelines:
             pl.stop_pipeline()
-
+        time.sleep(5)
     
     def _arm_and_wait(self, blocks, delay):
         """

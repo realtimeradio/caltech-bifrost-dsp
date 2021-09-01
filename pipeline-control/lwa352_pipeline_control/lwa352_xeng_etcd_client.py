@@ -335,7 +335,6 @@ class XengineController():
         if pid is not None:
             self.logger.info("Killing process %d" % pid)
             subprocess.run(["kill", "-9", str(pid)])
-            time.sleep(5)
         self.set_pid(xid, None)
 
     def start_pipeline(self,
