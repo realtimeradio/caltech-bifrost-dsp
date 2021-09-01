@@ -146,28 +146,42 @@ class Lwa352CorrelatorControl():
 
         :param dest_ip: Hostname or IP address to which slow correlator packets
             should be sent.
+            If list of ips is provided, pipeline ``n`` will use destination ip
+            ``dest_ip[n % len(dest_ip)]``
         :type dest_ip: str
 
         :param dest_port: UDP port to which slow correlator packets should be sent.
-        :type dest_port: int
+            If list of ports is provided, pipeline ``n`` will use destination port
+            ``dest_port[n % len(dest_port)]``
+        :type dest_port: int or list of int
 
         :param max_mbps: Total correlator output data rate in Mbits/s. This rate is
             shared over multiple pipelines in the system.
         :type max_mbps: int
         """
-        try:
-            dest_ip = socket.gethostbyname(dest_ip)
-        except:
-            self.log.exception("Couldn't convert hostname %s to IP" % dest_ip)
-            raise
-        self.log.info("Setting correlator data destination to %s:%d" % (dest_ip, dest_port))
+        if not isinstance(dest_port, list):
+            dest_port = [dest_port]
+        if not isinstance(dest_ip, list):
+            dest_ip = [dest_ip]
+
+        dest_ip_res = []
+        for ip in dest_ip:
+            try:
+                dest_ip_res += [socket.gethostbyname(ip)]
+            except:
+                self.log.exception("Couldn't convert hostname %s to IP" % dest_ip)
+                raise
 
         max_mbps_per_pl = max_mbps // self.npipeline
         self.log.info("Setting max data output rate per pipeline to %.1f Mbit/s" % max_mbps_per_pl)
 
-        for pl in self.pipelines:
+        for pn, pl in enumerate(self.pipelines):
+            pl_dest_ip = dest_ip[pn % len(dest_ip)]
+            pl_dest_port = dest_port[pn % len(dest_port)]
+            self.log.info("Setting pipeline %s:%d data destination to %s:%d" %
+                    (pl.host, pl.pipeline_id, pl_dest_ip, pl_dest_port))
             pl.corr_output_full.set_max_mbps(max_mbps_per_pl)
-            pl.corr_output_full.set_destination(dest_ip=dest_ip, dest_port=dest_port)
+            pl.corr_output_full.set_destination(dest_ip=pl_dest_ip, dest_port=pl_dest_port)
 
         self.log.info("Arming correlator core")
         self._arm_and_wait([pl.corr for pl in self.pipelines], self.ARM_DELAY)
