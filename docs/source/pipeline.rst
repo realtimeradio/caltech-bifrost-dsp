@@ -79,30 +79,36 @@ This has the following options:
 Software
 ========
 
-The LWA-352 pipeline comprises ?? independent processes, briefly
+The LWA-352 pipeline comprises 13 independent processes, briefly
 described below.
 
 #. ``capture``: Receive F-engine packets and correctly arrange in
    buffers for downstream processing. Monitor and record missing packets
    and network performance statistics.
 
-#. ``copy``: Transfer blocks of data from CPU to GPU, for
+#. ``copy1``: Transfer blocks of data from the capture buffer to a deep
+   transient buffer.
+
+#. ``copy2``: Transfer blocks of data from CPU to GPU, for
    high-performance computation.
 
-#. ``triggered_dump``: Buffer large quantities of time-domain data for triggered
-   dump to disk.
+#. ``triggered\_dump``: Process software triggers to copy deep-buffered data
+   to disk.
 
-#. ``corr``: Correlate data using the ``xGPU`` library.
+#. ``corr``: Correlate data using the ``xGPU`` library and accumulate for
+   short (~100ms) durations.
 
-#. ``corr_output_full``: Output full, accumulated visibility matrices.
+#. ``corr\_subsel``: Down-select a sub-set of the complete visibility matrices.
 
-#. ``corrsubsel``: Down-select a sub-set of the complete visibility matrices.
+#. ``corr\_output\_part``: Output subselected visibilities as UDP/IP streams.
 
-#. ``corr_output_part``: Output subselected visibilities as UDP/IP streams.
+#. ``corr\_acc``: Further accumulate correlation output to ~second durations.
+
+#. ``corr\_output\_full``: Output full, accumulated visibility matrices.
 
 #. ``beamform``: Form multiple voltage beams.
 
-#. ``beamform_vlbi_output``: Package and transmit multiple voltage beams for
+#. ``beamform\_vlbi\_output``: Package and transmit voltage beam(s) for
    VLBI purposes.
 
 #. ``beamform\_sum_beams``: Form integrated power-spectra for multiple beams.
@@ -112,8 +118,19 @@ described below.
 High-Level Parameters
 ---------------------
 
+-  ``NBEAM``: Number of dual-polarization beams to form.
+-  ``CHAN\_PER\_PACKET``: Number of frequency channels in an F-engine packet.
+   This should be chosen to match the F-engine configuration.
+-  ``NPIPELINE``: The total number of pipelines in the multi-server correlator
+   system.
+-  ``NSNAP``: The number of SNAP2 boards in the total F-engine system.
 -  ``GSIZE``: “Gulp size” – the number of samples processed per batch by
    a processing block.
+-  ``NETGSIZE``: Number of time samples buffered in a capture buffer block.
+-  ``NET_NGULP``: Number of ``NETGSIZE`` buffers comprising a single buffer
+   "time slot". Data capture always begins on a time boundary of
+   ``NETGSIZE*NET_NGULP``, and downstream processes should begin processing
+   on boundaries consistent with this.
 
 Bifrost Block Description
 -------------------------
