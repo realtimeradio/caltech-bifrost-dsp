@@ -104,9 +104,17 @@ def build_pipeline(args):
     
     
     hostname = socket.gethostname()
-    server_idx = 0 # HACK to allow testing on head node "adp"
+    try:
+        server_idx = hostname.split('.', 1)[0].replace('lxdlwagpu', '')
+        server_idx = int(server_idx, 10)
+    except (AttributeError, ValueError):
+        server_idx = 1 # HACK to allow testing on head node "adp"
+    # TODO: Is there a way to know how many pipelines to expect per server?
+    pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
+    log.info("Pipeline index: %i", args.pipelineid)
+    log.info("Global index: %i", pipeline_idx)
     
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='system')
@@ -209,6 +217,7 @@ def build_pipeline(args):
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj=bl_is_conj,
                           use_cor_fmt=not args.pycorrout,
+                          pipeline_idx=pipeline_idx,
                           npipeline=args.cor_npipeline,
                   ))
 
@@ -222,8 +231,9 @@ def build_pipeline(args):
 
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
-                          nvis_per_packet=16,
+                          nvis_per_packet=16, nchan_sum=CORR_SUBSEL_NCHAN_SUM,
                           use_cor_fmt=not args.pycorrout,
+                          pipeline_idx=pipeline_idx,
                           npipeline=args.cor_npipeline,
                   ))
 
@@ -234,10 +244,12 @@ def build_pipeline(args):
                           etcd_client=etcd_client))
         ops.append(BeamformSumBeams(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
                               nchan=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
-        ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
+        ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True,
+                                  ntime_gulp=GSIZE, pipeline_idx=pipeline_idx, etcd_client=etcd_client))
         cores.pop(0)
         ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client))
+                                      pipeline_idx=pipeline_idx, core=cores.pop(0),
+                                      guarantee=True, etcd_client=etcd_client))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     

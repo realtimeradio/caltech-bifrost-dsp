@@ -186,7 +186,14 @@ class CorrOutputPart(Block):
         | id            | uint8      |                | Mark 5C ID, used to identify COR packet,    |
         |               |            |                | ``0x02``                                    |
         +---------------+------------+----------------+---------------------------------------------+
-        | frame_number  | uint24     |                | Mark 5C frame number. Unused.               |
+        | frame_number  | uint24     |                | Mark 5C frame number.  Used to store info.  |
+        |               |            |                | about how to order the output packets.  The |
+        |               |            |                | first 8 bits contain the channel decimation |
+        |               |            |                | fraction relative to the F-Engine output.   |
+        |               |            |                | The next 8 bits contain the total number of |
+        |               |            |                | subbands being transmitted.  The final 8    |
+        |               |            |                | contain which subband is contained in the   |
+        |               |            |                | packet.                                     |
         +---------------+------------+----------------+---------------------------------------------+
         | secs_count    | uint32     |                | Mark 5C seconds since 1970-01-01 00:00:00   |
         |               |            |                | UTC. Unused.                                |
@@ -309,14 +316,22 @@ class CorrOutputPart(Block):
     """
 
     def __init__(self, log, iring, use_cor_fmt=False,
-                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16, npipeline=1):
+                 guarantee=True, core=-1, etcd_client=None, dest_port=10001, nvis_per_packet=16, 
+                 nchan_sum=1, pipeline_idx=1, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputPart, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
         self.nvis_per_packet = nvis_per_packet
+        self.nchan_sum = nchan_sum
+        self.pipeline_idx = pipeline_idx
         self.npipeline = npipeline
 
+        # Do this now since it doesn't change after the block is initialized
+        wrapped_idx = ((self.pipeline_idx - 1) % self.npipeline) + 1
+        self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | wrapped_idx
+        self.tuning &= 0x00FFFFFF
+        
         self.use_cor_fmt = use_cor_fmt
         if self.use_cor_fmt:
             self.sock = None
@@ -348,7 +363,7 @@ class CorrOutputPart(Block):
             self.sock.sendto(header + dout[vn*self.nvis_per_packet : (vn+1)*self.nvis_per_packet].tobytes(),
                                              (self.command_vals['dest_ip'], self.command_vals['dest_port']))
 
-    def send_packets_bf(self, data, baselines, udt, time_tag, desc, chan0, nchan, gain, navg, tuning):
+    def send_packets_bf(self, data, baselines, udt, time_tag, desc, chan0, nchan, gain, navg):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
@@ -358,7 +373,7 @@ class CorrOutputPart(Block):
         nvis = len(baselines)
         desc.set_nsrc(nvis // nvis_per_pkt)
         nstand_virt = int((-1 + np.sqrt(1 + 2*nvis))/2) # effective number of stands
-        desc.set_tuning(tuning)
+        desc.set_tuning(self.tuning)
         pkt_payload_bits = nchan * nvis_per_pkt * 8 * 8
         start_time = time.time()
         dview = data.view('cf32').reshape([nchan, nvis // nvis_per_pkt, COR_NPOL, COR_NPOL])
@@ -410,7 +425,6 @@ class CorrOutputPart(Block):
                 sfreq = ihdr['sfreq']
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan_sum * nchan * ihdr['fs_hz'] / bw_hz)
-                this_pipeline = (chan0 // nchan) % self.npipeline
             igulp_size = nvis * nchan * 8
             dout = np.zeros(shape=[nvis, nchan, 2], dtype='>i')
             for ispan in iseq.read(igulp_size):
@@ -440,7 +454,7 @@ class CorrOutputPart(Block):
                         # Read chan x baseline x complexity input data.
                         idata = ispan.data_view('i32').reshape([nchan, nvis, 2])
                         self.send_packets_bf(idata, baselines, udt, time_tag, desc, chan0, nchan, 0,
-                                upstream_acc_len, (self.npipeline<<8) + (this_pipeline+1))
+                                upstream_acc_len * samples_per_spectra)
                     else:
                         # Read chan x baseline x complexity input data.
                         # Transpose to baseline x chan x complexity

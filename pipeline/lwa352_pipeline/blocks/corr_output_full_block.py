@@ -240,7 +240,14 @@ class CorrOutputFull(Block):
         | id            | uint8      |                | Mark 5C ID, used to identify COR packet,    |
         |               |            |                | ``0x02``                                    |
         +---------------+------------+----------------+---------------------------------------------+
-        | frame_number  | uint24     |                | Mark 5C frame number. Unused.               |
+        | frame_number  | uint24     |                | Mark 5C frame number.  Used to store info.  |
+        |               |            |                | about how to order the output packets.  The |
+        |               |            |                | first 8 bits contain the channel decimation |
+        |               |            |                | fraction relative to the F-Engine output.   |
+        |               |            |                | The next 8 bits contain the total number of |
+        |               |            |                | subbands being transmitted.  The final 8    |
+        |               |            |                | contain which subband is contained in the   |
+        |               |            |                | packet.                                     |
         +---------------+------------+----------------+---------------------------------------------+
         | secs_count    | uint32     |                | Mark 5C seconds since 1970-01-01 00:00:00   |
         |               |            |                | UTC. Unused.                                |
@@ -356,15 +363,22 @@ class CorrOutputFull(Block):
     def __init__(self, log, iring,
                  guarantee=True, core=-1, nchan=192, npol=2, nstand=352, etcd_client=None, dest_port=10000,
                  checkfile=None, checkfile_acc_len=1, antpol_to_bl=None, bl_is_conj=None, use_cor_fmt=True,
-                 npipeline=1):
+                 nchan_sum=1, pipeline_idx=1, npipeline=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrOutputFull, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
+        self.nchan_sum = nchan_sum
+        self.pipeline_idx = pipeline_idx
         self.npipeline = npipeline
         self.nchan = nchan
         self.npol = npol
         self.nstand = nstand
         self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        
+        # Do this now since it doesn't change after the block is initialized
+        wrapped_idx = ((self.pipeline_idx - 1) % self.npipeline) + 1
+        self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | wrapped_idx
+        self.tuning &= 0x00FFFFFF
 
         self.igulp_size = self.matlen * 8 # complex64
 
@@ -420,7 +434,7 @@ class CorrOutputFull(Block):
         return np.frombuffer(dtest_raw, dtype=np.complex).reshape(dim)
 
     def send_packets_py(self, sync_time, this_gulp_time, bw_hz, sfreq,
-                              upstream_acc_len, chan0):
+                              upstream_acc_len, chan0, verbose=False):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         packet_cnt = 0
@@ -457,7 +471,8 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         gbps = 8*self.dump_size / elapsed / 1e9
-        self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
+        if verbose:
+            self.log.info("CORR OUTPUT >> Sending complete for time %d in %.2f seconds (%f Gb/s)" % (this_gulp_time, elapsed, gbps))
         self.update_stats({'output_gbps': gbps})
 
     def print_autos(self):
@@ -474,14 +489,14 @@ class CorrOutputFull(Block):
             print("%d-X-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,0,0])
             print("%d-Y-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,1,1])
 
-    def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, tuning):
+    def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, verbose=False):
         cpu_affinity.set_core(self.core)
         start_time = time.time()
         desc.set_chan0(chan0)
         desc.set_gain(gain)
         desc.set_decimation(navg)
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
-        desc.set_tuning(tuning)
+        desc.set_tuning(self.tuning)
         pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
         block_bits_sent = 0
         start_time = time.time()
@@ -512,7 +527,8 @@ class CorrOutputFull(Block):
         stop_time = time.time()
         elapsed = stop_time - start_time
         gbps = 8 * self.dump_size / elapsed / 1e9
-        self.log.info("CORR OUTPUT >> Sending complete for time_tag %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (time_tag, elapsed, self.dump_size, gbps))
+        if verbose:
+            self.log.info("CORR OUTPUT >> Sending complete for time_tag %d in %.2f seconds (%d Bytes; %.2f Gb/s)" % (time_tag, elapsed, self.dump_size, gbps))
         self.update_stats({'output_gbps': gbps})
 
     def check_against_file(self, upstream_acc_len, upstream_start_time):
@@ -587,9 +603,9 @@ class CorrOutputFull(Block):
             nchan = ihdr['nchan']
             chan0 = ihdr['chan0']
             bw_hz = ihdr['bw_hz']
+            print_on_send = True
             if self.use_cor_fmt:
                 samples_per_spectra = int(nchan * ihdr['fs_hz'] / bw_hz)
-                this_pipeline = (chan0 // nchan) % self.npipeline
             if not self.use_cor_fmt:
                 sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
@@ -602,6 +618,7 @@ class CorrOutputFull(Block):
                     continue # skip last gulp
                 # Update destinations if necessary
                 if self.update_pending:
+                    print_on_send = True
                     self.update_command_vals()
                     if self.command_vals['dest_file'] != "":
                         self.log.info("CORR OUTPUT >> Updating destination to file %s (max rate %.1f Mbits/s)" % 
@@ -642,12 +659,15 @@ class CorrOutputFull(Block):
                     #self.print_autos()
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
-                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len,
-                                (self.npipeline << 8) + (this_pipeline + 1))
+                        self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len * samples_per_spectra,
+                                verbose=print_on_send)
                     else:
-                        self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq, upstream_acc_len, chan0)
+                        self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq,
+                                upstream_acc_len, chan0, verbose=print_on_send)
                 else:
-                    self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
+                    if print_on_send:
+                        self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
+                print_on_send = False
                 curr_time = time.time()
                 process_time = curr_time - prev_time
                 prev_time = curr_time

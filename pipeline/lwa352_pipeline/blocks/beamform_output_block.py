@@ -69,6 +69,8 @@ class BeamformOutput(Block):
         +---------------+--------+-------+------------------------------------------------+
         | ``fs_hz``     | int    | Hz    | ADC sample rate.                               |
         +---------------+--------+-------+------------------------------------------------+
+        | ``bw_hz``     | double | Hz    | Bandwidth of the input data.                   |
+        +---------------+--------+-------+------------------------------------------------+
 
     **Output Headers**
 
@@ -78,7 +80,7 @@ class BeamformOutput(Block):
 
     *Input Data Buffer*: A CPU-side bifrost ring buffer of 32 bit,
     floating-point, integrated, beam powers.
-    Data has dimensionality ``time x channel x beams x beam-element``.
+    Data has dimensionality ``beams x time x channel x beam-element``.
 
     ``channel`` runs from 0 to ``nchan``.
     
@@ -213,11 +215,12 @@ class BeamformOutput(Block):
 
     def __init__(self, log, iring,
                  guarantee=True, core=-1, etcd_client=None, dest_port=10000,
-                 ntime_gulp=480,
+                 ntime_gulp=480, pipeline_idx=1
                  ):
         super(BeamformOutput, self).__init__(log, iring, None, guarantee, core, etcd_client=etcd_client)
 
         self.ntime_gulp = ntime_gulp
+        self.pipeline_idx = pipeline_idx
         self.define_command_key('dest_ip', type=list, initial_val=['0.0.0.0'])
         self.define_command_key('dest_port', type=list, initial_val=[dest_port])
         self.update_command_vals()
@@ -244,7 +247,7 @@ class BeamformOutput(Block):
             npipeline = system_nchan // nchan
             chan0 = ihdr['chan0']
             npol  = ihdr['npol']
-            samples_per_spectra = int(nchan_sum * nchan * ihdr['fs_hz'] / bw_hz)
+            samples_per_spectra = int(nchan * ihdr['fs_hz'] / ihdr['bw_hz'])
             this_pipeline = (chan0 // nchan) % npipeline
             igulp_size = self.ntime_gulp * nchan * nbeam * npol**2 * nbit // 8
             packet_cnt = 0
@@ -277,10 +280,10 @@ class BeamformOutput(Block):
                         socks[beam].close()
                         socks[beam].connect(Address(ip, port))
                     desc.set_chan0(chan0)
-                    desc.set_tuning(0)
+                    desc.set_tuning(1)
                     desc.set_nchan(nchan)
                     desc.set_decimation(upstream_acc_len) # Sets navg field
-                    desc.set_nsrc(nbeam * npipeline)
+                    desc.set_nsrc(npipeline)
                     self.stats.update({'dest_ip': self.command_vals['dest_ip'],
                                        'dest_port': self.command_vals['dest_port'],
                                        'update_pending': self.update_pending,
@@ -290,15 +293,15 @@ class BeamformOutput(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                idata = ispan.data.view('f32').reshape([self.ntime_gulp, nbeam, nchan, npol**2])
+                idata = ispan.data.view('f32').reshape([nbeam, self.ntime_gulp, nchan, npol**2])
                 start_time = time.time()
                 time_tag = this_gulp_time * samples_per_spectra
                 for beam in range(nbeam):
                     if beam_ips[beam] != '0.0.0.0':
-                        idata_beam = idata[:,beam,:,:].copy('system').reshape(self.ntime_gulp, 1, nchan * npol**2)
+                        idata_beam = idata[beam,:,:,:].reshape(self.ntime_gulp, 1, nchan * npol**2)
                         try:
-                            udts[beam].send(desc, this_gulp_time, samples_per_spectra,
-                                            npipeline*nbeam + this_pipeline, 0, idata_beam)
+                            udts[beam].send(desc, this_gulp_time, upstream_acc_len,
+                                            self.pipeline_idx-1, 0, idata_beam)
                         except Exception as e:
                             self.log.error("BEAM OUTPUT >> Sending error: %s" % (str(e)))
                 stop_time = time.time()
