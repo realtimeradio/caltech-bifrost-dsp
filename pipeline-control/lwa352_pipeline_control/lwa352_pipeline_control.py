@@ -239,6 +239,7 @@ class Lwa352PipelineControl():
                                   etcdhost=etcdhost,
                                   keyroot_cmd='/cmd/corr/x',
                                   keyroot_mon='/mon/corr/x',
+                                  keyroot_resp='/resp/corr/x',
                                   log=log,
                               )
 

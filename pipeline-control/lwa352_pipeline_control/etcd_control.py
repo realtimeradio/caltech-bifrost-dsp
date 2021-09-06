@@ -23,7 +23,7 @@ class EtcdCorrControl():
 
     The target key for a particular processing block is defined as:
 
-    ``<command-root>/<hostname>/pipeline/<pipeline-id>/<blockname>/<block-id>/ctrl``
+    ``<keyroot_cmd>/<hostname>/pipeline/<pipeline-id>/<blockname>/<block-id>``
 
     Where:
       -  ``command-root`` is a user-defined root path
@@ -32,9 +32,12 @@ class EtcdCorrControl():
       -  ``blockname`` is the name of the processing block in the pipeline
       -  ``block-id`` is the index of the instance of this block type
 
+    A block will respond to commands on a similarly defined key:
+    ``<keyroot_resp>/<hostname>/pipeline/<pipeline-id>/<blockname>/<block-id>``
+
     Similarly, a processing block's status can be read by reading the key:
 
-    ``<monitor-root>/<hostname>/pipeline/<pipeline-id>/<blockname>/<block-id>/status``
+    ``<keyroot_mon>/<hostname>/pipeline/<pipeline-id>/<blockname>/<block-id>``
 
     Where:
       -  ``monitor-root`` is a user-defined root path
@@ -53,6 +56,10 @@ class EtcdCorrControl():
     :param keyroot_cmd: The root path under which all correlator command
         keys live
     :type keyroot_cmd: string
+
+    :param keyroot_mon: The root path under which all correlator command
+        response keys live
+    :type keyroot_mon: string
 
     :param keyroot_mon: The root path under which all correlator monitor
         keys live

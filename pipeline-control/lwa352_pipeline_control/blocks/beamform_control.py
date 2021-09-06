@@ -18,7 +18,7 @@ class BeamformControl(BlockControl):
 
         :param gains: Complex-valued gains to load. Should be a numpy
             array with a complex data type and ``nchan`` entries,
-            where entry ``i`` corresponds to the ``i``th channel
+            where entry ``i`` corresponds to the ``i`` th channel
             being processed by this pipeline.
         :type gains: numpy.array
 
@@ -51,7 +51,7 @@ class BeamformControl(BlockControl):
 
         :param delays: Real-valued delays to load, specified in nanoseconds.
             Should be a numpy array with ``nbeam`` entries,
-            where entry ``i`` corresponds to the delay to apply to the ``i``th
+            where entry ``i`` corresponds to the delay to apply to the ``i`` th
             beamformer input.
         :type delays: numpy.array
 

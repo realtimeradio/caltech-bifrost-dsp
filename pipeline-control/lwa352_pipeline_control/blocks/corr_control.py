@@ -34,6 +34,17 @@ class CorrControl(BlockControl):
 
 
     def get_next_allowed_start(self, delay_s):
+        """
+        Get the time index of an allowed accumulation start at some point
+        in the future.
+
+        :param delay_s: Number of seconds in the future when we wish to start.
+        :type delay_s: float
+
+        :return: Nearest allowed start time index to ``delay_s`` seconds in the
+            future.
+        :rtype int:
+        """ 
         status = self.get_bifrost_status(user_only=False)
         sync_time = status['sync_time']
         self._log.debug("Detected sync time %s" % time.ctime(sync_time))
@@ -53,4 +64,10 @@ class CorrControl(BlockControl):
         return rounded_spectra_delay
 
     def triggered_start(self, delay_s):
+        """
+        Trigger a start in the future.
+
+        :param delay_s: Number of seconds in the future to start.
+        :type delay_s: float
+        """
         self.set_start_time(self.get_next_allowed_start(delay_s))

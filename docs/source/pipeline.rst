@@ -92,34 +92,34 @@ described below.
 #. ``copy2``: Transfer blocks of data from CPU to GPU, for
    high-performance computation.
 
-#. ``triggered\_dump``: Process software triggers to copy deep-buffered data
+#. ``triggered_dump``: Process software triggers to copy deep-buffered data
    to disk.
 
 #. ``corr``: Correlate data using the ``xGPU`` library and accumulate for
    short (~100ms) durations.
 
-#. ``corr\_subsel``: Down-select a sub-set of the complete visibility matrices.
+#. ``corr_subsel``: Down-select a sub-set of the complete visibility matrices.
 
-#. ``corr\_output\_part``: Output subselected visibilities as UDP/IP streams.
+#. ``corr_output_part``: Output subselected visibilities as UDP/IP streams.
 
-#. ``corr\_acc``: Further accumulate correlation output to ~second durations.
+#. ``corr_acc``: Further accumulate correlation output to ~second durations.
 
-#. ``corr\_output\_full``: Output full, accumulated visibility matrices.
+#. ``corr_output_full``: Output full, accumulated visibility matrices.
 
 #. ``beamform``: Form multiple voltage beams.
 
-#. ``beamform\_vlbi\_output``: Package and transmit voltage beam(s) for
+#. ``beamform_vlbi_output``: Package and transmit voltage beam(s) for
    VLBI purposes.
 
-#. ``beamform\_sum_beams``: Form integrated power-spectra for multiple beams.
+#. ``beamform_sum_beams``: Form integrated power-spectra for multiple beams.
 
-#. ``beamform\_output``: Output accumulated power beams.
+#. ``beamform_output``: Output accumulated power beams.
 
 High-Level Parameters
 ---------------------
 
 -  ``NBEAM``: Number of dual-polarization beams to form.
--  ``CHAN\_PER\_PACKET``: Number of frequency channels in an F-engine packet.
+-  ``CHAN_PER_PACKET``: Number of frequency channels in an F-engine packet.
    This should be chosen to match the F-engine configuration.
 -  ``NPIPELINE``: The total number of pipelines in the multi-server correlator
    system.
