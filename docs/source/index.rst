@@ -7,7 +7,7 @@ Welcome to LWA Correlator's documentation!
 """"""""""""""""""""""""""""""""""""""""""
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    installation.rst
