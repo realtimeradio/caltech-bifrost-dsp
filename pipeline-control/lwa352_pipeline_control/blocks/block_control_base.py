@@ -46,6 +46,9 @@ class BlockControl():
         self._pipeline_id = pipeline_id
         self._instance_id = instance_id
         self._log = log
+        self.host = self._host #TODO find/replace
+        self.pipeline_id = self._pipeline_id #TODO find/replace
+        self.instance_id = self._instance_id #TODO find/replace
     
     def _send_command(self, **kwargs):
         self._corr_interface.send_command(

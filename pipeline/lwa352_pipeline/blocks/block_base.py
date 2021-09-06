@@ -96,6 +96,7 @@ class Block(object):
             guarantee, core, etcd_client=None,
             command_keyroot='/cmd/corr',
             monitor_keyroot='/mon/corr',
+            response_keyroot='/resp/corr',
             name=None):
         self.log = log
         self.iring = iring
@@ -123,14 +124,20 @@ class Block(object):
 
         # optional etcd client
         self.etcd_client = etcd_client
-        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}/{id}/ctrl'.format(
+        self.command_key = '{cmdroot}/x/{host}/pipeline/{pid}/{block}/{id}'.format(
                                 cmdroot=command_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
                                 block=self.name,
                                 id=self.instance_id)
-        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}/{id}/status'.format(
+        self.monitor_key = '{monroot}/x/{host}/pipeline/{pid}/{block}/{id}'.format(
                                 monroot=monitor_keyroot,
+                                host=socket.gethostname(),
+                                pid=self.pipeline_id,
+                                block=self.name,
+                                id=self.instance_id)
+        self.response_key = '{resproot}/x/{host}/pipeline/{pid}/{block}/{id}'.format(
+                                resproot=response_keyroot,
                                 host=socket.gethostname(),
                                 pid=self.pipeline_id,
                                 block=self.name,
@@ -197,10 +204,68 @@ class Block(object):
         :type watchresponse: WatchResponse
         """
         cpu_affinity.set_core(self.core)
-        v = json.loads(watchresponse.events[-1].value) # Get the latest command
         self._control_lock.acquire()
-        self.update_stats({'last_cmd_response':self._process_commands(v)})
+        for event in watchresponse.events:
+            v = json.loads(event.value)
+            seq_id = v.get('id', None)
+            if seq_id is None:
+                self._send_command_response("0", False, "Missing ID field")
+                continue
+            cmd = v.get('cmd', None)
+            if cmd != "update":
+                self._send_command_response("0", False, "Invalid command")
+                continue
+            val = v.get("val", None)
+            if not isinstance(val, dict):
+                self._send_command_response(seq_id, False, "`val` field should be a dictionary")
+                continue
+            update_keys = val.get("kwargs", None)
+            if not isinstance(update_keys, dict):
+                self._send_command_response(seq_id, False, "`val[kwargs]` field should be a dictionary")
+                continue
+            try:
+                proc_ok = self._process_commands(update_keys)
+            except:
+                proc_ok = COMMAND_INVALID
+            self.update_stats({'last_cmd_response':proc_ok})
+            self._send_command_response(seq_id, proc_ok==COMMAND_OK, str(proc_ok))
         self._control_lock.release()
+
+    def _send_command_response(self, seq_id, processed_ok, response):
+        """
+        Respond to a received command with sequence ID `seq_id` on the
+        command response etcd channel.
+
+        :param seq_id: Sequence ID of the command to which we are responding.
+        :type seq_id: string
+
+        :param processed_ok: Flag indicating the response is an error if False.
+        :type status: bool
+
+        :param response: String response with which to respond. E.g.
+            'out of range', or 'command accepted'. If the command returns data,
+            this might be a json string of this data.
+        :type response: string
+        """
+        cpu_affinity.set_core(self.core)
+        if processed_ok:
+            status = 'normal'
+        else:
+            status = 'error'
+        resp = {
+            'id': seq_id,
+            'val': {
+                'status': status,
+                'response': response,
+                'timestamp': time.time(),
+            }
+        }
+        resp_json = json.dumps(resp)
+        try:
+            self.etcd_client.put(self.response_key, resp_json)
+        except:
+            self.log.error("Error trying to send ETCD command response")
+            raise
 
     def _process_commands(self, command_dict):
         """

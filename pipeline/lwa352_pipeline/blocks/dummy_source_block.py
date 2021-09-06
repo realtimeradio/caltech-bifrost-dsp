@@ -129,7 +129,8 @@ class DummySource(object):
 
     """
     def __init__(self, log, oring, ntime_gulp=2500,
-                 core=-1, nchan=192, nstand=352, npol=2, skip_write=False, target_throughput=22.0, testfile=None):
+                 core=-1, nchan=192, nstand=352, npol=2, skip_write=False, 
+                 target_throughput=22.0, testfile=None, header={}):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
@@ -140,6 +141,7 @@ class DummySource(object):
         self.ninputs = nstand * npol
         self.skip_write = skip_write
         self.target_throughput = target_throughput
+        self.header_base = header
         
         self.bind_proclog = ProcLog(type(self).__name__+"/bind")
         self.in_proclog   = ProcLog(type(self).__name__+"/in")
@@ -219,8 +221,9 @@ class DummySource(object):
         time.sleep(0.1)
         self.oring.resize(self.gulp_size, self.gulp_size*4)
         hdr = {}
+        hdr.update(self.header_base)
         hdr['nchan'] = self.nchan
-        hdr['system_nchan'] = self.nchan
+        hdr['system_nchan'] = 32*self.nchan
         hdr['chan0'] = 0
         hdr['bw_hz'] = 24e3 * self.nchan
         hdr['fs_hz'] = 196608000

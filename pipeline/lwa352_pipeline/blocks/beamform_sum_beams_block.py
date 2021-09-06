@@ -90,11 +90,11 @@ class BeamformSumBeams(Block):
     *Input Data Buffer*: A GPU-side bifrost ring buffer of 32+32 bit complex
     floating-point data containing beamformed voltages.
     The input buffer has dimensionality (slowest varying to fastest varying)
-    ``time x channel x beams x complexity``. 
+    ``channel x beams x time x complexity``. 
     The number of beams should be even.
 
     Each gulp of the input buffer reads ``ntime_gulp`` samples, I.e
-    ``ntime_gulp x nchan x nbeam x 8`` bytes.
+    ``nchan x nbeam x ntime_gulp x 8`` bytes.
 
     This block considers beam indices ``0, 2, 4, ..., nbeam-2`` to be ``X`` polarized,
     and beam indices ``1, 3, 5, ..., nbeam-1`` to be ``Y`` polarized. As such, ``nbeam/2``
@@ -102,7 +102,7 @@ class BeamformSumBeams(Block):
 
     *Output Data Buffer*: A CPU- or GPU-side bifrost ring buffer of 32 bit,
     floating-point, integrated, beam powers.
-    Data has dimensionality ``time x channel x beams x beam-element``.
+    Data has dimensionality ``beam x time x channel x beam-element``.
 
     ``channel`` runs from 0 to ``nchan``.
     
@@ -206,7 +206,6 @@ class BeamformSumBeams(Block):
                 nbeam  = ihdr['nbeam']
                 assert nchan == self.nchan
                 
-                ticksPerTime = int(FS) / int(CHAN_BW)
                 base_time_tag = iseq.time_tag
                 
                 ohdr = ihdr.copy()
@@ -218,8 +217,8 @@ class BeamformSumBeams(Block):
                 ohdr_str = json.dumps(ohdr)
 
                 # Block output
-                self.bf_output = BFArray(shape=(self.ntime_blocks, ohdr['nbeam'], nchan, 4), dtype=np.float32, space='cuda')
-                igulp_size = self.ntime_gulp * nchan * ihdr['nbeam'] * 2 * ihdr['nbit'] // 8
+                self.bf_output = BFArray(shape=(ohdr['nbeam'], self.ntime_blocks, nchan, 4), dtype=np.float32, space='cuda')
+                igulp_size = self.ntime_gulp * nchan * ihdr['nbeam'] * 2 * 32 // 8 # 32-bit only
                 ogulp_size = self.ntime_blocks * nchan * ohdr['nbeam'] * 4 * 4 # 4 x float32 per sample
                 # The output gulp size can be quite small if we base it on the input gulp size
                 # force the numper of times in the output span to match the input, which
@@ -248,7 +247,7 @@ class BeamformSumBeams(Block):
                             BFSync()
                             
                         ## Update the base time tag
-                        base_time_tag += self.ntime_gulp*ticksPerTime
+                        base_time_tag += self.ntime_gulp
                         
                         curr_time = time.time()
                         process_time = curr_time - prev_time

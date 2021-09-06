@@ -104,11 +104,18 @@ def build_pipeline(args):
     
     
     hostname = socket.gethostname()
-    server_idx = 0 # HACK to allow testing on head node "adp"
+    try:
+        server_idx = hostname.split('.', 1)[0].replace('lxdlwagpu', '')
+        server_idx = int(server_idx, 10)
+    except (AttributeError, ValueError):
+        server_idx = 1 # HACK to allow testing on head node "adp"
+    # TODO: Is there a way to know how many pipelines to expect per server?
+    pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
+    log.info("Pipeline index: %i", args.pipelineid)
+    log.info("Global index: %i", pipeline_idx)
     
-    NBEAM = 16
     if not args.nogpu:
         capture_ring = Ring(name="capture", space='system')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
@@ -125,6 +132,7 @@ def build_pipeline(args):
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
+    NBEAM = 16
     CHAN_PER_PACKET = 96
     NPIPELINE = 32
     NSNAP = 11
@@ -136,6 +144,8 @@ def build_pipeline(args):
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
     nstand = 352
     npol = 2
+    ninput_per_snap = nstand*npol // NSNAP
+    packet_buf_size = ninput_per_snap * CHAN_PER_PACKET + 128
     nchan = args.nchan
     system_nchan = nchan * NPIPELINE
 
@@ -151,13 +161,13 @@ def build_pipeline(args):
         isock.bind(iaddr)
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
-                           nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=6500,
+                           nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=packet_buf_size,
                            buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE,
                            core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE, core=cores.pop(0),
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP, core=cores.pop(0),
                    skip_write=args.nodata, target_throughput=args.target_throughput,
                    nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
@@ -208,6 +218,8 @@ def build_pipeline(args):
                           antpol_to_bl=antpol_to_bl,
                           bl_is_conj=bl_is_conj,
                           use_cor_fmt=not args.pycorrout,
+                          pipeline_idx=pipeline_idx,
+                          npipeline=args.cor_npipeline,
                   ))
 
         ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
@@ -220,7 +232,10 @@ def build_pipeline(args):
 
         ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
                           core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
-                          nvis_per_packet=16,
+                          nvis_per_packet=16, nchan_sum=CORR_SUBSEL_NCHAN_SUM,
+                          use_cor_fmt=not args.pycorrout,
+                          pipeline_idx=pipeline_idx,
+                          npipeline=args.cor_npipeline,
                   ))
 
     if not (args.nobeamform or args.nogpu):
@@ -230,10 +245,12 @@ def build_pipeline(args):
                           etcd_client=etcd_client))
         ops.append(BeamformSumBeams(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
                               nchan=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
-        ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True, ntime_gulp=GSIZE, etcd_client=etcd_client))
+        ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True,
+                                  ntime_gulp=GSIZE, pipeline_idx=pipeline_idx, etcd_client=etcd_client))
         cores.pop(0)
         ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
-                          core=cores[0], guarantee=True, etcd_client=etcd_client))
+                                      pipeline_idx=pipeline_idx, core=cores.pop(0),
+                                      guarantee=True, etcd_client=etcd_client))
 
     threads = [threading.Thread(target=op.main) for op in ops]
     
@@ -279,6 +296,7 @@ def main(argv):
     parser.add_argument('--ip',               default='100.100.100.101', help='IP address to which to bind')
     parser.add_argument('--port',             type=int, default=10000,   help='UDP port to which to bind')
     parser.add_argument('--bufgbytes',        type=int, default=4,       help='Number of GBytes to buffer for transient buffering')
+    parser.add_argument('--cor_npipeline',    type=int, default=2,       help='Number of pipelines per COR packet output stream')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
 
