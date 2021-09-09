@@ -51,7 +51,7 @@ class BlockControl():
         self.instance_id = self._instance_id #TODO find/replace
     
     def _send_command(self, **kwargs):
-        self._corr_interface.send_command(
+        return self._corr_interface.send_command(
             self._host,
             self._pipeline_id,
             self._name,

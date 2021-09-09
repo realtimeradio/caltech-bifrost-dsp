@@ -190,6 +190,28 @@ class Block(object):
         self._command_types[name] = type
         self._command_conditions[name] = condition
 
+    def process_command_strings(self, cmds):
+        """
+        Force processing of a command JSON string,
+        as if it had been received over etcd.
+
+        :param cmd: List of command JSON strings
+        :type cmd: list of str
+        """
+
+        class Command():
+            def __init__(self, cmd):
+                self.value=cmd
+
+        class SimWatchResponse():
+            def __init__(self, cmds):
+                self.events = [Command(cmd) for cmd in cmds]
+
+        if not isinstance(cmds, list):
+            cmds = [cmds]
+        wr = SimWatchResponse(cmds)
+        self._etcd_callback(wr)
+
     def _etcd_callback(self, watchresponse):
         """
         A callback executed whenever this block's command key is modified.
@@ -261,11 +283,14 @@ class Block(object):
             }
         }
         resp_json = json.dumps(resp)
-        try:
-            self.etcd_client.put(self.response_key, resp_json)
-        except:
-            self.log.error("Error trying to send ETCD command response")
-            raise
+        if self.etcd_client:
+            try:
+                self.etcd_client.put(self.response_key, resp_json)
+            except:
+                self.log.error("Error trying to send ETCD command response")
+                raise
+        else:
+            self.log.info("No ETCD interface: Command response:", resp)
 
     def _process_commands(self, command_dict):
         """

@@ -57,7 +57,7 @@ class CorrOutputFullControl(BlockControl):
         assert isinstance(dest_ip, str)
         assert isinstance(dest_port, int)
         assert isinstance(dest_file, str)
-        self._send_command(
+        return self._send_command(
             dest_ip = dest_ip,
             dest_port = dest_port,
             dest_file = dest_file,
@@ -74,7 +74,7 @@ class CorrOutputFullControl(BlockControl):
        """
 
        assert isinstance(max_mbps, int)
-       self._send_command(max_mbps=max_mbps)
+       return self._send_command(max_mbps=max_mbps)
 
     def get_status(self):
         """

@@ -165,8 +165,8 @@ class Beamform(Block):
         | ``delays``       | 2D list of      | ns     | An ``nbeam x ninput`` element list of geometric |
         |                  | float           |        | delays, in nanoseconds.                         |
         +------------------+-----------------+--------+-------------------------------------------------+
-        | ``gains``        | 2D list of      |        | A two dimensional list of calibration gains     |
-        |                  | complex32)      |        | with shape ``nchan x ninput``                   |
+        | ``gains``        | 3D list of      |        | A three dimensional list of calibration gains   |
+        |                  | complex32)      |        | with shape ``nchan x nbeam x ninput``           |
         +------------------+-----------------+--------+-------------------------------------------------+
         | ``load_sample``  | int             | sample | **NOT YET IMPLEMENTED** Sample number on which  |
         |                  |                 |        | the supplied delays should be loaded. If this   |
@@ -285,18 +285,19 @@ class Beamform(Block):
         self.command_vals.update(self._pending_command_vals)
         for k, v in self._pending_command_vals.items():
            try:
-               if v['type'] == 'gains':
+               if v['type'] == 'calgains':
                    i = v['input_id']
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating calibration gains for beam %d, input %d" % (b,i))
                    data = np.array(v['data'])
-                   self.cal_gains[:, b, i] = data[0::2] + 1j*data[1::2]
-               if v['type'] == 'delays':
+                   self.cal_gains[:, b, i] = data[0::2] + 1j*data[1::2] # freq x beam x input
+               if v['type'] == 'beamcoeffs':
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating delays for beam %d" % (b))
-                   data = np.array(v['data'])
-                   phases = np.exp(1j*2*np.pi*self.freqs[:, None]*data*1e-9) # freq x pol
-                   self.gains_cpu[:, b, :] = phases * self.cal_gains[:, b, :]
+                   delays_ns = np.array(v['data']['delays'])
+                   amps = np.array(v['data']['amps'])
+                   phases = np.exp(1j*2*np.pi*self.freqs[:, None]*delays_ns*1e-9) # freq x input
+                   self.gains_cpu[:, b, :] = amps * phases * self.cal_gains[:, b, :] # freq x beam x input
            except KeyError:
                self.log.error("BEAMFORM >> Failed to parse command")
         self.update_stats(self.command_vals)

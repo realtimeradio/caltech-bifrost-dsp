@@ -32,16 +32,16 @@ class BeamformControl(BlockControl):
         gains_real = np.zeros(2*nchan, dtype=np.float32)
         gains_real[0::2] = gains.real
         gains_real[1::2] = gains.imag
-        self._send_command(
+        return self._send_command(
             coeffs = {
-                'type': 'gains',
+                'type': 'calgains',
                 'input_id': input_id,
                 'beam_id': beam_id,
                 'data': gains_real.tolist(),
             }
         )
 
-    def update_delays(self, beam_id, delays):
+    def update_delays(self, beam_id, delays, amps=None):
         """
         Update geometric delays for a single beam.
 
@@ -55,11 +55,19 @@ class BeamformControl(BlockControl):
             beamformer input.
         :type delays: numpy.array
 
+        :param amps: Real-valued amplitudes to load.
+            Should be a numpy array with ``nbeam`` entries,
+            where entry ``i`` corresponds to the real-valued scaling to apply to the ``i`` th
+            beamformer input. If None, unity scaling is applied.
+        :type delays: numpy.array
+
         """
-        self._send_command(
+        if amps is None:
+            amps = np.ones_like(delays)
+        return self._send_command(
             coeffs = {
-                'type': 'delays',
+                'type': 'beamcoeffs',
                 'beam_id': beam_id,
-                'data': delays.tolist(),
+                'data': {'delays': delays.tolist(), 'amps': amps.tolist()},
             }
         )

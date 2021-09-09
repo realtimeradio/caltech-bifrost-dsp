@@ -4,7 +4,7 @@ class BeamformVlbiOutputControl(BlockControl):
     def set_destination(self, dest_ip, dest_port):
         assert isinstance(dest_ip, str)
         assert isinstance(dest_port, int)
-        self._send_command(
+        return self._send_command(
             dest_ip = dest_ip,
             dest_port = dest_port,
         )

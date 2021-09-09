@@ -16,6 +16,9 @@ from lwa352_pipeline.blocks.copy_block import Copy
 from lwa352_pipeline.blocks.beamform_block import Beamform 
 from lwa352_pipeline.blocks.block_base import Block
 
+from lwa352_pipeline_control.etcd_control import EtcdCorrControl
+from lwa352_pipeline_control.blocks.beamform_control import BeamformControl
+
 NSTAND = 40 #352
 NPOL = 2
 NTIME_GULP = 120 # 480
@@ -25,6 +28,8 @@ GPUDEV = 0
 ETCD_HOST = "etcdv3service.sas.pvt"
 TESTFILE_NAME = '/tmp/temp_testfile.dat'
 NBEAM = 16
+
+chan_bw_hz = 24e3
 
 CORES = list(range(12))
 
@@ -92,7 +97,7 @@ class SoftwareBf(Block):
                 maxdiff = np.max(np.abs(idata - cpudata)/np.abs(idata))
                 if maxdiff > running_max:
                     running_max = maxdiff
-                assert np.all(np.isclose(idata, cpudata, atol=1e-4)), "CPU/GPU match fail! Max frac diff %f" % maxdiff
+                assert np.all(np.isclose(idata, cpudata, rtol=1e-4, atol=1e-4)), "CPU/GPU match fail! Max frac diff %f" % maxdiff
                 seq += self.ntime_gulp
                 print("MATCH OK after %d times (max frac diff %f)" % (seq, running_max))
                 #if time.time() - tick > 1:
@@ -114,8 +119,15 @@ def main():
         fh.write(test_data.tobytes())
 
     print("Generating random coefficients")
-    coeffs = 3*(rng.random(size=[NCHAN, 2*NBEAM, NSTAND*NPOL])-0.5) + 4*1j*(rng.random(size=[NCHAN, 2*NBEAM, NSTAND*NPOL])-0.5)
-    coeffs = np.array(coeffs, dtype=np.complex64)
+    calgains = (3*rng.random(size=[NCHAN, 2*NBEAM, NSTAND*NPOL])+4) + 1j*(4*rng.random(size=[NCHAN, 2*NBEAM, NSTAND*NPOL])+5)
+    calgains = np.array(calgains, dtype=np.complex64)
+    beamdelays = 12*rng.random(size=[2*NBEAM, NSTAND*NPOL], dtype=np.float32)
+    beamamps   = 7*rng.random(size=[2*NBEAM, NSTAND*NPOL], dtype=np.float32) + 10
+
+    coeffs = np.zeros([NCHAN, 2*NBEAM, NSTAND*NPOL], dtype=np.complex64)
+    for b in range(2*NBEAM):
+        for i in range(NSTAND*NPOL):
+            coeffs[:,b,i] = calgains[:,b,i] * beamamps[b,i] * np.exp(1j*2*np.pi*beamdelays[b,i]/1e9*chan_bw_hz*np.arange(NCHAN))
     
     etcd_client = etcd.client(ETCD_HOST)
 
@@ -126,6 +138,10 @@ def main():
     logHandler = logging.StreamHandler(sys.stdout)
     logHandler.setFormatter(logFormat)
     log.addHandler(logHandler)
+
+    print("Generating simulated control objects")
+    sim_etcd_control = EtcdCorrControl(simulated=True, log=log)
+    sim_ctrl = BeamformControl(log, sim_etcd_control, '')
 
     input_ring = Ring(name="input", space="cuda_host")
     gpu_input_ring = Ring(name="gpu_input", space="cuda")
@@ -146,7 +162,17 @@ def main():
                       core=CORES.pop(0), guarantee=True, gpu=GPUDEV, ntime_sum=None,
                       etcd_client=etcd_client))
 
-    ops[-1].gains_cpu[...] = coeffs
+    ops[-1].freqs = chan_bw_hz*np.arange(ops[-1].nchan)
+    print("Constucting weight-setting commands")
+    commands = []
+    for b in range(2*NBEAM):
+        for i in range(NSTAND*NPOL):
+            commands += [sim_ctrl.update_calibration_gains(b, i, calgains[:, b, i])]
+    for b in range(2*NBEAM):
+        commands += [sim_ctrl.update_delays(b, beamdelays[b], beamamps[b])]
+    print("Processing commands")
+    ops[-1].process_command_strings(commands)
+    #ops[-1].gains_cpu[...] = coeffs
 
     ops.append(Copy(log, iring=bf_output_ring, oring=output_ring, ntime_gulp=NTIME_GULP,
                       nbyte_per_time=2*NBEAM*NCHAN*2*4,

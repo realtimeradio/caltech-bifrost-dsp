@@ -14,7 +14,7 @@ class CorrControl(BlockControl):
         :type start_time: int
         """
         assert isinstance(start_time, int)
-        self._send_command(
+        return self._send_command(
             start_time=start_time,
         )
 
@@ -28,7 +28,7 @@ class CorrControl(BlockControl):
         :type acc_len: int
         """
         assert isinstance(acc_len, int)
-        self._send_command(
+        return self._send_command(
             acc_len=acc_len,
         )
 

@@ -69,20 +69,28 @@ class EtcdCorrControl():
         The default behaviour is to log to stdout
     :type log: logging.Logger
 
+    :param simulated: If True, don't send messages over etcd, just
+        return their JSON strings.
+    :type simulated: bool
+
     """
     def __init__(self, etcdhost='etcdhost', keyroot_cmd='/cmd/corr/x',
                  keyroot_mon='/mon/corr/x', keyroot_resp='/resp/corr/x',
-                 log=default_log):
+                 log=default_log, simulated=False):
         self.keyroot_cmd = keyroot_cmd
         self.keyroot_mon = keyroot_mon
         self.keyroot_resp = keyroot_resp
         self.etcdhost = etcdhost
         self.log = log
-        try:
-            self.ec = etcd.client(self.etcdhost)
-        except:
-            log.error('Failed to connect to ETCD host %s' % self.etcdhost)
-            raise
+        self.simulated = simulated
+        if simulated:
+            self.ec = None
+        else:
+            try:
+                self.ec = etcd.client(self.etcdhost)
+            except:
+                log.error('Failed to connect to ETCD host %s' % self.etcdhost)
+                raise
 
     def _get_cmd_key(self, host, pipeline, block, inst_id):
         """
@@ -216,6 +224,9 @@ class EtcdCorrControl():
             by the processing block being targeted.
         :type **kwargs: Any JSON-serializable values
 
+        If ``self.simulated=True``, returns the JSON string which would be sent over
+        etcd.
+
         """
 
         cmd_key = self._get_cmd_key(host, pipeline, block, inst_id)
@@ -231,6 +242,9 @@ class EtcdCorrControl():
                        )
         if command_json is None:
             return False
+
+        if self.simulated:
+            return command_json
 
         self._response_received = False
         self._response = None
@@ -332,6 +346,9 @@ class EtcdCorrControl():
         :return: A dictionary of status values
 
         """
+        if self.simulated:
+            self.log.error("Can't get status in simulation mode")
+            return {}
 
         key = self._get_mon_key(host, pipeline, block, inst_id)
         val, meta = self.ec.get(key)
