@@ -79,13 +79,49 @@ class Lwa352CorrelatorControl():
                                                         )]
         self.npipeline = len(self.pipelines)
        
-    def start_pipelines(self):
+    def start_pipelines(self, wait=True, timeout=60):
         """
         Start all pipelines, using the default configuration.
+
+        :param wait: If True, wait until the pipelines look like they
+            are up and receiving data before returning.
+        :type wait: bool
+
+        :param timeout: Timeout, in seconds, to wait for pipelines to
+            come up. After this time, issue a warning and return.
+        :type timeout: float
         """
         for pl in self.pipelines:
             pl.start_pipeline()
-        time.sleep(10)
+
+        t0 = time.time()
+        if wait:
+            while(True):
+                try:
+                    time.sleep(1)
+                    ready = self.pipelines_are_up()
+                    if ready:
+                        time.sleep(2) # paranoia
+                        self.log.info("Pipelines all appear to be ready after %.1f seconds" % (time.time() - t0))
+                        return
+                except:
+                    pass
+                if time.time() - t0 > timeout:
+                    self.log.warning("Timeout waiting for pipelines to come up after %.1f seconds" % timeout)
+                    return
+
+    def pipelines_are_up(self, age_threshold=10):
+        """
+        Returns True if all pipelines look like they have published recent status data.
+
+        :param age_threshold: The age threshold, in seconds, above which status data
+            are considered stale.
+        :type age_threshold: float
+        """
+        up = True
+        for pl in self.pipelines:
+            up = up and pl.pipeline_is_up(age_threshold=age_threshold)
+        return up
 
     def stop_pipelines(self):
         """
@@ -93,7 +129,12 @@ class Lwa352CorrelatorControl():
         """
         for pl in self.pipelines:
             pl.stop_pipeline()
-        time.sleep(5)
+        time.sleep(10)
+        stopped = True
+        for pl in self.pipelines:
+            stopped = stopped and not (pl.pipeline_is_up(age_threshold=10))
+        if not stopped:
+            self.log.warning("Pipeline %s:%d still seems to be running" % (pl.host, pl.pipeline_id))
     
     def _arm_and_wait(self, blocks, delay):
         """
@@ -266,4 +307,19 @@ class Lwa352PipelineControl():
         Start the pipeline.
         """
         self.corr_interface.send_command(self.host, cmd='stop_pipeline', block='xctrl', xid=self.pipeline_id)
+
+    def pipeline_is_up(self, age_threshold=10):
+        """
+        Returns True if the pipeline looks like it has published recent status data.
+
+        :param age_threshold: The age threshold, in seconds, above which status data
+            are considered stale.
+        :type age_threshold: float
+        """
+        try:
+            if time.time() - self.corr.get_bifrost_status()['time'] < age_threshold:
+                return True
+        except:
+            pass
+        return False
 
