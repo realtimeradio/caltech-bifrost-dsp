@@ -128,7 +128,7 @@ class Lwa352CorrelatorControl():
         Stop all pipelines.
         """
         for pl in self.pipelines:
-            pl.stop_pipeline()
+            pl.stop_pipeline(force=True) #Will kill all pipelines on the remote servers
         time.sleep(10)
         stopped = True
         for pl in self.pipelines:
@@ -302,11 +302,15 @@ class Lwa352PipelineControl():
         """
         self.corr_interface.send_command(self.host, cmd='start_pipeline', block='xctrl', xid=self.pipeline_id)
 
-    def stop_pipeline(self):
+    def stop_pipeline(self, force=False):
         """
-        Start the pipeline.
+        Stop the pipeline.
+
+        :param force: If True, brutally "killall" pipelines on the server, rather than trying to kill by PID.
+            This can have the adverse effect of killing multiple pipelines unintentionally.
+        :type force: bool
         """
-        self.corr_interface.send_command(self.host, cmd='stop_pipeline', block='xctrl', xid=self.pipeline_id)
+        self.corr_interface.send_command(self.host, cmd='stop_pipeline', block='xctrl', xid=self.pipeline_id, force=force)
 
     def pipeline_is_up(self, age_threshold=10):
         """
