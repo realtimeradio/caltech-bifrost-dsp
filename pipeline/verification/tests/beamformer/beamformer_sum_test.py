@@ -1,5 +1,13 @@
 #! /usr/bin/env python
 
+"""
+Write random data and weights (not using the control interface)
+to the bifrost Beamform block.
+
+Verify that Beamform->BeamformSumBeams produces
+results consistent with a simple python implementation.
+"""
+
 import sys
 import os
 import time
