@@ -1,5 +1,14 @@
 #! /usr/bin/env python
 
+"""
+Load random data into the bifrost Beamform block.
+Load coefficients using the BeamformControl library
+(but bypassing the etcd data store).
+
+Verify the bifrost matrix multiple and a simple
+python equivalent produce similar results
+"""
+
 import sys
 import os
 import time
