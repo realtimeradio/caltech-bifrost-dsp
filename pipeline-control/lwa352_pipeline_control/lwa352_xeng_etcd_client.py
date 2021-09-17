@@ -11,6 +11,7 @@ import logging
 import netifaces
 import subprocess
 
+PIPELINE_COMMAND = "lwa352-pipeline.py" # used for 'killall'
 # DEFAULT PIPELINE SETTINGS
 NCHAN = 96
 IFACE = ['enp216s0', 'enp216s0', 'enp24s0', 'enp24s0']
@@ -330,11 +331,13 @@ class XengineController():
             with open(p, 'w') as fh:
                 fh.write(str(pid))
            
-    def stop_pipeline(self, xid):
+    def stop_pipeline(self, xid, force=False):
         pid = self.get_pid(xid)
-        if pid is not None:
+        if not force and pid is not None:
             self.logger.info("Killing process %d" % pid)
             subprocess.run(["kill", "-9", str(pid)])
+        if force:
+            subprocess.run(["killall", "-9", PIPELINE_COMMAND])
         self.set_pid(xid, None)
 
     def start_pipeline(self,
