@@ -314,7 +314,7 @@ class Lwa352PipelineControl():
 
     def check_connection(self, timeout=1):
         """
-        Send a ping to the pipeline control interface to see if it is alive.
+        Send a "get pipeline PID" command to the pipeline control interface to see if it is alive.
 
         :param timeout: The length of time, in seconds, to wait for a response from the pipeline.
         :type timeout: float
@@ -323,7 +323,7 @@ class Lwa352PipelineControl():
         :rtype: bool
         """
         try:
-            self.corr_interface.send_command(self.host, cmd='ping', block='xctrl', xid=self.pipeline_id, timeout=timeout)
+            self.corr_interface.send_command(self.host, cmd='get_pid', block='xctrl', xid=self.pipeline_id, timeout=timeout)
             return True
         except RuntimeError:
             self.log.error("Control interface on host %s failed to respond to ping!" % self.host)
