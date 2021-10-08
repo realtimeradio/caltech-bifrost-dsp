@@ -330,6 +330,9 @@ class XengineController():
             self.logger.info("Setting pidfile %s to %d" % (p, pid))
             with open(p, 'w') as fh:
                 fh.write(str(pid))
+
+    def ping(self):
+        self.logger.info("Received ping")
            
     def stop_pipeline(self, xid, force=False):
         pid = self.get_pid(xid)

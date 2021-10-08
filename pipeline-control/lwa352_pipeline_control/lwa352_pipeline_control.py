@@ -312,6 +312,23 @@ class Lwa352PipelineControl():
         """
         self.corr_interface.send_command(self.host, cmd='stop_pipeline', block='xctrl', xid=self.pipeline_id, force=force)
 
+    def check_connection(self, timeout=1):
+        """
+        Send a ping to the pipeline control interface to see if it is alive.
+
+        :param timeout: The length of time, in seconds, to wait for a response from the pipeline.
+        :type timeout: float
+
+        :return: True, if connected. Else, False
+        :rtype: bool
+        """
+        try:
+            self.corr_interface.send_command(self.host, cmd='ping', block='xctrl', xid=self.pipeline_id, timeout=timeout)
+            return True
+        except RuntimeError:
+            self.log.error("Control interface on host %s failed to respond to ping!" % self.host)
+            return False
+
     def pipeline_is_up(self, age_threshold=10):
         """
         Returns True if the pipeline looks like it has published recent status data.
