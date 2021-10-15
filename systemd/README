@@ -1,0 +1,9 @@
+MaaS is configured to install all .service files into /etc/systemd/system when
+provisioning GPU hosts for LWA-352. Likewise, all .sh scripts will be installed
+into /usr/local/bin. The service files can then reference the .sh files in
+/usr/local/bin. See: nvidia_tweaks* as an example. This is mainly used for
+oneshots which need to set the system on each boot as compared to a running
+service.
+
+Simply add new .service files and .sh files to this dir and commit and the next
+provisioning will pick them up.
