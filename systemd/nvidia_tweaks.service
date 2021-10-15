@@ -1,0 +1,9 @@
+[Unit]
+Description=Nvidia Tweaks
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nvidia_tweaks.sh
+
+[Install]
+WantedBy=multi-user.target
