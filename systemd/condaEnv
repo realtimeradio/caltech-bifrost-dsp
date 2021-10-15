@@ -1,0 +1,10 @@
+CONDA_SHLVL=2
+CONDA_EXE=/home/ubuntu/anaconda3/bin/conda
+CONDA_PREFIX=/home/ubuntu/anaconda3/envs/casa
+CONDA_PREFIX_1=/home/ubuntu/anaconda3
+CONDA_PYTHON_EXE=/home/ubuntu/anaconda3/bin/python
+_CE_CONDA=
+CONDA_PROMPT_MODIFIER=(casa) 
+CONDA_DEFAULT_ENV=casa
+LD_LIBRARY_PATH=:/usr/local/lib
+PATH=/home/ubuntu/anaconda3/envs/casa/bin:/home/ubuntu/anaconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/cuda/bin
