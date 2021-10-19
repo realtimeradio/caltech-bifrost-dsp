@@ -353,8 +353,6 @@ class XengineController():
           logfile=None,
         ):
 
-        PIPELINE_PATH='/home/ubuntu/anaconda3/bin/' #FIXME
-
         cpumask = cpumask or CPUMASK[xid]
         gpudev = gpudev or GPU[xid]
         interface = interface or IFACE[xid]
@@ -364,7 +362,7 @@ class XengineController():
         logfile = logfile or "%s.%s.%d.log" % (LOGFILE_BASE, self.hostname, xid)
         cmd = [
                   '/usr/bin/taskset', '0x%x' % cpumask,
-                  PIPELINE_PATH+'lwa352-pipeline.py',
+                  PIPELINE_COMMAND,
                   '--nchan', str(nchan),
                   '--ibverbs',
                   '--gpu', str(gpudev),
