@@ -9,3 +9,9 @@ nvidia-smi -pm 1
 
 #Cap GPU power to 150W
 nvidia-smi -pl 150
+
+# Set cpufreq to performance
+for i in `ls /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`
+do
+    echo performance > $i
+done
