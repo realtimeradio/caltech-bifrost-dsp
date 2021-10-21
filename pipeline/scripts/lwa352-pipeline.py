@@ -141,6 +141,7 @@ def build_pipeline(args):
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
     GSIZE = 480
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
+    BEAM_TIME_SUM = 24 # Number of time samples summed to make power beams
     nstand = 352
     npol = 2
     ninput_per_snap = nstand*npol // NSNAP
@@ -242,12 +243,15 @@ def build_pipeline(args):
                           nchan=nchan, nbeam=NBEAM*2, ninput=nstand*npol,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu, ntime_sum=None,
                           etcd_client=etcd_client))
+
         ops.append(BeamformSumBeams(log, iring=bf_output_ring, oring=bf_power_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
-                              nchan=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=24))
+                              nchan=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=BEAM_TIME_SUM))
+
         ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True,
-                                  ntime_gulp=GSIZE, pipeline_idx=pipeline_idx, etcd_client=etcd_client))
+                                  ntime_gulp=GPU_NGULP*GSIZE//BEAM_TIME_SUM, pipeline_idx=pipeline_idx, etcd_client=etcd_client))
+
         cores.pop(0)
-        ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GSIZE,
+        ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
                                       pipeline_idx=pipeline_idx, core=cores.pop(0),
                                       guarantee=True, etcd_client=etcd_client))
 
