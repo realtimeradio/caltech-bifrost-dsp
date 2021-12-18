@@ -477,17 +477,19 @@ class CorrOutputFull(Block):
 
     def print_autos(self):
         NCHAN_PRINT = 10
-        for i in range(4):
-            print("%d-X:"%i, self.reordered_data[i,i,0,0,0:NCHAN_PRINT])
-            print("%d-Y:"%i, self.reordered_data[i,i,1,1,0:NCHAN_PRINT])
-            # reordered_data has shape stand x stand x pol x pol x chan x complexity
-            sdata = self.reordered_data[i, i, :, :].copy(space='system')
-            print(sdata.shape)
-            sdata2 = sdata.transpose([2,0,1,3]) # stand x chan x pol x pol x complexity
-            print("%d-X-Reordered:"%i, sdata.reshape(192,2,2,2)[0:NCHAN_PRINT,0,0])
-            print("%d-Y-Reordered:"%i, sdata.reshape(192,2,2,2)[0:NCHAN_PRINT,1,1])
-            print("%d-X-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,0,0])
-            print("%d-Y-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,1,1])
+        for snap in range(2):
+            for j in range(4):
+                i = snap*32 + j
+                print("%d-X:"%i, self.reordered_data[i,i,0,0,0:NCHAN_PRINT])
+                print("%d-Y:"%i, self.reordered_data[i,i,1,1,0:NCHAN_PRINT])
+                # reordered_data has shape stand x stand x pol x pol x chan x complexity
+                sdata = self.reordered_data[i, i, :, :].copy(space='system')
+                print(sdata.shape)
+                sdata2 = sdata.transpose([2,0,1,3]) # stand x chan x pol x pol x complexity
+                print("%d-X-Reordered:"%i, sdata.reshape(self.nchan,2,2,2)[0:NCHAN_PRINT,0,0])
+                print("%d-Y-Reordered:"%i, sdata.reshape(self.nchan,2,2,2)[0:NCHAN_PRINT,1,1])
+                print("%d-X-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,0,0])
+                print("%d-Y-ReorderedT:"%i, sdata2[0:NCHAN_PRINT,1,1])
 
     def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, verbose=False):
         cpu_affinity.set_core(self.core)
@@ -656,7 +658,6 @@ class CorrOutputFull(Block):
                     self.check_against_file(upstream_acc_len, upstream_start_time)
 
                 if self.command_vals['dest_ip'] != "0.0.0.0" or self.command_vals['dest_file'] != "":
-                    #self.print_autos()
                     if self.use_cor_fmt:
                         time_tag = this_gulp_time * samples_per_spectra
                         self.send_packets_bf(udt, time_tag, desc, chan0, 0, upstream_acc_len * samples_per_spectra,
@@ -665,6 +666,7 @@ class CorrOutputFull(Block):
                         self.send_packets_py(ihdr['sync_time'], this_gulp_time, bw_hz, sfreq,
                                 upstream_acc_len, chan0, verbose=print_on_send)
                 else:
+                    #self.print_autos()
                     if print_on_send:
                         self.log.info("CORR OUTPUT >> Skipping sending for time %d" % this_gulp_time)
                 print_on_send = False
