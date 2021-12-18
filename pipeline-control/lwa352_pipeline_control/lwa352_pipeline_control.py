@@ -3,6 +3,8 @@ import time
 import sys
 import logging
 import socket
+import json
+import numpy as np
 
 from .etcd_control import EtcdCorrControl
 
@@ -229,6 +231,46 @@ class Lwa352CorrelatorControl():
         self.log.info("Arming correlator accumulator core")
         self._arm_and_wait([pl.corr_acc for pl in self.pipelines], self.ARM_DELAY)
 
+    def plot_autocorrs(self):
+        from matplotlib import pyplot as plt
+        for p in self.pipelines:
+            p.corr_output_full.enable_autos()
+        t0 = time.time()
+        ready = False
+        NCHAN = 4096
+        TIMEOUT = 10
+        while(not ready):
+            ready = True
+            for p in self.pipelines:
+                d = p.corr_output_full.get_status()
+                if 'autocorr' not in d:
+                    ready = False
+            if time.time() > t0 + TIMEOUT:
+                self.log.error('Timed out after waiting 60s for autocorrs')
+                break
+
+        autocorrs = None
+        for p in self.pipelines:
+            d = p.corr_output_full.get_status()
+            if 'autocorr' not in d:
+                continue
+            ac_dict = json.dumps(d['autocorr'])
+            data = ac_dict['data']
+            nstand, npol, nchan = data.shape
+            chan0 = ac['chan0']
+            t = ac['time']
+            self.log.info('Got autocorr from pipeline %s:%d for integration %d' % (p.host, p.pipeline_id, t))
+            if autocorrs is None:
+                autocorrs = np.zeros([nstand, npol, NCHAN])
+            autocorrs[:,:,chan0:chan0+nchan] = data
+
+        for i in range(11):
+            for j in range(32):
+                plt.subplot(11,32,32*i+j+1)
+                plt.plot(autocorrs[32*i + j, 0])
+                plt.plot(autocorrs[32*i + j, 1])
+        plt.show()
+
 class Lwa352PipelineControl():
     """
     **Description**
@@ -345,4 +387,3 @@ class Lwa352PipelineControl():
         except:
             pass
         return False
-

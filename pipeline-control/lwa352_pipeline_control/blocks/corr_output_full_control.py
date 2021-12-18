@@ -34,6 +34,11 @@ class CorrOutputFullControl(BlockControl):
         |                  |        |         | fast as possible. See        |
         |                  |        |         | ``set_max_mbps()``.          |
         +------------------+--------+---------+------------------------------+
+        | ``write_autos``  | bool   |         | If True, write               |
+        |                  |        |         | autocorrelations to status   |
+        |                  |        |         | memory (from which they can  |
+        |                  |        |         | be published to etcd)        |
+        +------------------+--------+---------+------------------------------+
 
     """
     def set_destination(self, dest_ip="0.0.0.0", dest_port=10000, dest_file=""):
@@ -75,6 +80,12 @@ class CorrOutputFullControl(BlockControl):
 
        assert isinstance(max_mbps, int)
        return self._send_command(max_mbps=max_mbps)
+
+    def enable_autos(self):
+        return self._send_command(write_autos=True)
+
+    def disable_autos(self):
+        return self._send_command(write_autos=False)
 
     def get_status(self):
         """
