@@ -2,10 +2,10 @@ NCHAN=96
 IFACE=(enp216s0 enp216s0 enp24s0 enp24s0)
 RXPORT=(10000 20000 10000 20000)
 GPU=(0 0 1 1)
-BUFGBYTES=4
+BUFGBYTES=32
 ETCDHOST=etcdv3service.sas.pvt
 CORES=("1,2,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4" "6,7,8,9,9,9,9,9,9,9,9,9,9,9,9" "11,12,13,14,14,14,14,14,14,14,14,14,14,14" "16,17,18,19,19,19,19,19,19,19,19,19,19,19,19")
-CPUMASK=(0x3fe 0x3fe 0xff800 0xff800)
+CPUMASK=(0x1e 0x3c0 0x7800 0xf000)
 
 get_ip () {
   echo `ip addr show $1 | grep -o "inet [0-9]*\.[0-9]*\.[0-9]*\.[0-9]*" | grep -o "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"`
