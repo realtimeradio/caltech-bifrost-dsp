@@ -125,20 +125,20 @@ class Copy(Block):
 
 
         with self.oring.begin_writing() as oring:
+            #self.log.info("COPY >>> Waiting 15 seconds before sending data")
+            #time.sleep(15)
+            #self.log.info("COPY >>> GO GO GO!")
             for iseq in self.iring.read(guarantee=self.guarantee):
-                ihdr = json.loads(iseq.header.tostring())
-                ohdr = ihdr.copy()
-                # Mash header in here if you want
-                ohdr_str = json.dumps(ohdr)
+                ohdr = iseq.header.copy()
                 prev_time = time.time()
-                with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str, nringlet=iseq.nringlet) as oseq:
+                with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr, nringlet=iseq.nringlet) as oseq:
                     for ispan in iseq.read(self.igulp_size):
                         if ispan.size < self.igulp_size:
                             continue # Ignore final gulp
                         curr_time = time.time()
                         acquire_time = curr_time - prev_time
                         prev_time = curr_time
-                        with oseq.reserve(self.igulp_size) as ospan:
+                        with oseq.reserve(ispan.size) as ospan:
                             curr_time = time.time()
                             reserve_time = curr_time - prev_time
                             prev_time = curr_time
