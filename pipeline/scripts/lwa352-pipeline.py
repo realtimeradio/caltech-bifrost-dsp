@@ -136,8 +136,8 @@ def build_pipeline(args):
     CHAN_PER_PACKET = 96
     NPIPELINE = 32
     NSNAP = 11
-    NETGSIZE = 96
-    NET_NGULP = 5*4 # Number of Net block gulps collated in the first copy
+    NETGSIZE = 96*2
+    NET_NGULP = 5*2 # Number of Net block gulps collated in the first copy
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
     GSIZE = 480
     GPU_NGULP = 2 # Number of GSIZE gulps in a contiguous GPU memory block
@@ -162,7 +162,7 @@ def build_pipeline(args):
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
                            nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=packet_buf_size,
-                           buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE*2,
+                           buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE*16,
                            core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
@@ -177,8 +177,8 @@ def build_pipeline(args):
     ant_to_input = ops[-1].ant_to_input
 
     # capture_ring -> triggered buffer
-    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE*NET_NGULP,
-                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP,
+    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE,
+                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
     ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
