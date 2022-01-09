@@ -162,7 +162,7 @@ def build_pipeline(args):
         isock.timeout = 0.5
         ops.append(Capture(log, fmt="snap2", sock=isock, ring=capture_ring,
                            nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=packet_buf_size,
-                           buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE,
+                           buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE*2,
                            core=cores.pop(0), system_nchan=system_nchan,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
@@ -177,8 +177,8 @@ def build_pipeline(args):
     ant_to_input = ops[-1].ant_to_input
 
     # capture_ring -> triggered buffer
-    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE,
-                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
+    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE*NET_NGULP,
+                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP,
                       core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
     ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GSIZE,
