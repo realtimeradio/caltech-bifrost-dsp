@@ -263,8 +263,8 @@ starts a new sequence.
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
                'nstand':   self.nstand,
-               'input_to_ant': self.input_to_ant.tolist(),
-               'ant_to_input': self.ant_to_input.tolist(),
+               #'input_to_ant': self.input_to_ant.tolist(),
+               #'ant_to_input': self.ant_to_input.tolist(),
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)
                'npol':     self.npol,
                'complex':  True,
