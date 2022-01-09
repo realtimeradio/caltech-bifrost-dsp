@@ -313,6 +313,8 @@ class Beamform(Block):
         
         igulp_size = self.ntime_gulp   * self.nchan * self.ninput    # 4+4
         ogulp_size = self.ntime_blocks * self.nchan * self.nbeam * 8 # complex 64
+        oshape = (self.ntime_gulp,self.nchan,self.nbeam*2)
+        self.oring.resize(ogulp_size)
 
         with self.oring.begin_writing() as oring:
             for iseq in self.iring.read(guarantee=self.guarantee):
@@ -333,8 +335,6 @@ class Beamform(Block):
                 assert self.ninput == nstand * npol
                 self.freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
                 
-                oshape = (self.ntime_gulp,nchan,self.nbeam*2)
-                
                 freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
 
                 base_time_tag = iseq.time_tag
@@ -346,8 +346,6 @@ class Beamform(Block):
                 ohdr['complex'] = True
                 ohdr['nbeam'] = self.nbeam
                 ohdr_str = json.dumps(ohdr)
-                
-                self.oring.resize(ogulp_size)
                 
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str) as oseq:
