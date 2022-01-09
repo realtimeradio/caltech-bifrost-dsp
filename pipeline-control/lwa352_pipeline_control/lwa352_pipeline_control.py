@@ -112,17 +112,23 @@ class Lwa352CorrelatorControl():
                     self.log.warning("Timeout waiting for pipelines to come up after %.1f seconds" % timeout)
                     return
 
-    def pipelines_are_up(self, age_threshold=10):
+    def pipelines_are_up(self, age_threshold=10, verbose=False):
         """
         Returns True if all pipelines look like they have published recent status data.
 
         :param age_threshold: The age threshold, in seconds, above which status data
             are considered stale.
         :type age_threshold: float
+
+        :param verbose: If True, print which pipelines are up
+        :type verbose: bool
         """
         up = True
         for pl in self.pipelines:
-            up = up and pl.pipeline_is_up(age_threshold=age_threshold)
+            this_pl_up = pl.pipeline_is_up(age_threshold=age_threshold)
+            if verbose:
+                print('%s:%d - up? %s' % (pl.host, pl.pipeline_id, this_pl_up))
+            up = up and this_pl_up
         return up
 
     def stop_pipelines(self):
