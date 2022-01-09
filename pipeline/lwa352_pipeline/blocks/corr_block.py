@@ -345,6 +345,7 @@ class Corr(Block):
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
             for iseq in self.iring.read(guarantee=self.guarantee):
+                self.log.info('CORR >> new input sequence!')
                 process_time = 0
                 oseq = None
                 ospan = None
@@ -371,6 +372,9 @@ class Corr(Block):
                 # uncomment if you want downstream processors to deal with input ordering on the fly
                 # ohdr.update({'ant_to_bl_id': self.antpol_to_bl.tolist(), 'bl_is_conj': self.bl_is_conj.tolist()})
                 for ispan in iseq.read(self.igulp_size):
+                    if ispan.size < self.igulp_size:
+                        self.log.info("CORR >>> Ignoring final gulp (expected %d bytes but got %d)" % (self.igulp_size, ispan.size))
+                        continue # ignore final gulp
                     if self.update_pending:
                         self.update_command_vals()
                         # Use start_time = -1 as a special condition to start on the next sample
@@ -444,6 +448,9 @@ class Corr(Block):
                         last = first + acc_len - self.ntime_gulp
                     # And, update overall time counter
                     this_gulp_time += self.ntime_gulp
+                if oseq: oseq.end()
+                oseq = None
+                start = False
                             
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
