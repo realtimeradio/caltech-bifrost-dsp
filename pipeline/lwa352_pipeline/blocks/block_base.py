@@ -292,7 +292,7 @@ class Block(object):
         else:
             self.log.info("No ETCD interface: Command response:", resp)
 
-    def _process_commands(self, command_dict):
+    def _process_commands(self, command_dict, set_pending_flag=True):
         """
         Take a dictionary of commands and load them into the ``_pending_command_vals``
         dictionary after checking data types and other user-provided
@@ -309,6 +309,10 @@ class Block(object):
         :param command_dict: Dictionary of command keys and their values, eg.
             {'dest_ip': '100.100.10.1', 'dest_port': 10000}
         :type command_dict: dict
+
+        :param set_pending_flag: If True, set the `update_pending` attribute to True.
+            If False, leave this attribute unchanged.
+        :type set_pending_flag: bool
 
         :return: Return COMMAND_OK (0) if everything completes successfully.
             Return COMMAND_NOT_RECOGNIZED (-1) if a command key is not known to
@@ -335,7 +339,8 @@ class Block(object):
             self._pending_command_vals[key] = command_dict[key]
             # Track the command status in the stats log
             self.stats['new_' + key] = command_dict[key]
-        self.update_pending = True
+        if set_pending_flag:
+            self.update_pending = True
         self.stats['update_pending'] = True
         self.stats['last_cmd_time'] = time.time()
         return COMMAND_OK

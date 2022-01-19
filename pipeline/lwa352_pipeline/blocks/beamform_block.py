@@ -263,7 +263,7 @@ class Beamform(Block):
                 self._send_command_response(seq_id, False, "`val[kwargs]` field should be a dictionary")
                 continue
             try:
-                proc_ok = self._process_commands(update_keys)
+                proc_ok = self._process_commands(update_keys, set_pending_flag=False)
             except:
                 proc_ok = COMMAND_INVALID
             self.update_stats({'last_cmd_response':proc_ok})
@@ -298,6 +298,10 @@ class Beamform(Block):
                    amps = np.array(v['data']['amps'])
                    phases = np.exp(1j*2*np.pi*self.freqs[:, None]*delays_ns*1e-9) # freq x input
                    self.gains_cpu[:, b, :] = amps * phases * self.cal_gains[:, b, :] # freq x beam x input
+                   # Only trigger update on beamcoeffs, not calibration only.
+                   # This means loading [lots of] calibration data has less of an impact on the
+                   # pipeline performance. Calibrations are only loaded after beamformer weights are applied.
+                   self.update_pending = True # Only trigger update on beamcoeffs, not calibration only
            except KeyError:
                self.log.error("BEAMFORM >> Failed to parse command")
         self.update_stats(self.command_vals)
