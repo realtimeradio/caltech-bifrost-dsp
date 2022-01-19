@@ -281,7 +281,7 @@ class EtcdCorrControl():
                 self.ec.cancel_watch(watch_id)
                 self.log.error("host %s (pipeline %s) failed to respond to etcd command!" % (host, str(pipeline)))
                 raise RuntimeError
-            time.sleep(0.01)
+            time.sleep(0.001)
 
     def _format_command(self, sequence_id, timestamp, block, cmd, kwargs={}):
         """
