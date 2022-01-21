@@ -125,35 +125,36 @@ class Copy(Block):
 
 
         with self.oring.begin_writing() as oring:
-            #self.log.info("COPY >>> Waiting 15 seconds before sending data")
-            #time.sleep(15)
-            #self.log.info("COPY >>> GO GO GO!")
             for iseq in self.iring.read(guarantee=self.guarantee):
                 ohdr = iseq.header.copy()
                 prev_time = time.time()
+                bytes_copied = 0
+                acquire_time = 0
+                reserve_time = 0
+                process_time = 0
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr, nringlet=iseq.nringlet) as oseq:
                     for ispan in iseq.read(self.igulp_size):
                         if ispan.size < self.igulp_size:
                             continue # Ignore final gulp
                         curr_time = time.time()
-                        acquire_time = curr_time - prev_time
+                        acquire_time += curr_time - prev_time
                         prev_time = curr_time
                         with oseq.reserve(ispan.size) as ospan:
                             curr_time = time.time()
-                            reserve_time = curr_time - prev_time
+                            reserve_time += curr_time - prev_time
                             prev_time = curr_time
-                            # The copy to a GPU is asynchronous, so we must wait for it to finish
-                            # before committing this span
                             copy_array(ospan.data, ispan.data)
-                            if (self.oring.space == 'cuda') or (self.iring.space=='cuda'):
-                                #idata = ispan.data_view('ci4').reshape(self.ntime_gulp, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
-                                #print(idata[0:10,0:10,0,0])
-                                stream_synchronize()
 
                         curr_time = time.time()
-                        process_time = curr_time - prev_time
+                        process_time += curr_time - prev_time
                         prev_time = curr_time
-                        self.perf_proclog.update({'acquire_time': acquire_time, 
-                                                  'reserve_time': reserve_time, 
-                                                  'process_time': process_time,
-                                                  'gbps': 8*self.igulp_size / process_time / 1e9})
+                        bytes_copied += ispan.size
+                        if bytes_copied > 10e9:
+                            self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                      'reserve_time': reserve_time, 
+                                                      'process_time': process_time,
+                                                      'gbps': 8*bytes_copied / process_time / 1e9})
+                            bytes_copied = 0
+                            acquire_time = 0
+                            reserve_time = 0
+                            process_time = 0
