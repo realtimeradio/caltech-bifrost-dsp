@@ -373,23 +373,18 @@ class CorrOutputFull(Block):
         self.nchan = nchan
         self.npol = npol
         self.nstand = nstand
-        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        self.nbl = (nstand * (nstand+1)) // 2 * npol * npol
         
         # Do this now since it doesn't change after the block is initialized
         wrapped_idx = ((self.pipeline_idx - 1) % self.npipeline) + 1
         self.tuning = (self.nchan_sum << 16) | (self.npipeline << 8) | wrapped_idx
         self.tuning &= 0x00FFFFFF
 
-        self.igulp_size = self.matlen * 8 # complex64
+        self.igulp_size = self.nchan * self.nbl * 8 # complex64
+        
+        self.reordered_data = BFArray(np.zeros([self.nbl//npol//npol, nchan, npol, npol, 2], dtype=np.int32), space='system')
 
         # Arrays to hold the conjugation and bl indices of data coming from xGPU
-        self.antpol_to_bl = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
-        self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
-        if antpol_to_bl is not None:
-            self.antpol_to_bl[...] = antpol_to_bl
-        if bl_is_conj is not None:
-            self.bl_is_conj[...] = bl_is_conj
-        self.reordered_data = BFArray(np.zeros([nstand, nstand, npol, npol, nchan, 2], dtype=np.int32), space='system')
         self.dump_size = nstand * (nstand+1) * npol * npol * nchan * 2 * 4 / 2.
 
         self.checkfile_acc_len = checkfile_acc_len
@@ -455,7 +450,7 @@ class CorrOutputFull(Block):
         for s0 in range(self.nstand):
             for s1 in range(s0, self.nstand):
                 header_dyn = struct.pack(">2I", s0, s1)
-                self.sock.sendto(header_static + header_dyn + self.reordered_data[s0, s1].tobytes(), (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                self.sock.sendto(header_static + header_dyn + self.reordered_data[s0*self.nstand+s1].tobytes(), (self.command_vals['dest_ip'], self.command_vals['dest_port']))
                 if self.command_vals['max_mbps'] > 0:
                     block_bits_sent += pkt_payload_bits
                     # Apply throttle every 1MByte -- every >~100 packets
@@ -504,13 +499,17 @@ class CorrOutputFull(Block):
         start_time = time.time()
         block_start = time.time()
         source_number = 0
+        start_bl = 0
+        stop_bl = self.nstand
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0 x complexity
             # copy a single baseline of data
-            # reordered_data array has shape stand x stand x pol x pol x chan x complexity
-            sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32')
+            # reordered_data array has shape baseline x chan x complexity
+            sdata = self.reordered_data[start_bl:stop_bl, :, :].copy(space='system').view('cf32')
+            start_bl = stop_bl
+            stop_bl = start_bl + (self.nstand - 1 - i)
             # reshape and send
-            sdata = sdata.transpose([0,3,1,2,4]).reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
+            sdata = sdata.reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
             udt.send(desc, time_tag, 0, source_number, 1, sdata)
             source_number += sdata.shape[1]
             if self.command_vals['max_mbps'] > 0:
@@ -567,8 +566,6 @@ class CorrOutputFull(Block):
                            zerocnt += 1
                        if np.any(self.reordered_data[s0, s1, p0, p1, :, 0] != dtest[:, s0, s1, p0, p1].real):
                            self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] real" %(s0,s1,p0,p1))
-                           print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
-                           print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
                            print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 0])
                            print("expected:", dtest[0:5, s0, s1, p0, p1].real)
                            badcnt += 1
@@ -576,8 +573,6 @@ class CorrOutputFull(Block):
                            goodcnt += 1
                        if np.any(self.reordered_data[s0, s1, p0, p1, :, 1] != dtest[:, s0, s1, p0, p1].imag): # test data follows inverse conj convention
                            self.log.error("CORR OUTPUT >> test vector mismatch! [%d, %d, %d, %d] imag" %(s0,s1,p0,p1))
-                           print("antpol to bl: %d" % self.antpol_to_bl[s0,s1,p0,p1])
-                           print("is conjugated : %d" % self.bl_is_conj[s0,s1,p0,p1])
                            print("pipeline:", self.reordered_data[s0, s1, p0, p1, 0:5, 1])
                            print("expected:", dtest[0:5, s0, s1, p0, p1].imag)
                            badcnt += 1
@@ -611,10 +606,6 @@ class CorrOutputFull(Block):
             if not self.use_cor_fmt:
                 sfreq = ihdr['sfreq']
             npol  = ihdr['npol']
-            if 'ant_to_bl_id' in ihdr:
-                self.antpol_to_bl[...] = ihdr['ant_to_bl_id']
-            if 'bl_is_conj' in ihdr:
-                self.bl_is_conj[...] = ihdr['bl_is_conj']
             for ispan in iseq.read(self.igulp_size):
                 if ispan.size < self.igulp_size:
                     continue # skip last gulp
@@ -652,7 +643,7 @@ class CorrOutputFull(Block):
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time
                 prev_time = curr_time
-                _bf.bfXgpuReorder(ispan.data.as_BFarray(), self.reordered_data.as_BFarray(), self.antpol_to_bl.as_BFarray(), self.bl_is_conj.as_BFarray())
+                self.reordered_data[...] = ispan.data_view('i32').reshape([self.nchan, self.nbl//self.npol//self.npol, self.npol, self.npol, 2]).transpose([1,0,2,3,4])
                 # Check against test data if a file is provided
                 if self.checkfile:
                     self.check_against_file(upstream_acc_len, upstream_start_time)

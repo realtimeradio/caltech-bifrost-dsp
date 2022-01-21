@@ -222,21 +222,21 @@ def build_pipeline(args):
                           npipeline=args.cor_npipeline,
                   ))
 
-        ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
-                          nchan=nchan, npol=npol, nstand=nstand,
-                          nchan_sum=CORR_SUBSEL_NCHAN_SUM,
-                          antpol_to_bl=antpol_to_bl,
-                          bl_is_conj = bl_is_conj,
-                  ))
+        #ops.append(CorrSubsel(log, iring=corr_output_ring, oring=corr_fast_output_ring,
+        #                  core=cores.pop(0), guarantee=True, gpu=args.gpu, etcd_client=etcd_client,
+        #                  nchan=nchan, npol=npol, nstand=nstand,
+        #                  nchan_sum=CORR_SUBSEL_NCHAN_SUM,
+        #                  antpol_to_bl=antpol_to_bl,
+        #                  bl_is_conj = bl_is_conj,
+        #          ))
 
-        ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
-                          core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
-                          nvis_per_packet=16, nchan_sum=CORR_SUBSEL_NCHAN_SUM,
-                          use_cor_fmt=not args.pycorrout,
-                          pipeline_idx=pipeline_idx,
-                          npipeline=args.cor_npipeline,
-                  ))
+        #ops.append(CorrOutputPart(log, iring=corr_fast_output_ring,
+        #                  core=cores.pop(0), guarantee=True, etcd_client=etcd_client,
+        #                  nvis_per_packet=16, nchan_sum=CORR_SUBSEL_NCHAN_SUM,
+        #                  use_cor_fmt=not args.pycorrout,
+        #                  pipeline_idx=pipeline_idx,
+        #                  npipeline=args.cor_npipeline,
+        #          ))
 
     if not (args.nobeamform or args.nogpu):
         ops.append(Beamform(log, iring=gpu_input_ring, oring=bf_output_ring, ntime_gulp=GPU_NGULP*GSIZE,

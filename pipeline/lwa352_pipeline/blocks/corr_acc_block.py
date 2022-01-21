@@ -168,27 +168,30 @@ class CorrAcc(Block):
     """
 
     def __init__(self, log, iring, oring,
-                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0):
+                 guarantee=True, core=-1, nchan=192, npol=2, nstand=352, acc_len=24000, gpu=-1, etcd_client=None, autostartat=0, phase_steps=1):
         # TODO: Other things we could check:
         # - that nchan/pols/gulp_size matches XGPU compilation
         super(CorrAcc, self).__init__(log, iring, oring, guarantee, core, etcd_client=etcd_client)
         self.nchan = nchan
         self.npol = npol
         self.nstand = nstand
-        self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        self.nbl = (nstand * (nstand + 1)) // 2 * npol * npol
         self.gpu = gpu
+        self.phase_steps = phase_steps
 
         if self.gpu != -1:
             BFSetGPU(self.gpu)
         
-        self.igulp_size = self.matlen * 8 # complex64
+        self.igulp_size = self.nchan * self.nbl * 8 # complex64
         self.ogulp_size = self.igulp_size
         # integration buffer
         self.accdata = BFArray(shape=(self.igulp_size // 4), dtype='i32', space='cuda')
+        if phase_steps != 0:
+            self.phase_weights = BFArray(shape=(phase_steps, self.igulp_size // 4), dtype='i32', space='cuda')
         self.bfbf = LinAlg()
 
         self.define_command_key('start_time', type=int, initial_val=autostartat)
-        self.define_command_key('acc_len', type=int, initial_val=acc_len)
+        self.define_command_key('acc_len', type=int, initial_val=acc_len, condition=lambda x: x<=acc_len)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -202,6 +205,7 @@ class CorrAcc(Block):
         ospan = None
         start = False
         process_time = 0
+        sub_acc_cnt = 0
         time_tag = 1
         self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
@@ -252,6 +256,7 @@ class CorrAcc(Block):
 
                     # If this is the start time, update the first flag, and compute where the last flag should be
                     if this_gulp_time == start_time:
+                        sub_acc_cnt = 0
                         start = True
                         first = start_time
                         last  = first + acc_len - upstream_acc_len
@@ -281,9 +286,16 @@ class CorrAcc(Block):
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
                         # TODO: surely there are more sensible ways to implement a vacc
-                        BFMap("a = b", data={'a': self.accdata, 'b': idata})
+                        if self.phase_steps == 0:
+                            BFMap("a = b", data={'a': self.accdata, 'b': idata})
+                        else:
+                            BFMap("a = c*b", data={'a': self.accdata, 'b': idata, 'c': self.phase_weights[0]})
                     else:
-                        BFMap("a += b", data={'a': self.accdata, 'b': idata})
+                        if self.phase_steps == 0:
+                            BFMap("a += b", data={'a': self.accdata, 'b': idata})
+                        else:
+                            BFMap("a += c*b", data={'a': self.accdata, 'b': idata, 'c': self.phase_weights[sub_acc_cnt % self.phase_weights.shape[0]]})
+                    sub_acc_cnt += 1
                     curr_time = time.time()
                     process_time += curr_time - prev_time
                     prev_time = curr_time

@@ -229,6 +229,7 @@ class Corr(Block):
         self.npol = npol
         self.nstand = nstand
         self.matlen = nchan * (nstand//2+1)*(nstand//4)*npol*npol*4
+        self.nbl = (nstand * (nstand+1)) // 2 * npol * npol
         self.gpu = gpu
 
         self.test = test
@@ -238,7 +239,10 @@ class Corr(Block):
         
         self.size_proclog.update({'nseq_per_gulp': self.ntime_gulp})
         self.igulp_size = self.ntime_gulp*nchan*nstand*npol*1        # complex8
-        self.ogulp_size = self.matlen * 8 # complex64
+        # Output buffer for xGPU raw register tile order data
+        self.regtile_output = BFArray(np.zeros(self.matlen * 8, dtype=np.uint8), space='cuda')
+        # Output gulp is "normal" triangular order data
+        self.ogulp_size = self.nchan * self.nbl * 8 # complex64
 
         self.define_command_key('start_time', type=int, initial_val=autostartat,
                                 condition=lambda x: (x == -1) or (x % self.ntime_gulp == 0))
@@ -257,8 +261,12 @@ class Corr(Block):
 
         # generate xGPU order map
         self.antpol_to_input = BFArray(np.zeros([nstand, npol], dtype=np.int32), space='system')
-        self.antpol_to_bl = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
-        self.bl_is_conj   = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
+        self.antpol_to_bl    = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
+        self.select_map_cpu  = BFArray(np.zeros(self.nbl, dtype=np.int32), space='cuda_host')
+        self.select_map_gpu  = BFArray(np.zeros(self.nbl, dtype=np.int32), space='cuda')
+        self.bl_is_conj      = BFArray(np.zeros([nstand, nstand, npol, npol], dtype=np.int32), space='system')
+        self.conj_map_cpu    = BFArray(np.zeros(self.nbl, dtype=np.int32), space='cuda_host')
+        self.conj_map_gpu    = BFArray(np.zeros(self.nbl, dtype=np.int32), space='cuda')
         if ant_to_input is not None:
             self.update_baseline_indices(ant_to_input)
 
@@ -331,6 +339,18 @@ class Corr(Block):
         _bf.bfXgpuGetOrder(self.antpol_to_input.as_BFarray(),
                            self.antpol_to_bl.as_BFarray(),
                            self.bl_is_conj.as_BFarray())
+        # Populate the reorder maps
+        bl_id = 0
+        for s0 in range(self.nstand):
+            for s1 in range(s0, self.nstand):
+                for p0 in range(self.npol):
+                    for p1 in range(self.npol):
+                        self.select_map_cpu[bl_id] = self.antpol_to_bl[s0, s1, p0, p1]
+                        self.conj_map_cpu[bl_id] = self.bl_is_conj[s0, s1, p0, p1]
+                        bl_id += 1
+        # Copy maps to GPU
+        copy_array(self.select_map_gpu, self.select_map_cpu)
+        copy_array(self.conj_map_gpu, self.conj_map_cpu)
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -419,6 +439,7 @@ class Corr(Block):
                     if this_gulp_time == first:
                         # reserve an output span
                         ospan = WriteSpan(oseq.ring, self.ogulp_size, nonblocking=False)
+                        odata = ospan.data_view('ci32').reshape(self.nbl, self.nchan)
                         if self.test:
                             test_out = np.zeros([ihdr['nchan'], ihdr['nstand'], ihdr['nstand'], ihdr['npol']**2], dtype=np.complex)
                         curr_time = time.time()
@@ -428,11 +449,18 @@ class Corr(Block):
                         self.log.error("CORR: trying to write to not-yet-opened ospan")
                     if self.test:
                         test_out += self._test(ispan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
-                    _bf.bfXgpuKernel(ispan.data.as_BFarray(), ospan.data.as_BFarray(), int(this_gulp_time==last))
+                    _bf.bfXgpuKernel(ispan.data.as_BFarray(), self.regtile_output.as_BFarray(), int(this_gulp_time==last))
                     curr_time = time.time()
                     process_time += curr_time - prev_time
                     prev_time = curr_time
                     if this_gulp_time == last:
+                        rv = _bf.bfXgpuSubSelect(
+                                self.regtile_output.view('ci32').as_BFarray(), odata.as_BFarray(),
+                                self.select_map_gpu.as_BFarray(), self.conj_map_gpu.as_BFarray(), 1, 0
+                             ) # 1,0 => no channel summing, don't transpose
+                        if (rv != _bf.BF_STATUS_SUCCESS):
+                            self.log.error("xgpuSubSelect returned %d" % rv)
+                            raise RuntimeError
                         if self.test:
                             self._compare(test_out, ospan.data, ihdr['nchan'], ihdr['nstand'], ihdr['npol'])
                         ospan.close()
