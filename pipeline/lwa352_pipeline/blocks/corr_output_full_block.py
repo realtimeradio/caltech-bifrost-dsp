@@ -415,8 +415,8 @@ class CorrOutputFull(Block):
         self.define_command_key('max_mbps', type=int, initial_val=-1)
         self.update_command_vals()
         # Set a random delay for outputting data from this pipeline
-        # between 0 and 3 seconds
-        self.output_delay_ms = np.random.randint(0,3000) / 1000.
+        # between 0 and 4 seconds
+        self.output_delay_ms = np.random.randint(0,4000) / 1000.
 
     def get_checkfile_corr(self, t):
         """
