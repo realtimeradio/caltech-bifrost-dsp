@@ -415,8 +415,8 @@ class CorrOutputFull(Block):
         self.define_command_key('max_mbps', type=int, initial_val=-1)
         self.update_command_vals()
         # Set a random delay for outputting data from this pipeline
-        # between 0 and 2 seconds
-        self.output_delay_ms = np.random.randint(0,2000) / 1000.
+        # between 0 and 3 seconds
+        self.output_delay_ms = np.random.randint(0,3000) / 1000.
 
     def get_checkfile_corr(self, t):
         """
@@ -519,8 +519,8 @@ class CorrOutputFull(Block):
             source_number += sdata.shape[1]
             if self.command_vals['max_mbps'] > 0:
                 block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
-                # Apply throttle every 1MByte -- every >~100 packets
-                if block_bits_sent > 8000000:
+                # Apply throttle every 1Mbit -- every ~40 packets
+                if block_bits_sent > 1000000:
                     block_elapsed = time.time() - block_start
                     # Minimum allowed time to satisfy max rate
                     min_time = block_bits_sent / (1.e6 * self.command_vals['max_mbps'])
