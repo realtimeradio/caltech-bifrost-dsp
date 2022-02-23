@@ -500,31 +500,41 @@ class CorrOutputFull(Block):
         desc.set_nsrc((self.nstand*(self.nstand + 1))//2)
         desc.set_tuning(self.tuning)
         pkt_payload_bits = self.nchan * self.npol * self.npol * 8 * 8
-        block_bits_sent = 0
+        block_pkts_sent = 0
         start_time = time.time()
         block_start = time.time()
         source_number = 0
+        n_packet_burst = 50
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0 x complexity
             # copy a single baseline of data
             # reordered_data array has shape stand x stand x pol x pol x chan x complexity
             sdata = self.reordered_data[i, i:, :, :].copy(space='system').view('cf32')
-            # reshape and send
-            sdata = sdata.transpose([0,3,1,2,4]).reshape(1, -1, self.nchan*self.npol*self.npol).view('cf32')
-            udt.send(desc, time_tag, 0, source_number, 1, sdata)
-            source_number += sdata.shape[1]
-            if self.command_vals['max_mbps'] > 0:
-                block_bits_sent += i * self.nchan * self.npol * self.npol * 8 * 8
-                # Apply throttle every 1MByte -- every >~100 packets
-                if block_bits_sent > 8000000:
-                    block_elapsed = time.time() - block_start
-                    # Minimum allowed time to satisfy max rate
-                    min_time = block_bits_sent / (1.e6 * self.command_vals['max_mbps'])
-                    delay = min_time - block_elapsed
-                    if delay > 0:
-                        time.sleep(delay)
-                    block_start = time.time()
-                    block_bits_sent = 0
+            # sdata has order stand x pol x pol x chan x complexity
+            # reshape
+            sdata = sdata.transpose([0,3,1,2,4]).reshape(-1, self.nchan*self.npol*self.npol).view('cf32')
+            # sdata now has order stand x chan x pol x pol x complexity, with the later dimensions flattened
+            # Track how many baselines we've sent from this block of data
+            n_bls = sdata.shape[0] # Number of baselines in this chunk of data
+            n_bls_sent = 0
+            for bl_block in range((n_bls // n_packet_burst) + 1):
+                n_bls_this_time = min(n_bls - n_bls_sent, n_packet_burst)
+                if n_bls_this_time > 0:
+                    sdata_i = sdata[n_bls_sent : n_bls_sent + n_bls_this_time].reshape(1, n_bls_this_time, -1)
+                    udt.send(desc, time_tag, 0, source_number, 1, sdata_i)
+                    source_number += n_bls_this_time
+                    n_bls_sent += n_bls_this_time
+                    if self.command_vals['max_mbps'] > 0:
+                        block_pkts_sent += n_bls_this_time
+                        if block_pkts_sent > n_packet_burst:
+                            block_elapsed = time.time() - block_start
+                            # Minimum allowed time to satisfy max rate
+                            min_time = block_pkts_sent * pkt_payload_bits / (1.e6 * self.command_vals['max_mbps'])
+                            delay = min_time - block_elapsed
+                            if delay > 0:
+                                time.sleep(delay)
+                            block_start = time.time()
+                            block_pkts_sent = 0
         del sdata
         stop_time = time.time()
         elapsed = stop_time - start_time
