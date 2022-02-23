@@ -414,6 +414,9 @@ class CorrOutputFull(Block):
         self.define_command_key('dest_port', type=int, initial_val=dest_port)
         self.define_command_key('max_mbps', type=int, initial_val=-1)
         self.update_command_vals()
+        # Set a random delay for outputting data from this pipeline
+        # between 0 and 2 seconds
+        self.output_delay_ms = np.random.randint(0,2000) / 1000.
 
     def get_checkfile_corr(self, t):
         """
@@ -493,6 +496,7 @@ class CorrOutputFull(Block):
 
     def send_packets_bf(self, udt, time_tag, desc, chan0, gain, navg, verbose=False):
         cpu_affinity.set_core(self.core)
+        time.sleep(self.output_delay_ms)
         start_time = time.time()
         desc.set_chan0(chan0)
         desc.set_gain(gain)
