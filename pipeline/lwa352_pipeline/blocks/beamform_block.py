@@ -162,16 +162,45 @@ class Beamform(Block):
         +------------------+-----------------+--------+-------------------------------------------------+
         | Field            | Format          | Units  | Description                                     |
         +==================+=================+========+=================================================+
-        | ``delays``       | 2D list of      | ns     | An ``nbeam x ninput`` element list of geometric |
-        |                  | float           |        | delays, in nanoseconds.                         |
+        | ``coeffs``       | dict            |        | A dictionary with coefficient data              |
         +------------------+-----------------+--------+-------------------------------------------------+
-        | ``gains``        | 3D list of      |        | A three dimensional list of calibration gains   |
-        |                  | complex32)      |        | with shape ``nchan x nbeam x ninput``           |
+
+    The ``coeffs`` command dictionary contains the following fields.
+
         +------------------+-----------------+--------+-------------------------------------------------+
-        | ``load_sample``  | int             | sample | **NOT YET IMPLEMENTED** Sample number on which  |
-        |                  |                 |        | the supplied delays should be loaded. If this   |
-        |                  |                 |        | field is absent, new delays will be loaded as   |
-        |                  |                 |        | soon as possible.                               |
+        | Field            | Format          | Units  | Description                                     |
+        +==================+=================+========+=================================================+
+        | ``type``         | string          |        | A string describing the command type. May be    |
+        |                  |                 |        | 'calgains' for calibration gains, or            |
+        |                  |                 |        | 'beamcoeffs' for beam coefficients.             |
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | ``input_id``     | int             |        | Input index of the signal to which these        |
+        |                  |                 |        | calibration gains should be applied if          |
+        |                  |                 |        | ``type=='calgains'``. Unused if                 |
+        |                  |                 |        | ``type=='beamcoeffs'``.                         |
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | ``beam_id``      | int             |        | Beam index which these beamforming coefficients |
+        |                  |                 |        | should be applied.                              |
+        +------------------+-----------------+--------+-------------------------------------------------+
+        | ``data``         |                 |        | If ``type==calgains`` a list of floats of       |
+        |                  |                 |        | length ``2*nchan``. Entry ``2i`` of this list   |
+        |                  |                 |        | is the real part of the calibration gain for    |
+        |                  |                 |        | frequency channel ``i``. Entry ``2i+1`` is the  |
+        |                  |                 |        | imaginary part of the calibration gain for      |
+        |                  |                 |        | frequency channel ``i``. If                     |
+        |                  |                 |        | ``type==beamcoeffs``, ``data`` is a dictionary  |
+        |                  |                 |        | with up to 3 keys: ``delays`` is an             |
+        |                  |                 |        | ``nsignal``-length list of floating point       |
+        |                  |                 |        | delays, in units of nanoseconds. Entry ``i`` of |
+        |                  |                 |        | this list is the delay which should be applied  |
+        |                  |                 |        | to signal ``i``. to signal ``i``. ``amps`` is   |
+        |                  |                 |        | an ``nsignal``-length list of floating point    |
+        |                  |                 |        | amplitudes, with entry ``i`` being the          |
+        |                  |                 |        | amplitude to apply to signal ``i``.             |
+        |                  |                 |        | ``load_sample`` is the integer sample number at |
+        |                  |                 |        | which the provided amplitudes and delays should |
+        |                  |                 |        | be loaded. If not provided, coefficients are    |
+        |                  |                 |        | loaded immediately.                             |
         +------------------+-----------------+--------+-------------------------------------------------+
 
     """
@@ -199,8 +228,18 @@ class Beamform(Block):
             BFSetGPU(self.gpu)
         ## Delays and gains
         self.cal_gains = np.ones((nchan, nbeam, ninput), dtype=np.complex64) #: calibration gains
+        # Three buffers for complex gains.
+        #   `gains_cpu_new` is the latest set of coefficients. As soon as new coefficients arrive
+        #   they are loaded here.
+        #   `gains_cpu is` the set of coefficient array waiting to be copied to the GPU. coefficients
+        #   from gains_cpu_new are copied to gains_cpu when a user-supplied trigger time is reached
+        #   `gains_gpu` is the coefficient set in GPU device memory. Whenever gains_cpu_new changes,
+        #   these coefficients are copied. Copies go through an intermediate CPU buffer so that all
+        #   transfers to GPU memory are contiguous.
+        self.gains_cpu_new = np.zeros((nchan, nbeam, ninput), dtype=np.complex64) #: CPU-side beamformer coeffs waiting to be activated
         self.gains_cpu = np.zeros((nchan, nbeam, ninput), dtype=np.complex64) #: CPU-side beamformer coeffs to be copied
         self.gains_gpu = BFArray(shape=(nchan, nbeam, ninput), dtype=np.complex64, space='cuda') #: GPU-side beamformer coeffs
+        self.gains_load_sample = np.zeros(nbeam) #: sample time at which gains_cpu_new should be copied to gains_cpu (and on to gains_gpu)
 
         self.define_command_key('coeffs', type=dict, initial_val={})
 
@@ -297,7 +336,8 @@ class Beamform(Block):
                    delays_ns = np.array(v['data']['delays'])
                    amps = np.array(v['data']['amps'])
                    phases = np.exp(1j*2*np.pi*self.freqs[:, None]*delays_ns*1e-9) # freq x input
-                   self.gains_cpu[:, b, :] = amps * phases * self.cal_gains[:, b, :] # freq x beam x input
+                   self.gains_cpu_new[:, b, :] = amps * phases * self.cal_gains[:, b, :] # freq x beam x input
+                   self.gains_load_sample[b] = v.get('load_sample', -1) # default to immediate load
                    # Only trigger update on beamcoeffs, not calibration only.
                    # This means loading [lots of] calibration data has less of an impact on the
                    # pipeline performance. Calibrations are only loaded after beamformer weights are applied.
@@ -324,6 +364,7 @@ class Beamform(Block):
             for iseq in self.iring.read(guarantee=self.guarantee):
                 # recalculate beamforming coefficients on each new sequence (freqs could have changed)
                 self.update_pending = True
+                copy_pending = True
                 ihdr = json.loads(iseq.header.tostring())
                 
                 self.sequence_proclog.update(ihdr)
@@ -342,6 +383,7 @@ class Beamform(Block):
                 freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
 
                 base_time_tag = iseq.time_tag
+                this_gulp_time = base_time_tag
                 
                 ohdr = ihdr.copy()
                 ohdr['nstand'] = self.nbeam
@@ -354,17 +396,29 @@ class Beamform(Block):
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str) as oseq:
                     for ispan in iseq.read(igulp_size):
+                        self.update_stats({'curr_sample': this_gulp_time})
                         if ispan.size < igulp_size:
                             continue # Ignore final gulp
                         if self.update_pending:
                             self.acquire_control_lock()
-                            self.update_pending = False
-                            self.stats['update_pending'] = False
+                            for b in range(self.nbeam):
+                                if self.gains_load_sample[b] == 0:
+                                    continue
+                                if this_gulp_time >= self.gains_load_sample[b]:
+                                    self.gains_cpu[:,b,:] = self.gains_cpu_new[:,b,:]
+                                    self.gains_load_sample[b] = 0
+                                    copy_pending = True
+                            if self.gains_load_sample.sum() == 0:
+                                self.update_pending = False
+                            self.stats['update_pending'] = self.update_pending
                             self.stats['last_cmd_proc_time'] = time.time()
-                            self.log.debug("BEAMFORM >> Copy coefficients to GPU")
-                            self.gains_gpu[...] = self.gains_cpu
                             self.release_control_lock()
                         
+                        if copy_pending:
+                            self.log.debug("BEAMFORM >> Copy coefficients to GPU at time %d" % this_gulp_time)
+                            self.gains_gpu[...] = self.gains_cpu
+                            copy_pending = False
+
                         curr_time = time.time()
                         acquire_time = curr_time - prev_time
                         prev_time = curr_time
@@ -382,7 +436,7 @@ class Beamform(Block):
                             BFSync()
                             
                         ## Update the base time tag
-                        base_time_tag += self.ntime_gulp
+                        this_gulp_time += self.ntime_gulp
                         
                         curr_time = time.time()
                         process_time = curr_time - prev_time

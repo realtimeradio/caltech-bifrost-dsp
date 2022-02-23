@@ -4,6 +4,8 @@ import numpy as np
 from .block_control_base import BlockControl
 
 class BeamformControl(BlockControl):
+    nchan = 8192
+    fs_hz = 196000000
     def update_calibration_gains(self, beam_id, input_id, gains):
         """
         Update calibration gains for a single beam and input.
@@ -41,7 +43,7 @@ class BeamformControl(BlockControl):
             }
         )
 
-    def update_delays(self, beam_id, delays, amps=None):
+    def update_delays(self, beam_id, delays, amps=None, load_time=None, time_unit='time'):
         """
         Update geometric delays for a single beam.
 
@@ -61,13 +63,34 @@ class BeamformControl(BlockControl):
             beamformer input. If None, unity scaling is applied.
         :type delays: numpy.array
 
+        :param load_time: The time at which provided delays / amplitudes
+            should be loaded. If None is provided, updates occur immediately.
+        :type load_sample: int
+
+        :param time_unit: The unit at which the load time is specified. If 'time', the
+            load time should be provided as a UNIX time. If 'sample', the load time should
+            be specified as a sample (spectra) index.
+        :type time_unit: str
+
         """
         if amps is None:
             amps = np.ones_like(delays)
+        if load_time is None:
+            load_sample = -1
+        else:
+            if time_unit == 'sample':
+                load_sample = load_time
+            elif time_unit == 'time':
+                load_adc_sample = int(load_time * self.fs_hz)
+                load_sample = load_adc_sample // (2*nchan)
+            else:
+                self._log.error('Only time units "sample" and "time" are understood')
+                return
         return self._send_command(
             coeffs = {
                 'type': 'beamcoeffs',
                 'beam_id': beam_id,
                 'data': {'delays': delays.tolist(), 'amps': amps.tolist()},
+                'load_sample': load_sample
             }
         )
