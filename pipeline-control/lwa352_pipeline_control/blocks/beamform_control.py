@@ -82,7 +82,7 @@ class BeamformControl(BlockControl):
                 load_sample = load_time
             elif time_unit == 'time':
                 load_adc_sample = int(load_time * self.fs_hz)
-                load_sample = load_adc_sample // (2*nchan)
+                load_sample = load_adc_sample // (2*self.nchan)
             else:
                 self._log.error('Only time units "sample" and "time" are understood')
                 return
