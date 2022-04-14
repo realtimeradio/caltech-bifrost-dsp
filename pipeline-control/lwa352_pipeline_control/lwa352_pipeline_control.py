@@ -7,6 +7,7 @@ import json
 import numpy as np
 
 from .etcd_control import EtcdCorrControl
+from lwa352_utils import NCHAN
 
 from .blocks.corr_output_full_control import CorrOutputFullControl
 from .blocks.corr_output_part_control import CorrOutputPartControl
@@ -243,7 +244,6 @@ class Lwa352CorrelatorControl():
             p.corr_output_full.enable_autos()
         t0 = time.time()
         ready = False
-        NCHAN = 4096
         TIMEOUT = 10
         while(not ready):
             ready = True

@@ -2,10 +2,9 @@ import time
 import numpy as np
 
 from .block_control_base import BlockControl
+from ..lwa352_utils import time_to_spectra
 
 class BeamformControl(BlockControl):
-    nchan = 8192
-    fs_hz = 196000000
     def update_calibration_gains(self, beam_id, input_id, gains):
         """
         Update calibration gains for a single beam and input.
@@ -81,16 +80,16 @@ class BeamformControl(BlockControl):
             if time_unit == 'sample':
                 load_sample = load_time
             elif time_unit == 'time':
-                load_adc_sample = int(load_time * self.fs_hz)
-                load_sample = load_adc_sample // (2*self.nchan)
+                load_sample = time_to_spectra(load_time)
+                self._log.debug("Load sample: %d" % load_sample)
             else:
                 self._log.error('Only time units "sample" and "time" are understood')
                 return
-        return self._send_command(
-            coeffs = {
-                'type': 'beamcoeffs',
-                'beam_id': beam_id,
-                'data': {'delays': delays.tolist(), 'amps': amps.tolist()},
-                'load_sample': load_sample
-            }
-        )
+        coeffs = {
+            'type': 'beamcoeffs',
+            'beam_id': beam_id,
+            'data': {'delays': delays.tolist(), 'amps': amps.tolist()},
+            'load_sample': load_sample
+        }
+        self._log.debug("Command: %s" % str(coeffs))
+        return self._send_command(coeffs=coeffs)
