@@ -369,6 +369,7 @@ class Beamform(Block):
                 
                 self.sequence_proclog.update(ihdr)
                 
+                this_gulp_time = ihdr['seq0']
                 nchan  = ihdr['nchan']
                 nstand = ihdr['nstand']
                 npol   = ihdr['npol']
@@ -382,8 +383,6 @@ class Beamform(Block):
                 
                 freqs = np.arange(sfreq, sfreq+nchan*chan_bw, chan_bw)
 
-                base_time_tag = iseq.time_tag
-                this_gulp_time = base_time_tag
                 
                 ohdr = ihdr.copy()
                 ohdr['nstand'] = self.nbeam
