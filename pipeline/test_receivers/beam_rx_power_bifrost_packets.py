@@ -55,6 +55,8 @@ parser.add_argument('-P', '--port', type=int, default=11111,
                     help='UDP port to which to listen')
 parser.add_argument('-i', '--ip', type=str, default='100.100.101.101',
                     help='IP address to which to bind')
+parser.add_argument('--stats-only', action='store_true', default=False,
+                    help='Just print stats')
 args = parser.parse_args()
 
 print("Creating socket and binding to %s:%d" % (args.ip, args.port))
@@ -66,10 +68,19 @@ packet_cnt = 0
 seq = 0
 last_seq=0
 
+packets_per_server = None
+
 while(True):
     p = sock.recv(8192)
     packet_cnt += 1
     h = decode_header(p)
+    if packets_per_server is None:
+        packets_per_server = [0 for i in range(h['nserver'])]
+    packets_per_server[h['server']-1] += 1
+    if packet_cnt % 100000 == 0:
+        print(time.ctime(), 'packets_per_server:', packets_per_server)
+    if args.stats_only:
+        continue
     d = decode_data(p, h['nchan'], nbeam=h['nbeam'])
     seq = h['seq']
     if not np.all(d == 0):
