@@ -278,7 +278,13 @@ class BeamformOutput(Block):
                         if ip != '0.0.0.0':
                             self.log.info("BEAM OUTPUT >> Will send beam %d to %s:%d" % (beam, ip, port))
                         socks[beam].close()
+                        temp = socks[beam]
+                        socks[beam] = UDPSocket()
+                        del temp
                         socks[beam].connect(Address(ip, port))
+                        temp = udts[beam]
+                        udts[beam] = UDPTransmit('pbeam1_%d' % (nchan), sock=socks[beam], core=self.core)
+                        del temp
                     desc.set_chan0(chan0)
                     desc.set_tuning(1)
                     desc.set_nchan(nchan)
