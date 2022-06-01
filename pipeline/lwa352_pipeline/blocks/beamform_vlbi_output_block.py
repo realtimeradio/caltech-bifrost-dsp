@@ -237,9 +237,9 @@ class BeamformVlbiOutput(Block):
                         self.sock = UDPSocket()
                     else:
                         self.sock.close()
+                        self.sock = UDPSocket()
                     self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                    if not isinstance(udt, UDPTransmit):
-                        udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
+                    udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
                     self.stats.update({'dest_ip': self.command_vals['dest_ip'],
                                        'dest_port': self.command_vals['dest_port'],
                                        'update_pending': self.update_pending,
