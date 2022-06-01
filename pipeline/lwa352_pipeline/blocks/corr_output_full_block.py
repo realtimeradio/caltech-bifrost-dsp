@@ -659,9 +659,9 @@ class CorrOutputFull(Block):
                                 self.sock = UDPSocket()
                             else:
                                 self.sock.close()
+                                self.sock = UDPSocket()
                             self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                            if not isinstance(udt, UDPTransmit):
-                                udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
+                            udt = UDPTransmit('cor_%i' % self.nchan, sock=self.sock, core=self.core)
                 self.update_stats({'curr_sample':this_gulp_time})
                 curr_time = time.time()
                 acquire_time = curr_time - prev_time

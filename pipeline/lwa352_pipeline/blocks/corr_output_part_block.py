@@ -440,9 +440,9 @@ class CorrOutputPart(Block):
                             self.sock = UDPSocket()
                         else:
                             self.sock.close()
+                            self.sock = UDPSocket()
                         self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                        if not isinstance(udt, UDPTransmit):
-                            udt = UDPTransmit('cor_%i' % nchan, sock=self.sock, core=self.core)
+                        udt = UDPTransmit('cor_%i' % nchan, sock=self.sock, core=self.core)
                 self.stats.update({'curr_sample': this_gulp_time})
                 self.update_stats()
                 curr_time = time.time()
