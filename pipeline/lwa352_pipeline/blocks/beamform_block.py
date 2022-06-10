@@ -103,7 +103,7 @@ class Beamform(Block):
     floating-point  data containing beamformed data. With ``ntime_sum=None``, this is
     complex beamformer data with dimensionality
     ``channel x beams x time x complexity``. This output buffer is written
-    in blocks of ``ntime_gulp`` samples, I.e. ``ntime_gulp x nchan x nbeam x 8`` bytes.
+    in blocks of ``ntime_gulp`` samples, I.e. ``nchan x nbeam x ntime_gulp x 8`` bytes.
 
     With ``ntime_sum != None``, this block will generate dynamic power spectra
     rather than voltages. This mode is experimental (aka probably doesn't work).
