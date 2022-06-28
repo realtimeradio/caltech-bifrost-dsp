@@ -254,7 +254,7 @@ class BeamformVlbiOutput(Block):
                     idata = ispan.data.view('cf32').reshape([nchan, nbeam, self.ntime_gulp])
                     # Downselect beams and copy to CPU
                     # Transpose to time x chan x beam order
-                    idata_cpu = idata[:,0:(self.npol // npol) * self.nbeam_send,:].copy(space='system').transpose([2,0,1])
+                    idata_cpu = idata[:,0:(self.npol // npol) * self.nbeam_send,:].copy(space='system').transpose([2,0,1]).copy(space='system')
                     idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
                     try:
                         udt.send(desc, this_gulp_time, 1, self.pipeline_idx-1, 0, idata_cpu_r)
