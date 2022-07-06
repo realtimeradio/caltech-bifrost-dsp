@@ -197,6 +197,8 @@ class BeamformVlbiOutput(Block):
         self.define_command_key('dest_port', type=int, initial_val=dest_port)
         self.update_command_vals()
         self.ntime_gulp = ntime_gulp
+        self._npacket_burst = 32 # Number of packets to burst between throttle sleep calls
+        self._max_bps = 0.6 * 1e9
         self.pipeline_idx = pipeline_idx
         self.nbeam_send = 1
         self.npol = 2 # If the upstream beamformer provides single pol data, we interpret pairs of beams as dual-pol
@@ -256,8 +258,18 @@ class BeamformVlbiOutput(Block):
                     # Transpose to time x chan x beam order
                     idata_cpu = idata[:,0:(self.npol // npol) * self.nbeam_send,:].copy(space='system').transpose([2,0,1]).copy(space='system')
                     idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
+                    burst_bits = self._npacket_burst * nchan * self.nbeam_send * self.npol // npol * 2 * 32 
                     try:
-                        udt.send(desc, this_gulp_time, 1, self.pipeline_idx-1, 0, idata_cpu_r)
+                        toff = 0
+                        while(toff < self.ntime_gulp):
+                            t0 = time.time()
+                            udt.send(desc, this_gulp_time + toff, 1, self.pipeline_idx-1, 0, idata_cpu_r[toff : toff + self._npacket_burst])
+                            toff += self._npacket_burst
+                            dt = time.time() - t0
+                            delay = (burst_bits / (self._max_bps)) - dt
+                            if delay > 0:
+                                time.sleep(delay)
+
                     except Exception as e:
                         self.log.error("VLBI OUTPUT >> Sending error: %s" % str(e))
                     stop_time = time.time()
