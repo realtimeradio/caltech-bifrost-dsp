@@ -28,9 +28,9 @@ LOGFILE_BASE = os.path.expanduser("~/xpipeline")
 PIDFILE_BASE = os.path.expanduser("~/xpipeline")
 
 # ETCD Keys
-ETCD_CMD_ROOT = "/cmd/corr/x"
-ETCD_MON_ROOT = "/mon/corr/x"
-ETCD_RESP_ROOT = "/resp/corr/x"
+ETCD_CMD_ROOT = "/cmd/corr/x/xctrl"
+ETCD_MON_ROOT = "/mon/corr/x/xctrl"
+ETCD_RESP_ROOT = "/resp/corr/x/xctrl"
 
 class LwaXengineEtcdClient():
     """
