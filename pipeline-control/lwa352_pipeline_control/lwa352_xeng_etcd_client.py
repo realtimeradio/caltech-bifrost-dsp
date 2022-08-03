@@ -28,9 +28,9 @@ LOGFILE_BASE = os.path.expanduser("~/xpipeline")
 PIDFILE_BASE = os.path.expanduser("~/xpipeline")
 
 # ETCD Keys
-ETCD_CMD_ROOT = "/cmd/corr/x/xctrl"
-ETCD_MON_ROOT = "/mon/corr/x/xctrl"
-ETCD_RESP_ROOT = "/resp/corr/x/xctrl"
+ETCD_CMD_ROOT = "/cmd/corr/x"
+ETCD_MON_ROOT = "/mon/corr/x"
+ETCD_RESP_ROOT = "/resp/corr/x"
 
 class LwaXengineEtcdClient():
     """
@@ -71,9 +71,9 @@ class LwaXengineEtcdClient():
             self.logger.exception("Failed to connect to Etcd server on host %s" % etcdhost)
             raise
 
-        self.cmd_key = ETCD_CMD_ROOT + "/%s" % (self.xhost)
-        self.cmd_resp_key = ETCD_RESP_ROOT + "/%s" % (self.xhost)
-        self.mon_key = ETCD_MON_ROOT + "/%s" % (self.xhost)
+        self.cmd_key = ETCD_CMD_ROOT + "/%s/xctrl" % (self.xhost)
+        self.cmd_resp_key = ETCD_RESP_ROOT + "/%s/xctrl" % (self.xhost)
+        self.mon_key = ETCD_MON_ROOT + "/%s/xctrl" % (self.xhost)
         self.logger.debug("Command key is %s" % self.cmd_key)
         self.logger.debug("Command response key is %s" % self.cmd_resp_key)
         self.logger.debug("Monitor key root is %s" % self.mon_key)
