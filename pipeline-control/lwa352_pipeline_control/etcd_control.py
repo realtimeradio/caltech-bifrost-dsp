@@ -268,7 +268,6 @@ class EtcdCorrControl():
         # Begin watching response channel and then send message
         watch_id = self.ec.add_watch_callback(resp_key, response_callback)
         # send command
-        print(cmd_key, resp_key, command_json)
         self.ec.put(cmd_key, command_json)
         starttime = time.time()
         while(True):
