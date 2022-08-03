@@ -166,10 +166,10 @@ class EtcdCorrControl():
         key = '/%s' % (host)
         if pipeline is not None:
             key += '/pipeline/%d' % (pipeline)
-            if block is not None:
-                key += '/%s' % (block)
-                if inst_id is not None:
-                    key += '/%d' % (inst_id)
+        if block is not None:
+            key += '/%s' % (block)
+        if inst_id is not None:
+            key += '/%d' % (inst_id)
         return key
 
     def _get_mon_key(self, host, pipeline, block, inst_id):
@@ -268,6 +268,7 @@ class EtcdCorrControl():
         # Begin watching response channel and then send message
         watch_id = self.ec.add_watch_callback(resp_key, response_callback)
         # send command
+        print(cmd_key, resp_key, command_json)
         self.ec.put(cmd_key, command_json)
         starttime = time.time()
         while(True):
