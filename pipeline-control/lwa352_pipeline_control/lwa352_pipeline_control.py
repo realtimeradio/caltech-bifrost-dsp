@@ -9,6 +9,7 @@ import numpy as np
 from .etcd_control import EtcdCorrControl
 from .lwa352_utils import NCHAN
 
+from .blocks.block_control_base import BlockControl
 from .blocks.corr_output_full_control import CorrOutputFullControl
 from .blocks.corr_output_part_control import CorrOutputPartControl
 from .blocks.corr_acc_control import CorrAccControl
@@ -334,6 +335,7 @@ class Lwa352PipelineControl():
 
         args = [self.log, self.corr_interface, self.host, self.pipeline_id]
 
+        self.capture = BlockControl(*args, name='udp_verbs_capture')
         self.corr_output_full = CorrOutputFullControl(*args)
         self.corr_output_part = CorrOutputPartControl(*args)
         self.corr = CorrControl(*args)
