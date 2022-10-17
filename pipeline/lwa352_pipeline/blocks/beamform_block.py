@@ -242,6 +242,8 @@ class Beamform(Block):
         self.gains_load_sample = np.zeros(nbeam) #: sample time at which gains_cpu_new should be copied to gains_cpu (and on to gains_gpu)
 
         self.define_command_key('coeffs', type=dict, initial_val={})
+        for b in range(nbeam):
+            self.update_stats({'cal_gains%d' % b: False})
 
         # Initialize beamforming library
         if ntime_sum is not None:
