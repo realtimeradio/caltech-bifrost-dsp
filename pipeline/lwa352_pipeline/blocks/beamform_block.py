@@ -243,7 +243,7 @@ class Beamform(Block):
 
         self.define_command_key('coeffs', type=dict, initial_val={})
         for b in range(nbeam):
-            self.update_stats({'cal_gains%d' % b: False})
+            self.update_stats({'cal_gains%d' % b: [False,]*ninput})
 
         # Initialize beamforming library
         if ntime_sum is not None:
@@ -332,7 +332,7 @@ class Beamform(Block):
                    self.log.debug("BEAMFORM >> Updating calibration gains for beam %d, input %d" % (b,i))
                    data = np.array(v['data'])
                    self.cal_gains[:, b, i] = data[0::2] + 1j*data[1::2] # freq x beam x input
-                   self.update_stats({'cal_gains%d' % b: True})
+                   self.stats['cal_gains%d' % b][i] = True
                if v['type'] == 'beamcoeffs':
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating delays for beam %d" % (b))
