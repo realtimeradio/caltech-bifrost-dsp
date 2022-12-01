@@ -248,7 +248,8 @@ def build_pipeline(args):
                               nchan=nchan, core=cores[0], guarantee=True, gpu=args.gpu, ntime_sum=BEAM_TIME_SUM))
 
         ops.append(BeamformOutput(log, iring=bf_power_output_ring, core=cores[0], guarantee=True,
-                                  ntime_gulp=GPU_NGULP*GSIZE//BEAM_TIME_SUM, pipeline_idx=pipeline_idx, etcd_client=etcd_client))
+                                  ntime_gulp=GPU_NGULP*GSIZE//BEAM_TIME_SUM, pipeline_idx=pipeline_idx,
+                                  nchan=nchan, nbeam=NBEAM, etcd_client=etcd_client))
 
         cores.pop(0)
         ops.append(BeamformVlbiOutput(log, iring=bf_output_ring, ntime_gulp=GPU_NGULP*GSIZE,
