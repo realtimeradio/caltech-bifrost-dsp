@@ -196,6 +196,8 @@ class BeamformVlbiOutput(Block):
         self.define_command_key('dest_ip', type=str, initial_val='0.0.0.0')
         self.define_command_key('dest_port', type=int, initial_val=dest_port)
         self.update_command_vals()
+        self.dest_ip = self.command_vals['dest_ip']
+        self.dest_port = self.command_vals['dest_port']
         self.ntime_gulp = ntime_gulp
         self._npacket_burst = 32 # Number of packets to burst between throttle sleep calls
         self._max_bps = 0.6 * 1e9
@@ -233,17 +235,17 @@ class BeamformVlbiOutput(Block):
                 # Update destinations if necessary
                 if self.update_pending:
                     self.update_command_vals()
-                    self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % 
-                            (self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                    if self.sock is None:
+                    # Don't do anything unless something has changed
+                    if not (self.dest_ip == self.command_vals['dest_ip'] and self.dest_port == self.command_vals['dest_port']):
+                        self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % 
+                                (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                        if self.sock is not None:
+                            self.sock.close()
                         self.sock = UDPSocket()
-                    else:
-                        self.sock.close()
-                        self.sock = UDPSocket()
-                    self.sock.connect(Address(self.command_vals['dest_ip'], self.command_vals['dest_port']))
-                    udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
-                    self.stats.update({'dest_ip': self.command_vals['dest_ip'],
-                                       'dest_port': self.command_vals['dest_port'],
+                        self.sock.connect(Address(self.dest_ip, self.dest_port))
+                        udt = UDPTransmit('ibeam%i_%i' % (self.nbeam_send, nchan), sock=self.sock, core=self.core)
+                    self.stats.update({'dest_ip': self.dest_ip,
+                                       'dest_port': self.dest_port,
                                        'update_pending': self.update_pending,
                                        'last_update_time': time.time()})
                 self.stats['curr_sample'] = this_gulp_time
