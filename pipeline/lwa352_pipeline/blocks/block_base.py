@@ -157,6 +157,7 @@ class Block(object):
         self._pending_command_vals = {}
         self._command_types = {}
         self._command_conditions = {}
+        self._etcd_sets_pending = True # Set the update_pending attribute to True when etcd callback runs
 
     def define_command_key(self, name, type=None, condition=None, initial_val=None): 
         """
@@ -246,7 +247,7 @@ class Block(object):
                 self._send_command_response(seq_id, False, "`val[kwargs]` field should be a dictionary")
                 continue
             try:
-                proc_ok = self._process_commands(update_keys)
+                proc_ok = self._process_commands(update_keys, set_pending_flag=self._etcd_sets_pending)
             except:
                 proc_ok = COMMAND_INVALID
             self.update_stats({'last_cmd_response':proc_ok})

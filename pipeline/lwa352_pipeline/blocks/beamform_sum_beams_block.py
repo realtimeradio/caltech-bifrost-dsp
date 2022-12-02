@@ -223,7 +223,7 @@ class BeamformSumBeams(Block):
                 # The output gulp size can be quite small if we base it on the input gulp size
                 # force the numper of times in the output span to match the input, which
                 # is likely to be more reasonable
-                self.oring.resize(ogulp_size // self.ntime_blocks * self.ntime_gulp * 4)
+                self.oring.resize(ogulp_size * self.ntime_sum * 4)
                 
                 prev_time = time.time()
                 with oring.begin_sequence(time_tag=iseq.time_tag, header=ohdr_str) as oseq:
