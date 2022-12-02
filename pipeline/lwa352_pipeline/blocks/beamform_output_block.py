@@ -234,17 +234,16 @@ class BeamformOutput(Block):
         self.define_command_key('dest_ip', type=list, initial_val=['0.0.0.0'])
         self.define_command_key('dest_port', type=list, initial_val=[dest_port])
         self.update_command_vals()
-        self.use_python_tx = False
+        self.use_python_tx = False # Python socket output is not tested
         # Populate the initial IP / Port / Sockets / UDTs
-        self.udts     = [None for _ in range(self.nbeam)]
-        if self.use_python_tx:
-            self.socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(self.nbeam)]
-        else:
-            self.socks = [UDPSocket() for _ in range(self.nbeam)]
-        self.beam_ips = [None for _ in range(self.nbeam)]
+        self.udts       = [None for _ in range(self.nbeam)]
+        self.socks      = [None for _ in range(self.nbeam)]
+        self.beam_ips   = [None for _ in range(self.nbeam)]
         self.beam_ports = [None for _ in range(self.nbeam)]
+        for beam in range(self.nbeam):
+            self.beam_ips[beam] = self.command_vals['dest_ip'][beam % len(self.command_vals['dest_ip'])]
+            self.beam_ports[beam] = self.command_vals['dest_port'][beam % len(self.command_vals['dest_port'])]
         self.tx_locks = [Lock() for _ in range(self.nbeam)]
-        self._etcd_callback(None)
 
     def _etcd_callback(self, watchresponse):
         """
@@ -260,32 +259,38 @@ class BeamformOutput(Block):
         :type watchresponse: WatchResponse
         """
         cpu_affinity.set_core(self.core)
-        if watchresponse is not None:
-            super(BeamformOutput, self)._etcd_callback(watchresponse)
-            self.log.info("post etcd callback -- pending?: %s" % str(self.update_pending))
-            self.update_command_vals()
+        # Empirically determined sleep patterns.
+        # Destroying and creating UDTs is liable to lock up bifrost momentarily
+        SLEEP_TIME = 0.1 # sleep seconds before and after UDT creation
+        SLEEP_TIME_POST_DEL = 0.3 # sleep seconds after destroying an existing UDT
+        super(BeamformOutput, self)._etcd_callback(watchresponse)
+        self.update_command_vals()
 
-        self.log.info("running etcd callback")
         t0 = time.time()
         for beam in range(self.nbeam):
             ip = self.command_vals['dest_ip'][beam % len(self.command_vals['dest_ip'])]
             port = self.command_vals['dest_port'][beam % len(self.command_vals['dest_port'])]
             if self.beam_ips[beam] == ip and self.beam_ports[beam] == port:
                 continue
-            else:
-                self.tx_locks[beam].acquire()
-                self.beam_ips[beam] = ip
-                self.beam_ports[beam] = port
+            self.tx_locks[beam].acquire()
+            time.sleep(SLEEP_TIME)
+            if self.udts[beam] is not None:
+                self.udts[beam] = None
+                time.sleep(SLEEP_TIME_POST_DEL)
+            self.beam_ips[beam] = ip
+            self.beam_ports[beam] = port
+            if self.socks[beam] is not None:
                 self.socks[beam].close()
-                self.log.info("Sending beam %d to %s:%d" % (beam, ip, port))
-                if not self.use_python_tx:
-                    self.socks[beam] = UDPSocket()
-                    self.socks[beam].connect(Address(ip, port))
-                    self.udts[beam] = UDPTransmit('pbeam1_%d' % (self.nchan), sock=self.socks[beam], core=self.core)
-                else:
-                    self.socks[beam] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    self.socks[beam].connect((ip, port))
-                self.tx_locks[beam].release()
+            self.log.info("Sending beam %d to %s:%d" % (beam, ip, port))
+            if not self.use_python_tx:
+                self.socks[beam] = UDPSocket()
+                self.socks[beam].connect(Address(ip, port))
+                self.udts[beam] = UDPTransmit('pbeam1_%d' % (self.nchan), sock=self.socks[beam], core=self.core)
+            else:
+                self.socks[beam] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.socks[beam].connect((ip, port))
+            time.sleep(SLEEP_TIME)
+            self.tx_locks[beam].release()
         self.stats.update({'dest_ip': self.beam_ips,
             'dest_port': self.beam_ports,
             'update_pending': False,
@@ -312,7 +317,6 @@ class BeamformOutput(Block):
         udts = None
         desc = None
         for iseq in self.iring.read(guarantee=self.guarantee):
-            self.log.info("starting seq")
             # Update control each sequence
             ihdr = json.loads(iseq.header.tostring())
             this_gulp_time = ihdr['seq0']
@@ -338,35 +342,6 @@ class BeamformOutput(Block):
             for ispan in iseq.read(igulp_size):
                 if ispan.size < igulp_size:
                     continue # ignore final gulp
-                # Update destinations
-                #if self.update_pending:
-                #    # Delete old sockets and copy new ones
-                #    l0 = time.time()
-                #    if socks:
-                #        for beam in range(self.nbeam):
-                #            socks[beam].close()
-                #    self.log.info("Update pending, waiting on lock")
-                #    l1 = time.time()
-                #    self.acquire_control_lock()
-                #    l2 = time.time()
-                #    self.log.info("Copying sockets")
-                #    # These aren't copies, so respect Python's object referencing
-                #    socks = self._new_socks
-                #    udts = self._new_udts
-                #    beam_ips = self._new_beam_ips
-                #    beam_ports = self._new_beam_ports
-                #    self.update_pending = False
-                #    l3 = time.time()
-                #    self.release_control_lock()
-                #    self.log.info("BEAM OUTPUT >> Updating destination to %s:%s" % (beam_ips, beam_ports))
-                #    for beam in range(self.nbeam):
-                #        if beam_ips[beam] != '0.0.0.0':
-                #            self.log.info("BEAM OUTPUT >> Will send beam %d to %s:%d" % (beam, beam_ips[beam], beam_ports[beam]))
-                #    self.stats.update({'dest_ip': beam_ips,
-                #                       'dest_port': beam_ports,
-                #                       'update_pending': False,
-                #                       'last_update_time': time.time()})
-                #    self.log.info('Beamformer setup steps: %f %f %f secs' % (l1-l0, l2-l1, l3-l2))
                 self.stats['curr_sample'] = this_gulp_time
                 self.update_stats()
                 curr_time = time.time()
