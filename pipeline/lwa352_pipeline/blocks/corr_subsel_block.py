@@ -295,7 +295,7 @@ class CorrSubsel(Block):
                         curr_time = time.time()
                         reserve_time = curr_time - prev_time
                         prev_time = curr_time
-                        rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray(), self._conj.as_BFarray(), self.nchan_sum)
+                        rv = _bf.bfXgpuSubSelect(idata.as_BFarray(), self.obuf_gpu.as_BFarray(), self._subsel.as_BFarray(), self._conj.as_BFarray(), self.nchan_sum, 0)
                         if (rv != _bf.BF_STATUS_SUCCESS):
                             self.log.error("xgpuSubSelect returned %d" % rv)
                             raise RuntimeError
