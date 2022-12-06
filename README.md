@@ -1,3 +1,9 @@
+# Installation
+
+1. Install xgpu: `bash install_xgpu.sh`
+2. Install bifrost: `bash install_bifrost.sh`
+3. Install pipeline: `cd pipeline; pip install .`
+
 # Useful Tools
 
 ```

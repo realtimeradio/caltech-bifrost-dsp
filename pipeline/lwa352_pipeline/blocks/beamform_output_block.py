@@ -240,10 +240,11 @@ class BeamformOutput(Block):
         self.socks      = [None for _ in range(self.nbeam)]
         self.beam_ips   = [None for _ in range(self.nbeam)]
         self.beam_ports = [None for _ in range(self.nbeam)]
-        for beam in range(self.nbeam):
-            self.beam_ips[beam] = self.command_vals['dest_ip'][beam % len(self.command_vals['dest_ip'])]
-            self.beam_ports[beam] = self.command_vals['dest_port'][beam % len(self.command_vals['dest_port'])]
         self.tx_locks = [Lock() for _ in range(self.nbeam)]
+        self._etcd_callback(None) # Set up IP/ports
+        #for beam in range(self.nbeam):
+        #    self.beam_ips[beam] = self.command_vals['dest_ip'][beam % len(self.command_vals['dest_ip'])]
+        #    self.beam_ports[beam] = self.command_vals['dest_port'][beam % len(self.command_vals['dest_port'])]
 
     def _etcd_callback(self, watchresponse):
         """
@@ -259,12 +260,9 @@ class BeamformOutput(Block):
         :type watchresponse: WatchResponse
         """
         cpu_affinity.set_core(self.core)
-        # Empirically determined sleep patterns.
-        # Destroying and creating UDTs is liable to lock up bifrost momentarily
-        SLEEP_TIME = 0.1 # sleep seconds before and after UDT creation
-        SLEEP_TIME_POST_DEL = 0.3 # sleep seconds after destroying an existing UDT
-        super(BeamformOutput, self)._etcd_callback(watchresponse)
-        self.update_command_vals()
+        if watchresponse is not None:
+            super(BeamformOutput, self)._etcd_callback(watchresponse)
+            self.update_command_vals()
 
         t0 = time.time()
         for beam in range(self.nbeam):
@@ -273,10 +271,8 @@ class BeamformOutput(Block):
             if self.beam_ips[beam] == ip and self.beam_ports[beam] == port:
                 continue
             self.tx_locks[beam].acquire()
-            time.sleep(SLEEP_TIME)
             if self.udts[beam] is not None:
                 self.udts[beam] = None
-                time.sleep(SLEEP_TIME_POST_DEL)
             self.beam_ips[beam] = ip
             self.beam_ports[beam] = port
             if self.socks[beam] is not None:
@@ -289,7 +285,6 @@ class BeamformOutput(Block):
             else:
                 self.socks[beam] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 self.socks[beam].connect((ip, port))
-            time.sleep(SLEEP_TIME)
             self.tx_locks[beam].release()
         self.stats.update({'dest_ip': self.beam_ips,
             'dest_port': self.beam_ports,
