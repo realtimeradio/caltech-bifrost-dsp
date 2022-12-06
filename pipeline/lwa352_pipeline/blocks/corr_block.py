@@ -248,8 +248,8 @@ class Corr(Block):
 
         # initialize xGPU. Arrays passed as inputs don't really matter here
         # but we need to pass something
-        ibuf = BFArray(0, dtype='i8', space='cuda')
-        obuf = BFArray(0, dtype='i64', space='cuda')
+        ibuf = BFArray([0], dtype='i8', space='cuda')
+        obuf = BFArray([0], dtype='i64', space='cuda')
         rv = _bf.bfXgpuInitialize(ibuf.as_BFarray(), obuf.as_BFarray(), self.gpu)
         if (rv != _bf.BF_STATUS_SUCCESS):
             self.log.error("xgpuIntialize returned %d" % rv)
