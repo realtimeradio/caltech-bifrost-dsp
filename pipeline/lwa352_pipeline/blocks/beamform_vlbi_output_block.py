@@ -237,8 +237,10 @@ class BeamformVlbiOutput(Block):
                     self.update_command_vals()
                     # Don't do anything unless something has changed
                     if not (self.dest_ip == self.command_vals['dest_ip'] and self.dest_port == self.command_vals['dest_port']):
+                        self.dest_ip = self.command_vals['dest_ip']
+                        self.dest_port = self.command_vals['dest_port']
                         self.log.info("VLBI OUTPUT >> Updating destination to %s:%s" % 
-                                (self.command_vals['dest_ip'], self.command_vals['dest_port']))
+                                (self.dest_ip, self.dest_port))
                         if self.sock is not None:
                             self.sock.close()
                         self.sock = UDPSocket()
