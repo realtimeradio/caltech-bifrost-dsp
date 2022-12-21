@@ -297,7 +297,7 @@ class BeamformOutput(Block):
             'last_update_time': time.time()})
         self.update_stats()
         t1 = time.time()
-        self.log.info("Returning after %f secs" % (t1-t0))
+        self.log.debug("Returning after %f secs" % (t1-t0))
 
     def send_packets_python(self, src, tuning, nsrc, navg, chan0, seq, b, d):
         header0 = np.array([src, b, tuning, self.nchan, self.nbeam, nsrc], dtype='>u1').tobytes() \
