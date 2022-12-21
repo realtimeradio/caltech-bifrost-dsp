@@ -177,7 +177,7 @@ class TriggeredDump(Block):
         # Needs to be 512-byte aligned to work with O_DIRECT writing.
         # Luckily mmap aligns to memory page size
         hinfo = mmap.mmap(-1, HEADER_SIZE)
-        start = False
+        start = False # Should we start?
         last_trigger_time = None
         dump_path = self.command_vals['dump_path']
         ntime_per_file = 0
@@ -188,13 +188,15 @@ class TriggeredDump(Block):
         while not self.iring.writing_ended():
             # Check trigger every few ms
             time.sleep(0.05)
+            # If no new commands keep waiting
+            if not self.update_pending:
+                continue
             self.update_command_vals()
             if self.command_vals['command'] == 'trigger':
-                self.acquire_control_lock()
+                # Shortcut variables
                 ntime_per_file = self.command_vals['ntime_per_file']
                 nfile = self.command_vals['nfile']
                 dump_path = self.command_vals['dump_path']
-                self.command_vals['trigger'] = None # reset the trigger
                 last_trigger_time = time.time()
                 filename = os.path.join(dump_path, "lwa-dump-%.2f.tbf" % last_trigger_time)
                 self.update_stats({'last_trigger_time' : last_trigger_time,
@@ -210,8 +212,6 @@ class TriggeredDump(Block):
                 with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
                     ihdr = json.loads(iseq.header.tostring())
                     for ispan in iseq.read(self.igulp_size):
-                        #print("size:", ispan.size)
-                        #print("offset:", ispan.offset)
                         if ispan.size < self.igulp_size:
                             continue
                         this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
@@ -223,6 +223,8 @@ class TriggeredDump(Block):
                                 ofile = None
                                 file_num += 1
                             if file_num == nfile:
+                                self.log.info("TRIGGERED DUMP >> File writing ended")
+                                self.update_stats({'status'       : 'complete'})
                                 break
                             # If we're here we need to open a new file
                             # Doing the writing from python with directIO -- yikes!
@@ -231,6 +233,7 @@ class TriggeredDump(Block):
                             # such an option
                             self.update_stats({'status' : 'writing'})
                             self.log.info("TRIGGERED DUMP >> Opening %s" % (filename + '.%d' % file_num))
+                            self.log.info("Start seq is %d" % this_time)
                             file_ndumped = 0
                             ofile = os.open(
                                         filename + '.%d' % file_num,
@@ -245,27 +248,33 @@ class TriggeredDump(Block):
                         os.write(ofile, ispan.data)
                         file_ndumped += self.ntime_gulp
                         total_bytes += self.igulp_size
-                        if self.command == 'stop':
+                        self.update_stats({'bytes_dumped'  : total_bytes,
+                                           'files_created' : file_num+1})
+                        # If no new commands, loop again
+                        if not self.update_pending:
+                            continue
+                        self.update_command_vals()
+                        if self.command_vals['command'] == 'stop':
                             self.log.info("TRIGGERED DUMP >> Stopped")
                             self.update_stats({'last_command' : 'stop',
                                                'status'       : 'stopped'})
+                            os.close(ofile)
+                            ofile = None
                             break
-                        if self.command == 'abort':
+                        if self.command_vals['command'] == 'abort':
                             self.log.info("TRIGGERED DUMP >> Aborted")
                             self.update_stats({'last_command' : 'abort',
                                                'status'       : 'aborted'})
+                            os.close(ofile)
+                            ofile = None
                             break
-                        if ispan.size < self.igulp_size:
-                            self.log.info("TRIGGERED DUMP >> Stopped because stream ended")
-                            self.update_stats({'status'       : 'stream end'})
-                            # ignore final gulp and stop
-                            break
-                    # Try closing
+                    # Try closing if a file is still around
                     if ofile is not None:
+                        self.log.info("TRIGGERED DUMP >> Stopped unexpectedly")
+                        self.update_stats({'status'       : 'stream end'})
                         os.close(ofile)
                         ofile = None
                     stop_time = time.time()
                     elapsed = stop_time - start_time
                     gbytesps = total_bytes / 1e9 / elapsed
                     self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
-                    self.update_stats({'status' : 'finished'})
