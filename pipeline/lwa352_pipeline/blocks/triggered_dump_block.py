@@ -143,8 +143,8 @@ class TriggeredDump(Block):
 
         import struct
         with open(FILENAME, "rb") as fh:
-            hsize = struct.unpack('<I', fh.read(4))
-            hblock_size = struct.unpack('<I', fh.read(4))
+            hsize = struct.unpack('<I', fh.read(4))[0]
+            hblock_size = struct.unpack('<I', fh.read(4))[0]
             header = json.loads(fh.read(hsize))
             fh.seek(hblock_size)
             data = fh.read() # read to EOF
