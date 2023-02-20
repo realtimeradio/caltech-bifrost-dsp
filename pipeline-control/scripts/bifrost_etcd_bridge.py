@@ -94,38 +94,61 @@ def poll(base_dir):
     return time.time(), blockList
 
 def main(args):
-   ec = etcd.client(args.etcdhost)
-   last_poll = 0
-   while True:
-       try:
-           wait_time = max(0, last_poll + args.polltime - time.time())
-           time.sleep(wait_time)
-           last_poll, d = poll(BIFROST_STATS_BASE_DIR)
-           for k, v in d.items():
-               pipeline_id, block = k.split('-')
-               # If the block name ends in _<number> (which seem to be how
-               # bifrost handles multiple blocks of the same type, figure
-               # out the block id.
-               # Bifrost labels block 1: "Block", block 2: "Block_2" etc
-               # Seach for _<number> and if it exists, strip it off and
-               # use the value to calculate a block id.
-               x = re.search(r'_\d+$', block)
-               if x is not None:
-                   block_id = int(x.group()[1:]) - 1 # convert to 0-indexing
-                   block = block.rstrip(x.group())
-               else:
-                   block_id = 0
-               
-               ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}'.format(
-                          keybase=args.keybase,
-                          hostbase=args.hostbase,
-                          pipeline_id=pipeline_id,
-                          block=block,
-                          block_id=block_id,
-                      )
-               ec.put(ekey, json.dumps(v))
-           
-       except KeyboardInterrupt:
+    ec = etcd.client(args.etcdhost)
+    last_poll = 0
+    # historical bytes captured, keyed by PID
+    capture_times = {} # store the last time we captured bytes received
+    capture_bytes = {} # store the last number of bytes received captured
+    while True:
+        try:
+            wait_time = max(0, last_poll + args.polltime - time.time())
+            time.sleep(wait_time)
+            last_poll, d = poll(BIFROST_STATS_BASE_DIR)
+            for k, v in d.items():
+                pipeline_id, block = k.split('-')
+                # If the block name ends in _<number> (which seem to be how
+                # bifrost handles multiple blocks of the same type, figure
+                # out the block id.
+                # Bifrost labels block 1: "Block", block 2: "Block_2" etc
+                # Seach for _<number> and if it exists, strip it off and
+                # use the value to calculate a block id.
+                x = re.search(r'_\d+$', block)
+                if x is not None:
+                    block_id = int(x.group()[1:]) - 1 # convert to 0-indexing
+                    block = block.rstrip(x.group())
+                else:
+                    block_id = 0
+                # Special case to handle capture capture gbps
+                if block == "udp_verbs_capture":
+                    try:
+                        last_capture_bytes = capture_bytes.get(pipeline_id, 0)
+                        last_capture_time  = capture_times.get(pipeline_id, 0)
+                        this_capture_bytes = v['stats'].get('ngood_bytes', 0)
+                        this_capture_time  = last_poll
+                        gbps = (this_capture_bytes - last_capture_bytes) / (this_capture_time - last_capture_time) * 8 / 1e9
+                        capture_times[pipeline_id] = this_capture_time
+                        capture_bytes[pipeline_id] = this_capture_bytes
+                        v['gbps'] = gbps
+                    except:
+                        pass
+                # Special case to remove lots of baseline selection status traffic. TODO: how should we read this?
+                if block == "CorrSubsel":
+                    try:
+                        v['stats'].pop("baselines")
+                    except:
+                        pass
+                
+                ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}'.format(
+                           keybase=args.keybase,
+                           hostbase=args.hostbase,
+                           pipeline_id=pipeline_id,
+                           block=block,
+                           block_id=block_id,
+                       )
+                print(ekey)
+                ec.put(ekey, json.dumps(v))
+            
+        except KeyboardInterrupt:
            break
 
 
