@@ -346,6 +346,7 @@ class Lwa352PipelineControl():
         self.beamform_output = BeamformOutputControl(*args)
         self.beamform_vlbi_output = BeamformVlbiOutputControl(*args)
         if not self.check_connection():
+            self.corr_interface.close()
             raise RuntimeError("Connection failed. Consider restarting lwa-xeng-etcd.service daemon on host %s" % host)
 
     def start_pipeline(self):
