@@ -362,4 +362,9 @@ class EtcdCorrControl():
         else:
             return val
 
-
+    def close(self):
+        """
+        Close existing etcd connection(s) held by the instance.
+        """
+        if self.ec:
+            self.ec.close()
