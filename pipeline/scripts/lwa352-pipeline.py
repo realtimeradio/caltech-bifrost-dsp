@@ -137,7 +137,7 @@ def build_pipeline(args):
     CHAN_PER_PACKET = 96
     NPIPELINE = 32
     NSNAP = 11
-    NETGSIZE = 96*2
+    NETGSIZE = 96*4
     NET_NGULP = 5*2 # Number of Net block gulps collated in the first copy
     CORR_SUBSEL_NCHAN_SUM = 4 # Number of freq chans to average over while sub-selecting baselines
     GSIZE = 480
