@@ -19,6 +19,10 @@ __maintainer__ = "Jack Hickish"
 __email__      = "jack@realtimeradio.co.uk"
 __status__     = "Development"
 
+# Yukky hacks to crowbar in pipeline indices recorder expects
+NSERVER = 8
+NPIPELINE_PER_SERVER = 4
+
 class CoreList(list):
     """
     A dumb class to catch pop-ing too many cores and print an error
@@ -109,8 +113,12 @@ def build_pipeline(args):
         server_idx = int(server_idx, 10)
     except (AttributeError, ValueError):
         server_idx = 1 # HACK to allow testing on head node "adp"
-    # TODO: Is there a way to know how many pipelines to expect per server?
-    pipeline_idx = 4*(server_idx - 1) + args.pipelineid + 1
+    # TODO: Make this less hard-codedly grim.
+    # ID layout assumes that IDs count (for, eg., 4 pipelines on each of 8 servers):
+    # 1,2,16,17 <-- server 1
+    # 3,4,18,19 <-- server 2
+    # 15,16,31,32 <--server 8
+    pipeline_idx = (NPIPELINE_PER_SERVER//2)*(server_idx - 1) + NSERVER*(args.pipelineid//2) + (args.pipelineid%2) + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
     log.info("Pipeline index: %i", args.pipelineid)
