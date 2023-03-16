@@ -128,7 +128,8 @@ def build_pipeline(args):
     else:
         capture_ring = Ring(name="capture", space='system')
 
-    trigger_capture_ring = Ring(name="trigger_capture", space='cuda_host')
+    if args.bufgbytes > 0:
+        trigger_capture_ring = Ring(name="trigger_capture", space='cuda_host')
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
@@ -167,7 +168,7 @@ def build_pipeline(args):
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP, core=cores.pop(0),
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP*16, core=cores.pop(0),
                    skip_write=args.nodata, target_throughput=args.target_throughput,
                    nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
@@ -176,20 +177,26 @@ def build_pipeline(args):
     # but observational evidence is that this can be problematic for pipeline throughput.
     ant_to_input = ops[-1].ant_to_input
 
-    # capture_ring -> triggered buffer
-    ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE,
-                      nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
-                      core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
+    if args.bufgbytes > 0:
+        # capture_ring -> triggered buffer
+        ops.append(Copy(log, iring=capture_ring, oring=trigger_capture_ring, ntime_gulp=NETGSIZE,
+                          nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
+                          core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
-    ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GPU_NGULP*GSIZE,
-                      nbyte_per_time=nchan*npol*nstand,
-                      core=cores.pop(0), guarantee=True,
-                      etcd_client=etcd_client))
+        ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GPU_NGULP*GSIZE,
+                          nbyte_per_time=nchan*npol*nstand,
+                          core=cores.pop(0), guarantee=True,
+                          etcd_client=etcd_client))
 
     if not args.nogpu:
-        ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GPU_NGULP*GSIZE,
-                          nbyte_per_time=nchan*npol*nstand,
-                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        if args.bufgbytes > 0:
+            ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GPU_NGULP*GSIZE,
+                              nbyte_per_time=nchan*npol*nstand,
+                              core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        else:
+            ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=NETGSIZE,
+                              nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
+                              core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,

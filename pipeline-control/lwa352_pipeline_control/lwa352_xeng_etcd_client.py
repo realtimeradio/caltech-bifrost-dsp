@@ -14,16 +14,16 @@ import subprocess
 PIPELINE_COMMAND = "lwa352-pipeline.py" # used for 'killall'
 # DEFAULT PIPELINE SETTINGS
 NCHAN = 96
-IFACE = ['enp24s0', 'enp24s0', 'enp216s0', 'enp216s0']
-RXPORT = [10000, 20000, 10000, 20000]
-GPU = [0, 0, 1, 1]
-BUFGBYTES = 16
+IFACE = ['enp24s0', 'enp216s0', 'enp24s0', 'enp216s0']
+RXPORT = [10000, 10000, 20000, 20000]
+GPU = [0, 1, 0, 1]
+BUFGBYTES = [0, 0, 16, 16] # Only second pipeline per NUMA-node gets a buffer
 ETCDHOST = 'etcdv3service.sas.pvt'
 CORES = [[1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
-       [6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9],
-       [11,12,13,14,14,14,14,14,14,14,14,14,14,14,14],
-       [16,17,18,19,19,19,19,19,19,19,19,19,19,19,19]]
-CPUMASK = [0x1e, 0x3c0, 0x7800, 0xf0000]
+         [11,12,13,14,14,14,14,14,14,14,14,14,14,14,14],
+         [6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9],
+         [16,17,18,19,19,19,19,19,19,19,19,19,19,19,19]]
+CPUMASK = [0x1e, 0x7800, 0x3c0, 0xf0000]
 LOGFILE_BASE = os.path.expanduser("~/xpipeline")
 PIDFILE_BASE = os.path.expanduser("~/xpipeline")
 
@@ -348,16 +348,23 @@ class XengineController():
           etcdhost=ETCDHOST,
           interface=None,
           rxport=None,
-          bufgbytes=BUFGBYTES,
+          bufgbytes=None,
           cores=None,
           logfile=None,
         ):
 
-        cpumask = cpumask or CPUMASK[xid]
-        gpudev = gpudev or GPU[xid]
-        interface = interface or IFACE[xid]
-        rxport = rxport or RXPORT[xid]
-        cores = cores or CORES[xid]
+        if cpumask is None:
+            cpumask = CPUMASK[xid]
+        if gpudev is None:
+            gpudev = GPU[xid]
+        if interface is None:
+            interface = IFACE[xid]
+        if rxport is None:
+            rxport = RXPORT[xid]
+        if cores is None:
+            cores = CORES[xid]
+        if bufgbytes is None:
+            bufgbytes = BUFGBYTES[xid]
         rxip = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['addr']
         logfile = logfile or "%s.%s.%d.log" % (LOGFILE_BASE, self.hostname, xid)
         cmd = [
