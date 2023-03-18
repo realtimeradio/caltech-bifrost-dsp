@@ -118,7 +118,7 @@ def build_pipeline(args):
     # 1,2,16,17 <-- server 1
     # 3,4,18,19 <-- server 2
     # 15,16,31,32 <--server 8
-    pipeline_idx = (NPIPELINE_PER_SERVER//2)*(server_idx - 1) + NSERVER*(args.pipelineid//2) + (args.pipelineid%2) + 1
+    pipeline_idx = (NPIPELINE_PER_SERVER//2)*(server_idx - 1) + (NPIPELINE_PER_SERVER//2)*NSERVER*(args.pipelineid//2) + (args.pipelineid%2) + 1
     log.info("Hostname:     %s", hostname)
     log.info("Server index: %i", server_idx)
     log.info("Pipeline index: %i", args.pipelineid)
