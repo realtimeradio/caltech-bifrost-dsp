@@ -52,6 +52,8 @@ class Capture(object):
         | ``system_nchan`` | int        |              | The total number of channels in the system (i.e., the number |
         |                  |            |              | of channels across all pipelines)                            |
         +------------------+------------+--------------+--------------------------------------------------------------+
+        | ``pipeline_id``  | int        |              | The pipeline ID passed to this block's constructor           |
+        +------------------+------------+--------------+--------------------------------------------------------------+
         | ``fs_hz``        | double     | Hz           | Sampling frequency of ADCs                                   |
         +------------------+------------+--------------+--------------------------------------------------------------+
         | ``sfreq``        | double     | Hz           | Center frequency of first channel in the sequence            |
@@ -132,6 +134,10 @@ class Capture(object):
     :param src0: The first source to transmit to this block.
     :type src0: int
 
+    :param pipeline_id: The ID of this pipeline (usually within a physical server)
+        to be inserted as a header entry.
+    :type pipeline_id: int
+
     :param system_nchan: The total number of channels in the complete,
         multi-pipeline system. This is only used to set sequence headers
         for downstream packet header generators which require this information.
@@ -157,7 +163,8 @@ class Capture(object):
     """
 
     def __init__(self, log, fs_hz=196000000, chan_bw_hz=23925.78125,
-                     input_to_ant=None, nstand=352, npol=2, system_nchan=182*16,
+                     input_to_ant=None, nstand=352, npol=2, system_nchan=192*16,
+                     pipeline_id=0,
                      *args, **kwargs):
         self.log    = log
         self.fs_hz  = fs_hz # sampling frequency in Hz
@@ -169,6 +176,7 @@ class Capture(object):
         self.nstand = nstand
         self.npol = npol
         self.system_nchan = system_nchan
+        self.pipeline_id = pipeline_id
         if 'ibverbs' in self.kwargs:
             if self.kwargs['ibverbs']:
                 self.log.info("Using IBVERBs")
@@ -263,6 +271,7 @@ starts a new sequence.
                'sfreq':    chan0*self.chan_bw_hz,
                'bw_hz':    nchan*self.chan_bw_hz,
                'nstand':   self.nstand,
+               'pipeline_id': self.pipeline_id, # From base class
                #'input_to_ant': self.input_to_ant.tolist(),
                #'ant_to_input': self.ant_to_input.tolist(),
                #'stand0':   src0*16, # TODO: Pass src0 to the callback too(?)

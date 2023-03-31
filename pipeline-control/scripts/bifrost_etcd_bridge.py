@@ -45,17 +45,22 @@ def poll(base_dir):
         if cmd == '':
             continue
 
+        # Get a pipeline ID from the first block willing to provide one
+        pipeline_id = None
+        for block in contents.keys():
+            try:
+                pipeline_id = contents[block]['sequence0']['pipeline_id']
+            except KeyError:
+                continue
+        if pipeline_id is None:
+            pipeline_id = pn
+
         for block in contents.keys():
             try:
                 log = contents[block]['bind']
                 cr = log['core0']
             except KeyError:
                 continue
-
-            try:
-                pipeline_id = contents['block']['id']
-            except KeyError:
-                pipeline_id = pn
 
             try:
                 log = contents[block]['perf']

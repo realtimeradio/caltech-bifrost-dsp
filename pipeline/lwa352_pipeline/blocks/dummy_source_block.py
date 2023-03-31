@@ -49,6 +49,9 @@ class DummySource(object):
         |                  |            |               |                 | system (i.e., the number of         |
         |                  |            |               |                 | channels across all pipelines)      |
         +------------------+------------+---------------+-----------------+-------------------------------------+
+        | ``pipeline_id``  | int        |               | ``pipeline_id`` | The pipeline ID passed to this      |
+        |                  |            |               |                 | blocks constructor                  |
+        +------------------+------------+---------------+-----------------+-------------------------------------+
         | ``sfreq``        | double     | Hz            | 0.0             | Center frequency of first channel   |
         |                  |            |               |                 | in the sequence                     |
         +------------------+------------+---------------+-----------------+-------------------------------------+
@@ -116,6 +119,10 @@ class DummySource(object):
        samples. When the end of the file is reached, it is repeated.
     :type test_file: str
 
+    :param pipeline_id: The ID of this pipeline (usually within a physical server)
+        to be inserted as a header entry.
+    :type pipeline_id: int
+
     :param target_throughput: The target Gbits/s at which this block should output data.
        Throttling will be used to target this rate if necessary.
     :type target_throughput: float
@@ -130,10 +137,11 @@ class DummySource(object):
     """
     def __init__(self, log, oring, ntime_gulp=2500,
                  core=-1, nchan=192, nstand=352, npol=2, skip_write=False, 
-                 target_throughput=22.0, testfile=None, header={}):
+                 target_throughput=22.0, testfile=None, pipeline_id=0, header={}):
         self.log = log
         self.oring = oring
         self.ntime_gulp = ntime_gulp
+        self.pipeline_id = pipeline_id
         self.core = core
         self.nchan = nchan
         self.npol = npol
@@ -234,6 +242,7 @@ class DummySource(object):
         hdr['input_to_ant'] = self.input_to_ant.tolist()
         hdr['ant_to_input'] = self.ant_to_input.tolist()
         hdr['sync_time'] = int(time.time())
+        hdr['pipeline_id'] = self.pipeline_id
         time_tag = 0
         REPORT_PERIOD = 100
         bytes_per_report = REPORT_PERIOD * self.gulp_size

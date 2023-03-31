@@ -173,11 +173,13 @@ def build_pipeline(args):
                            nsrc=NSNAP*nfreqblocks, src0=0, max_payload_size=packet_buf_size,
                            buffer_ntime=NETGSIZE, slot_ntime=NET_NGULP*NETGSIZE*16,
                            core=cores.pop(0), system_nchan=system_nchan,
+                           pipeline_id = args.pipelineid,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
     else:
         print('Using dummy source...')
         ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP*16, core=cores.pop(0),
                    skip_write=args.nodata, target_throughput=args.target_throughput,
+                   pipeline_id = args.pipelineid,
                    nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
     # Get the antenna to input map as understood by the data source
