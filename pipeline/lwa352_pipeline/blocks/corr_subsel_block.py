@@ -318,7 +318,7 @@ class CorrSubsel(Block):
                         oseq.end()
                         self.log.info("Updating baseline subselection indices")
                         self.update_command_vals()
-                        self.udpate_subsel(self.command_vals['baselines'])
+                        self.update_subsel(self.command_vals['baselines'])
                         copy_array(self._subsel, self._subsel_next)
                         copy_array(self._conj, self._conj_next)
                         ohdr['baselines'] = self.command_vals['baselines']
