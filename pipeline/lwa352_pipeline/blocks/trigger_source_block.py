@@ -9,7 +9,7 @@ import ujson as json
 import threading
 import numpy as np
 
-#NTEST_BLOCKS = 2
+
 
 class DummySource(object):
     """
@@ -241,24 +241,14 @@ class DummySource(object):
         seekloc = self.hblock_size + self.gulp_size * t
         remaining_bytes = self.testfile_nbytes - seekloc
 
-
         if remaining_bytes < nbytes:
+            self.log.error("Not enough data left in the file for a full gulp")
+            return None
 
-            self.testfile.seek(seekloc)
-            rawdata = self.testfile.read(remaining_bytes)
-            if len(rawdata) != remaining_bytes:
-                self.log.error("Failed to read remaining bytes")
-                return np.zeros([self.ntime_gulp, self.nchan, self.nstand, self.npol])
+        self.testfile.seek(seekloc)
+        rawdata = self.testfile.read(nbytes)
 
-            nt = len(rawdata) // (nchan * nstand * npol)
-            return np.frombuffer(rawdata, dtype=np.uint8).reshape([nt, nchan, nstand, npol])
-
-        else:
-            self.testfile.seek(seekloc)
-            rawdata = self.testfile.read(nbytes)
-
-            return np.frombuffer(rawdata, dtype=np.uint8).reshape([self.ntime_gulp, self.nchan, self.nstand, self.npol])
-
+        return np.frombuffer(rawdata, dtype=np.uint8).reshape([self.ntime_gulp, self.nchan, self.nstand, self.npol])
 
     def main(self):
         cpu_affinity.set_core(self.core)
@@ -286,7 +276,7 @@ class DummySource(object):
                 while not self.shutdown_event.is_set():
                     # Check if end of test file is reached
                     remaining_bytes = self.testfile_nbytes - (self.hblock_size + self.gulp_size * time_tag)
-                    if remaining_bytes <= 0:
+                    if remaining_bytes < self.gulp_size:
                         break
 
                     with oseq.reserve(self.gulp_size) as ospan:
