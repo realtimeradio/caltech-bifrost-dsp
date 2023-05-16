@@ -9,6 +9,65 @@ import ujson as json
 import threading
 import numpy as np
 
+from bifrost.pipeline import SourceBlock
+
+class TrigBufSourceBlock(SourceBlock):
+    def __init__(self, sourcenames, gulp_nframe=1, frame_size=1, *args, **kwargs):
+        self.frame_size = frame_size
+        super(TrigBufSourceBlock, self).__init__(sourcenames,
+                                                 gulp_nframe=gulp_nframe,
+                                                 *args, **kwargs)
+    def create_reader(self, sourcename):
+        return open(sourcename, 'rb')
+
+    def _read_header(self, reader):
+        hsize = struct.unpack('<I', reader.read(4))[0]
+        hblock_size = struct.unpack('<I', reader.read(4))[0]
+        header = json.loads(reader.read(hsize))
+        reader.seek(hblock_size) # Go to where data starts
+        return header
+
+    def on_sequence(self, reader, sourcename):
+        previous_pos = reader.tell()
+        hdr = self._read_header(reader)
+        tstep_s = hdr['nchan'] / hdr['bw_hz']
+        fstep_hz = 1. / tstep_s
+        # Add some axis labels to help downstream bifrost magic
+        tstart_unix = hdr['seq'] * tstep_s
+        hdr['_tensor'] = {
+                'dtype':  'ci' + str(hdr['nbit']),
+                'shape':  [-1, self.frame_size, hdr['nchan'], hdr['nstand'], hdr['npol']],
+                # Note: 'time' (aka block) is the frame axis
+                'labels': ['time', 'fine_time', 'freq', 'stand', 'pol'],
+                'scales': [(tstart_unix, tstep_s * self.frame_size),
+                           (0, tstep_s),
+                           (hdr['sfreq'], fstep_hz),
+                           None,
+                           None],
+                'units':  ['s', 's', 'Hz', None, None],
+                'gulp_nframe': self.gulp_nframe,
+            }
+        # Note: This gives 32 bits to the fractional part of a second,
+        #         corresponding to ~0.233ns resolution. The whole part
+        #         gets at least 31 bits, which will overflow in 2038.
+        time_tag  = int(round(tstart_unix * 2**32))
+        hdr['time_tag'] = time_tag
+        print(hdr)
+        return [hdr]
+
+    def on_data(self, reader, ospans):
+        ospan = ospans[0]
+        odata = ospan.data
+        nbyte = reader.readinto(odata)
+        print("read %d bytes " % nbyte)
+        # Ignore the last chunk of data
+        if nbyte < (ospan.frame_nbyte * self.gulp_nframe):
+            return [0]
+        if nbyte % ospan.frame_nbyte:
+            raise IOError("Block data is truncated")
+        nframe = nbyte // ospan.frame_nbyte
+        return [nframe]
+
 
 
 class TriggerReplay(object):
@@ -83,25 +142,25 @@ class TriggerReplay(object):
 
         # make an array ninputs-elements long with [station, pol] IDs.
         # e.g. if input_to_ant[12] = [27, 1], then the 13th input is stand 27, pol 1
+        self.log.info("Making input -> antenna map")
         self.input_to_ant = np.zeros([self.ninputs, 2], dtype=np.int32)
         for s in range(self.nstand):
             for p in range(self.npol):
                 self.input_to_ant[self.npol*s + p] = [s, p]
 
+        self.log.info("Making antenna -> input map")
         self.ant_to_input = np.zeros([self.nstand, self.npol], dtype=np.int32)
         for i, inp in enumerate(self.input_to_ant):
             stand = inp[0]
             pol = inp[1]
             self.ant_to_input[stand, pol] = i
 
+        self.log.info("Initializing data block")
         if skip_write:
             self.test_data = BFArray(shape=[ntime_gulp, nchan, nstand, npol], dtype='i8', space='system')
         else:
             self.test_data = BFArray(np.zeros([ntime_gulp, nchan, nstand, npol]),
                                 dtype='u8', space='system')
-            for i in range(nstand):
-                self.test_data[:,:,:,i,:] = i%8
-
         self.shutdown_event = threading.Event()
 
 
@@ -142,7 +201,7 @@ class TriggerReplay(object):
         hdr['ant_to_input'] = self.ant_to_input.tolist()
 
         time_tag = 0
-        REPORT_PERIOD = 100
+        REPORT_PERIOD = 10
         bytes_per_report = REPORT_PERIOD * self.gulp_size
         acquire_time = 0 # this block doesn't have an input ring
         gbps = 0
@@ -156,6 +215,7 @@ class TriggerReplay(object):
                     # Check if end of test file is reached
                     remaining_bytes = self.testfile_nbytes - (self.hblock_size + self.gulp_size * time_tag)
                     if remaining_bytes < self.gulp_size:
+                        self.log.info("End of file reached!")
                         break
 
                     with oseq.reserve(self.gulp_size) as ospan:
@@ -164,7 +224,7 @@ class TriggerReplay(object):
                         prev_time = curr_time
                         if not self.skip_write:
                             if self.testfile:
-                                self.test_data[time_tag] = self.get_testfile_gulp(time_tag)
+                                self.test_data[...] = self.get_testfile_gulp(time_tag)
                             odata = ospan.data_view(shape=self.test_data.shape[:], dtype=self.test_data.dtype)
                             odata[...] = self.test_data[time_tag]
                         time_tag += 1
@@ -185,4 +245,5 @@ class TriggerReplay(object):
                         extra_delay = target_time - dt + extra_delay
                         tick = tock
         if self.testfile:
+            self.log.info("Closing file")
             self.testfile.close()
