@@ -221,7 +221,7 @@ class EtcdCorrControl():
 
         """
         key = self._get_key(host, pipeline, block, inst_id)
-        return self.keyroot_mon + key + '/keyname'
+        return self.keyroot_mon + key + '/' + keyname
 
     def send_command(self, host, pipeline=None, block=None, inst_id=None,
             cmd='update', timeout=10.0, **kwargs):

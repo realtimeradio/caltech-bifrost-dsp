@@ -150,15 +150,14 @@ def main(args):
                 if block == "CorrSubsel":
                     baselines = v['stats'].get('baselines', None)
                     if baselines is None:
-                        continue
+                        pass
                     else:
                         v['stats'].pop('baselines')
                         baselines_cache = baseline_sel_cache.get(ekey, None)
-                        if baselines_cache is None:
+                        # Update cache if this is the first read, or the value has changed
+                        if baselines_cache != baselines:
                             baseline_sel_cache[ekey] = baselines
                             ec.put(ekey + '/baselines', json.dumps(baselines))
-                        elif baselines_cache == baselines:
-                            continue
                 ec.put(ekey, json.dumps(v))
             
         except KeyboardInterrupt:
