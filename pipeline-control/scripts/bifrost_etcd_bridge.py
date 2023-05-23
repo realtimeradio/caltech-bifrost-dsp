@@ -157,7 +157,7 @@ def main(args):
                         # Update cache if this is the first read, or the value has changed
                         if baselines_cache != baselines:
                             baseline_sel_cache[ekey] = baselines
-                            ec.put(ekey + '/baselines', json.dumps(baselines))
+                            ec.put(ekey + '/baselines', baselines)
                 ec.put(ekey, json.dumps(v))
             
         except KeyboardInterrupt:
