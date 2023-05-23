@@ -35,9 +35,4 @@ class CorrSubselControl(BlockControl):
         Attempt to retrieve the currently loaded baseline selection array.
         This requires data to be flowing through the pipeline.
         """
-        stats = self.get_bifrost_status()['stats']
-        if not 'baselines' in stats:
-            return None
-        else:
-            baselines = json.loads(stats['baselines'])
-            return np.array(baselines, dtype=int)
+        return self.get_special_val('baselines')

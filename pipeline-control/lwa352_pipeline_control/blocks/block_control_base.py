@@ -82,6 +82,24 @@ class BlockControl():
                    user_only=user_only,
                )
 
+    def get_special_val(self, keyname):
+        """
+        Get the value associated with a particular keyname
+        for this block.
+
+        :param keyname: Name of key to be read
+        :type keyname: str
+
+        :return: Value stored under provided key
+        """
+        return self._corr_interface.read_special(
+                   self._host,
+                   self._pipeline_id,
+                   self._name,
+                   self._instance_id,
+                   keyname,
+               )
+
     def update_is_pending(self):
         """
         Return True if new parameters are waiting to be loaded. Else, False.
