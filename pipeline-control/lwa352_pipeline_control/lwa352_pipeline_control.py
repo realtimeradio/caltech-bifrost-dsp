@@ -83,7 +83,7 @@ class Lwa352CorrelatorControl():
                                                         )]
         self.npipeline = len(self.pipelines)
        
-    def start_pipelines(self, wait=True, timeout=60):
+    def start_pipelines(self, wait=True, timeout=60*3):
         """
         Start all pipelines, using the default configuration.
 
