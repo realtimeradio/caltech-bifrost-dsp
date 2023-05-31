@@ -76,11 +76,15 @@ class Lwa352CorrelatorControl():
         self.pipelines = []
         for host in hosts:
             for pipeline_id in range(npipeline_per_host):
-                self.pipelines += [Lwa352PipelineControl(host=host,
-                                                            pipeline_id=pipeline_id,
-                                                            etcdhost=etcdhost,
-                                                            log=log,
-                                                        )]
+                try:
+                    pl = Lwa352PipelineControl(host=host,
+                                                pipeline_id=pipeline_id,
+                                                etcdhost=etcdhost,
+                                                log=log)
+                except RuntimeError:
+                    self.log.error('%s pipeline %d was unresponsive and will be ignored' % (host, pipeline_id))
+                    continue
+                self.pipelines += [pl]
         self.npipeline = len(self.pipelines)
        
     def start_pipelines(self, wait=True, timeout=60*3):
