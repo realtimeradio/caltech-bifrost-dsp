@@ -72,6 +72,13 @@ class Lwa352CorrelatorControl():
         self.npipeline_per_host = npipeline_per_host
         self.log = log
         self.etcdhost = etcdhost
+        self.corr_interface = EtcdCorrControl(
+                                  etcdhost=etcdhost,
+                                  keyroot_cmd='/cmd/corr/x',
+                                  keyroot_mon='/mon/corr/x',
+                                  keyroot_resp='/resp/corr/x',
+                                  log=log,
+                              )
 
         self.pipelines = []
         for host in hosts:
@@ -79,7 +86,7 @@ class Lwa352CorrelatorControl():
                 try:
                     pl = Lwa352PipelineControl(host=host,
                                                 pipeline_id=pipeline_id,
-                                                etcdhost=etcdhost,
+                                                etcdhost=self.corr_interface,
                                                 log=log)
                 except RuntimeError:
                     self.log.error('%s pipeline %d was unresponsive and will be ignored' % (host, pipeline_id))
@@ -299,8 +306,8 @@ class Lwa352PipelineControl():
     :type pipeline_id: int
     
     :param etcdhost: The hostname of the system running the correlator's
-        etcd server
-    :type etcdhost: string
+        etcd server, or, a pre-instantiated EtcdCorrControl instance
+    :type etcdhost: string or EtcdCorrControl
 
     :param log: The logger to which this class should emit log messages.
         The default behaviour is to log to stdout
@@ -329,13 +336,16 @@ class Lwa352PipelineControl():
         self.host = host
         self.pipeline_id = pipeline_id
         self.log = log
-        self.corr_interface = EtcdCorrControl(
-                                  etcdhost=etcdhost,
-                                  keyroot_cmd='/cmd/corr/x',
-                                  keyroot_mon='/mon/corr/x',
-                                  keyroot_resp='/resp/corr/x',
-                                  log=log,
-                              )
+        if isinstance(etcdhost, EtcdCorrControl):
+            self.corr_interface = etcdhost
+        else:
+            self.corr_interface = EtcdCorrControl(
+                                      etcdhost=etcdhost,
+                                      keyroot_cmd='/cmd/corr/x',
+                                      keyroot_mon='/mon/corr/x',
+                                      keyroot_resp='/resp/corr/x',
+                                      log=log,
+                                  )
 
         args = [self.log, self.corr_interface, self.host, self.pipeline_id]
 
