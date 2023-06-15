@@ -9,7 +9,7 @@ CONDA_ENV_GPU=casa
 # Install in this conda environment everywhere else
 CONDA_ENV_DEFAULT=deployment
 # Install etcd services in this user's /home/$SERVICE_USER/.config/systemd/user
-SERVICE_USER=pipeline
+SERVICE_USER=ubuntu
 
 # setup
 NAME="caltech-bifrost-dsp"
@@ -43,22 +43,33 @@ if [[ ${IS_GPU} = yes ]]; then
     # Install full pipeline. xgpu / bifrost / etc
     # For now, assume xgpu is installed
     # bifrost--
-    cd ${REPO_TOP}
+    cd ${REPO_TOP}/bifrost
     conda run -n ${CONDA_ENV} make >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} make install >> $LOG 2>>$LOG
     # LWA352 pipeline
-    cd ${PIPELINE_SUBDIR}
+    cd ${REPO_TOP}/${PIPELINE_SUBDIR}
     conda run -n ${CONDA_ENV} which python >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} git describe >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} pip install -r requirements.txt >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} python setup.py install >> $LOG 2>>$LOG
-    # TODO: etcd services
+    # ETCD services
+    SERVICE_DIR=/home/${SERVICE_USER}/.config/systemd/user
+    mkdir -p ${SERVICE_DIR} >> $LOG 2>>$LOG
+    cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    # Stop pipelines before restarting services or they hang
+    lwa352-stop-pipeline.sh >> $LOG 2>>$LOG
+    systemctl --user enable bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    systemctl --user stop bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    systemctl --user start bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    systemctl --user enable lwa-xeng-etcd.service >> $LOG 2>>$LOG
+    systemctl --user stop lwa-xeng-etcd.service >> $LOG 2>>$LOG
+    systemctl --user start lwa-xeng-etcd.service >> $LOG 2>>$LOG
 fi
 
 echo "Installing control software" >> $LOG
-cd ${REPO_TOP}
-cd ${CONTROL_SUBDIR}
+cd ${REPO_TOP}/${CONTROL_SUBDIR}
 conda run -n ${CONDA_ENV} which python >> $LOG 2>>$LOG
 conda run -n ${CONDA_ENV} git describe >> $LOG 2>>$LOG
 conda run -n ${CONDA_ENV} pip install -r requirements.txt >> $LOG 2>>$LOG
-conda run -n ${CONDA_ENV} python setup.py install >> $LOG 2>>$LOG
+conda run -n ${CONDA_ENV} pip install . >> $LOG 2>>$LOG

@@ -12,13 +12,13 @@ Description=Bifrost <-> etcd bridge service
 Type=simple
 Restart=always
 RestartSec=60
-User=ubuntu
-Group=ubuntu
+#User=ubuntu
+#Group=ubuntu
 WorkingDirectory=/home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts
 EnvironmentFile=/home/ubuntu/condaEnv
 PIDFile=/var/run/bifrost_etcd_bridge.pid
-ExecPath=/home/ubuntu/anaconda3/envs/casa/bin /home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts $PATH
-ExecStart=/usr/bin/taskset 0x1 /home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts/bifrost_etcd_bridge.py --etcdhost etcdv3service.sas.pvt -t 2
+#ExecPath=/home/ubuntu/anaconda3/envs/casa/bin /home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts $PATH
+ExecStart=/usr/bin/taskset 0x1 /home/ubuntu/anaconda3/envs/casa/bin/bifrost_etcd_bridge.py --etcdhost etcdv3service.sas.pvt -t 2
 
 [Install]
 WantedBy=multi-user.target
