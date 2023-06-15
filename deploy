@@ -51,7 +51,7 @@ if [[ ${IS_GPU} = yes ]]; then
     conda run -n ${CONDA_ENV} which python >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} git describe >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} pip install -r requirements.txt >> $LOG 2>>$LOG
-    conda run -n ${CONDA_ENV} python setup.py install >> $LOG 2>>$LOG
+    conda run -n ${CONDA_ENV} pip install . >> $LOG 2>>$LOG
     # ETCD services
     SERVICE_DIR=/home/${SERVICE_USER}/.config/systemd/user
     mkdir -p ${SERVICE_DIR} >> $LOG 2>>$LOG
