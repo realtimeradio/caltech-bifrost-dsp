@@ -93,6 +93,11 @@ class Lwa352CorrelatorControl():
                     continue
                 self.pipelines += [pl]
         self.npipeline = len(self.pipelines)
+
+    def __del__(self):
+        for pl in self.pipelines:
+            del(pl)
+        self.corr_interface.close()
        
     def start_pipelines(self, wait=True, timeout=60*3):
         """
@@ -336,8 +341,10 @@ class Lwa352PipelineControl():
         self.host = host
         self.pipeline_id = pipeline_id
         self.log = log
+        self._corr_interface_from_parent = False
         if isinstance(etcdhost, EtcdCorrControl):
             self.corr_interface = etcdhost
+            self._corr_interface_from_parent = True
         else:
             self.corr_interface = EtcdCorrControl(
                                       etcdhost=etcdhost,
@@ -360,8 +367,13 @@ class Lwa352PipelineControl():
         self.beamform_output = BeamformOutputControl(*args)
         self.beamform_vlbi_output = BeamformVlbiOutputControl(*args)
         if not self.check_connection():
-            self.corr_interface.close()
+            if not self._corr_interface_from_parent:
+                self.corr_interface.close()
             raise RuntimeError("Connection failed. Consider restarting lwa-xeng-etcd.service daemon on host %s" % host)
+
+    def __del__(self):
+        if not self._corr_interface_from_parent:
+            self.corr_interface.close()
 
     def start_pipeline(self):
         """

@@ -92,6 +92,9 @@ class EtcdCorrControl():
                 log.error('Failed to connect to ETCD host %s' % self.etcdhost)
                 raise
 
+    def __del__(self):
+        self.ec.close()
+
     def _get_cmd_key(self, host, pipeline, block, inst_id):
         """
         Generate a block's command key from the block instance specification.
