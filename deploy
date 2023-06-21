@@ -54,9 +54,9 @@ if [[ ${IS_GPU} = yes ]]; then
     conda run -n ${CONDA_ENV} pip install . >> $LOG 2>>$LOG
     # ETCD services
     SERVICE_DIR=/etc/systemd/system/
-    mkdir -p ${SERVICE_DIR} >> $LOG 2>>$LOG
-    cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
-    cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    #mkdir -p ${SERVICE_DIR} >> $LOG 2>>$LOG
+    sudo cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    sudo cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
     sudo systemctl daemon-reload
     # Stop pipelines before restarting services or they hang
     conda run -n ${CONDA_ENV} lwa352-stop-pipeline.sh >> $LOG 2>>$LOG
