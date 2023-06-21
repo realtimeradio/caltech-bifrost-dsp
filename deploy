@@ -53,19 +53,18 @@ if [[ ${IS_GPU} = yes ]]; then
     conda run -n ${CONDA_ENV} pip install -r requirements.txt >> $LOG 2>>$LOG
     conda run -n ${CONDA_ENV} pip install . >> $LOG 2>>$LOG
     # ETCD services
-    SERVICE_DIR=/home/${SERVICE_USER}/.config/systemd/user
-    mkdir -p ${SERVICE_DIR} >> $LOG 2>>$LOG
-    cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
-    cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
-    systemctl --user daemon-reload
+    SERVICE_DIR=/etc/systemd/system/
+    sudo cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    sudo cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
+    sudo systemctl daemon-reload
     # Stop pipelines before restarting services or they hang
     conda run -n ${CONDA_ENV} lwa352-stop-pipeline.sh >> $LOG 2>>$LOG
-    systemctl --user enable bifrost_etcd_bridge.service >> $LOG 2>>$LOG
-    systemctl --user stop bifrost_etcd_bridge.service >> $LOG 2>>$LOG
-    systemctl --user start bifrost_etcd_bridge.service >> $LOG 2>>$LOG
-    systemctl --user enable lwa-xeng-etcd.service >> $LOG 2>>$LOG
-    systemctl --user stop lwa-xeng-etcd.service >> $LOG 2>>$LOG
-    systemctl --user start lwa-xeng-etcd.service >> $LOG 2>>$LOG
+    sudo systemctl enable bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    sudo systemctl stop bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    sudo systemctl start bifrost_etcd_bridge.service >> $LOG 2>>$LOG
+    sudo systemctl enable lwa-xeng-etcd.service >> $LOG 2>>$LOG
+    sudo systemctl stop lwa-xeng-etcd.service >> $LOG 2>>$LOG
+    sudo systemctl start lwa-xeng-etcd.service >> $LOG 2>>$LOG
 fi
 
 echo "Installing control software" >> $LOG
