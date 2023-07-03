@@ -18,7 +18,7 @@ linalg = LinAlg()
 
 NPOL = 2
 class BfOfflineBlock(TransformBlock):
-    def __init__(self, iring, nbeam, ntimestep, ra_array, dec_array, station=ovro,frame_size=None, *args, **kwargs):
+    def __init__(self, iring, nbeam, ntimestep, ra_array, dec_array, station=ovro,frame_size=1, *args, **kwargs):
         super(BfOfflineBlock, self).__init__(iring, *args, **kwargs)
         self.nbeam = nbeam # Number of beams to form
         self.ntimestep = ntimestep # Number of time samples between coefficient updates
@@ -26,6 +26,9 @@ class BfOfflineBlock(TransformBlock):
         self.frame_size = frame_size  # Frame size
         self.ra_array = ra_array  # Right Ascension array
         self.dec_array = dec_array  # Declination array
+
+        # Initially set uniform antenna weighting for a natural beam shape
+        self.set_beam_weighting(lambda x: 1.0)
 
     def set_beam_target(self, ra, dec, observation_time, verbose=True):
         """
@@ -88,17 +91,15 @@ class BfOfflineBlock(TransformBlock):
             delays = np.repeat(delays, NPOL)
             delays = delays.max() - delays
 
-            # Compute antenna weights
-            antenna_weights = np.repeat(self._weighting, NPOL)
 
-            # Multiply delays by antenna weights
-            weighted_delays = antenna_weights * delays
+
+            weighted_delays = self._weighting * delays
 
             weights = np.exp(2j * np.pi * self.frequencies[:, None] * weighted_delays * 1e-9)
             weights_array.append(weights)
 
 
-        return np.array(weights_array)  # Convert list of weights into an array
+        return np.array(weights_array)
 
     def on_sequence(self, iseq):
         """
@@ -108,7 +109,6 @@ class BfOfflineBlock(TransformBlock):
         # Get the observation time from the tensor header
         self.tstart_unix, self.tstep_s = iseq.header['_tensor']['scales'][0]
         self.gulp_nframe = iseq.header['_tensor']['gulp_nframe']
-
         sfreq, fstep_hz = iseq.header['_tensor']['scales'][2]
         self.frequencies = sfreq + np.arange(iseq.header['nchan']) * fstep_hz
 
@@ -153,15 +153,17 @@ class BfOfflineBlock(TransformBlock):
                 observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe
                 self.coeffs = self.compute_weights(observation_time)
 
-                # Add an extra dimension for "fine_time" before transposing
-                self.coeffs = np.expand_dims(self.coeffs, axis=1)
+                # Reshape to (nbeam, nchan, nstand, npol)
+                self.coeffs = self.coeffs.reshape(self.nbeam, self.nchan, self.nstand, self.npol)
+                # Swap nchan and nbeam
+                self.coeffs = self.coeffs.transpose(1, 0, 2, 3)
 
-                # Transpose coefficients to match the dimensions for multiplication
-                self.coeffs = np.transpose(self.coeffs, (2, 1, 0, 3, 4))  # [nstand, fine_time, nchan, nbeam, npol]
+            for j in range(self.frame_size):
+                # Perform element-wise multiplication and then sum over the nstand axis
+                odata[i, j] = np.sum(self.coeffs * idata[i, j][:, np.newaxis, :, :], axis=2)
 
 
-            # Perform beamforming operation for the current frame
-            linalg(1, idata[i], self.coeffs, 0, odata[i])
+            ##linalg(1, idata[i], self.coeffs, 0, odata[i])
 
             self.nframe_read += 1
 
