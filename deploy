@@ -58,6 +58,12 @@ if [[ ${IS_GPU} = yes ]]; then
     sudo cp ${REPO_TOP}/systemd/bifrost_etcd_bridge.service ${SERVICE_DIR} >> $LOG 2>>$LOG
     sudo cp ${REPO_TOP}/systemd/lwa-xeng-etcd.service ${SERVICE_DIR} >> $LOG 2>>$LOG
     sudo systemctl daemon-reload
+    # logrotate config.
+    sudo cp ${REPO_TOP}/logrotate/xengine.conf /etc/logrotate.d/ >> $LOG 2>>$LOG
+    sudo systemctl restart logrotate.service >> $LOG 2>>$LOG
+    # rsyslog config.
+    sudo cp ${REPO_TOP}/rsyslog/xengine.conf /etc/rsyslog.d/ >> $LOG 2>>$LOG
+    sudo systemctl restart rsyslog.service >> $LOG 2>>$LOG
     # Stop pipelines before restarting services or they hang
     conda run -n ${CONDA_ENV} lwa352-stop-pipeline.sh >> $LOG 2>>$LOG
     sudo systemctl enable bifrost_etcd_bridge.service >> $LOG 2>>$LOG
