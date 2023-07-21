@@ -1,5 +1,5 @@
 MaaS is configured to install all .conf files into /etc/logrotate.d/ when
 provisioning GPU hosts for LWA-352.
 
-Simply add new .conf files to this dir and commit and the next
-provisioning will pick them up.
+Simply add new files to this dir, update the `deploy` script at the root
+of the repo, and commit and the next provisioning will pick them up.
