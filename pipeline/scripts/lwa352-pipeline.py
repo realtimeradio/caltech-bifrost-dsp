@@ -8,6 +8,7 @@ import argparse
 import threading
 import socket
 import datetime
+from logging.handlers import TimedRotatingFileHandler
 
 __version__    = "1.0"
 __date__       = '$LastChangedDate: 2020-25-11$'
@@ -33,6 +34,25 @@ class CoreList(list):
         except IndexError:
             print("Ran out of CPU cores to use!")
             exit()
+
+class LogFileHandler(TimedRotatingFileHandler):
+    """
+    Sub-class of TimedRotatingFileHandler that rolls over files daily and keeps
+    the last 21 days.
+    """
+    
+    def __init__(self, filename, rollover_callback=None):
+        days_per_file =  1
+        file_count    = 21
+        TimedRotatingFileHandler.__init__(self, filename, when='D',
+                                          interval=days_per_file,
+                                          backupCount=file_count)
+        self.filename = filename
+        self.rollover_callback = rollover_callback
+    def doRollover(self):
+        super(LogFileHandler, self).doRollover()
+        if self.rollover_callback is not None:
+            self.rollover_callback()
 
 def build_pipeline(args):
     from bifrost.address import Address
@@ -70,7 +90,7 @@ def build_pipeline(args):
     if args.logfile is None:
         logHandler = logging.StreamHandler(sys.stdout)
     else:
-        logHandler = logging.FileHandler(args.logfile)
+        logHandler = LogFileHandler(args.logfile)
     logHandler.setFormatter(logFormat)
     log.addHandler(logHandler)
     verbosity = args.verbose - args.quiet
