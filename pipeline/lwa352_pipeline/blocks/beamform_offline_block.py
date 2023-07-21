@@ -171,7 +171,7 @@ class BfOfflineBlock(TransformBlock):
 
                 for j in range(self.frame_size):
                     # Perform element-wise multiplication and then sum over the nstand axis?
-                    odata[i, j] = np.sum(self.coeffs * idata[i, j][:, np.newaxis, :, :], axis=2)
+                    odata[i, j, :, batch_start:batch_end, :] = np.sum(self.coeffs * idata[i, j][:, np.newaxis, :, :], axis=2)
 
                 self.nframe_read += 1
 
