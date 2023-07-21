@@ -60,7 +60,7 @@ if [[ ${IS_GPU} = yes ]]; then
     sudo systemctl daemon-reload
     # logrotate config.
     sudo mkdir -p /var/log/xengine/ >> $LOG 2>>$LOG
-    sudo cp -v ${REPO_TOP}/logrotate/*.conf /etc/logrotate.d/ >> $LOG 2>>$LOG
+    sudo cp -v ${REPO_TOP}/logrotate/xengine /etc/logrotate.d/ >> $LOG 2>>$LOG
     sudo systemctl restart logrotate.service >> $LOG 2>>$LOG
     # rsyslog config.
     sudo cp -v ${REPO_TOP}/rsyslog/*.conf /etc/rsyslog.d/ >> $LOG 2>>$LOG
