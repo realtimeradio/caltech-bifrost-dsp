@@ -242,7 +242,7 @@ class Beamform(Block):
         self.gains_load_sample = np.zeros(nbeam) #: sample time at which gains_cpu_new should be copied to gains_cpu (and on to gains_gpu)
 
         self.define_command_key('coeffs', type=dict, initial_val={})
-        for b in range(nbeam):
+        for b in range(self.nbeam):
             self.update_stats({'cal_gains%d' % b: [False,]*ninput})
 
         # Initialize beamforming library
@@ -324,6 +324,7 @@ class Beamform(Block):
         """
         cpu_affinity.set_core(self.core)
         self.command_vals.update(self._pending_command_vals)
+        update_beam_cal_state = False
         for k, v in self._pending_command_vals.items():
            try:
                if v['type'] == 'calgains':
@@ -333,6 +334,7 @@ class Beamform(Block):
                    data = np.array(v['data'])
                    self.cal_gains[:, b, i] = data[0::2] + 1j*data[1::2] # freq x beam x input
                    self.stats['cal_gains%d' % b][i] = True
+                   update_beam_cal_state = True
                if v['type'] == 'beamcoeffs':
                    b = v['beam_id']
                    self.log.debug("BEAMFORM >> Updating delays for beam %d" % (b))
@@ -347,6 +349,9 @@ class Beamform(Block):
                    self.update_pending = True # Only trigger update on beamcoeffs, not calibration only
            except KeyError:
                self.log.error("BEAMFORM >> Failed to parse command")
+        if update_beam_cal_state:
+            for b in range(self.nbeam):
+                self.command_vals['cal_gains%d' % b] = self.stats['cal_gains%d' % b]
         self.update_stats(self.command_vals)
 
     def main(self):
