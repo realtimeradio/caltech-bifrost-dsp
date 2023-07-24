@@ -349,10 +349,12 @@ class Beamform(Block):
                    self.update_pending = True # Only trigger update on beamcoeffs, not calibration only
            except KeyError:
                self.log.error("BEAMFORM >> Failed to parse command")
-        if update_beam_cal_state:
-            for b in range(self.nbeam):
-                self.command_vals['cal_gains%d' % b] = self.stats['cal_gains%d' % b]
         self.update_stats(self.command_vals)
+        if update_beam_cal_state:
+            beam_cal_state = {}
+            for b in range(self.nbeam):
+                beam_cal_state['cal_gains%d' % b] = self.stats['cal_gains%d' % b]
+            self.update_stats(beam_cal_state)
 
     def main(self):
         cpu_affinity.set_core(self.core)
