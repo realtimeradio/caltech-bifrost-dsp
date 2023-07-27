@@ -210,6 +210,7 @@ class BeamformVlbiOutput(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
+        udt = None
         prev_time = time.time()
         for iseq in self.iring.read(guarantee=self.guarantee):
             self.update_pending = True
@@ -223,7 +224,6 @@ class BeamformVlbiOutput(Block):
             npol  = ihdr['npol']
             igulp_size = self.ntime_gulp * nbeam * nchan * npol * 2 * nbit // 8
             packet_cnt = 0
-            udt = None
             desc = HeaderInfo()
             desc.set_nchan(nchan)
             desc.set_chan0(chan0)
