@@ -1,5 +1,0 @@
-MaaS is configured to install all .conf files into /etc/rsyslog.d/ when
-provisioning GPU hosts for LWA-352.
-
-Simply add new .conf files to this dir and commit and the next
-provisioning will pick them up.
