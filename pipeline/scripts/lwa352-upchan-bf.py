@@ -91,7 +91,10 @@ def build_pipeline(args):
     gpu_raw_data = blocks.copy(raw_data, space='cuda')
     transposed_data = blocks.transpose(gpu_raw_data, ['time', 'freq', 'stand', 'pol', 'fine_time'])
     upchan_data = blocks.fft(transposed_data, axes='fine_time', axis_labels='fine_freq')
-    #bf_data = BfOfflineBlock(...)
+
+    ra_array = list(map(float, args.ra_array.split(',')))
+    dec_array = list(map(float, args.dec_array.split(',')))
+    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.nbeams_per_batch, args.ntimestep, ra_array, dec_array)
 
     pipeline = bf.get_default_pipeline()
     pipeline.shutdown_on_signals()
@@ -111,6 +114,12 @@ def main(argv):
     parser.add_argument('-C', '--cores',      default='0,1,2,3,4,5,6,7', help='Comma-separated list of CPU cores to use')
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
+    parser.add_argument('--nbeam', type=int, default=4, help='Number of beams to form')
+    parser.add_argument('--nbeams_per_batch', type=int, default=2, help='Number of beams per batch')
+    parser.add_argument('--ntimestep', type=int, default=1024, help='Number of time samples between coefficient updates')
+    parser.add_argument('--ra_array', type=str, default="10,20,30,40", help='Comma-separated values for RA array')
+    parser.add_argument('--dec_array', type=str, default="10,20,30,40", help='Comma-separated values for DEC array')
+
     args = parser.parse_args()
 
     build_pipeline(args)

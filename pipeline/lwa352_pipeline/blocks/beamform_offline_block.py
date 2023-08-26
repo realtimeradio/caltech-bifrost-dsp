@@ -149,7 +149,9 @@ class BfOfflineBlock(TransformBlock):
         out_nframe = in_nframe # Probably don't accumulate in this block
 
         idata = ispan.data
-        odata = ospan.data
+        odata = ospan.data #check that dimensions are correct
+        # [in_nframe, self.frame_size, self.nchan, self.nbeam, self.npol]
+        # if nbeam_per_batch remove slicing in odata
 
         # Calculate the observation time for the current gulp
         gulp_start_time = self.tstart_unix + self.tstep_s * ispan.sequence
@@ -159,15 +161,17 @@ class BfOfflineBlock(TransformBlock):
 
             for i in range(in_nframe):
                 if self.nframe_read % self.ntimestep == 0:
-                    observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe
+                    observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe #check division by gulp_nframe
                     batch_coefficients = self.compute_weights(observation_time, batch_start, batch_end)
                     # Reshape to (nbeams_per_batch, nchan, nstand, npol)
                     batch_coefficients = batch_coefficients.reshape(self.nbeams_per_batch, self.nchan, self.nstand,
                                                                     self.npol)
+                    self.coeffs = batch_coefficients
+
+
                     # Swap nchan and nbeams_per_batch
-                    batch_coefficients = batch_coefficients.transpose(1, 0, 2, 3)
-                    # Update the coefficients in self.coeffs for the current batch
-                    self.coeffs[:] = batch_coefficients
+                    self.coeffs = self.coeffs.transpose(1, 0, 2, 3)
+
 
                 for j in range(self.frame_size):
                     # Perform element-wise multiplication and then sum over the nstand axis?
