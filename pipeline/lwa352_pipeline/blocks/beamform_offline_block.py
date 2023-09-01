@@ -17,6 +17,8 @@ from astropy.coordinates import Angle
 linalg = LinAlg()
 
 NPOL = 2
+NUPCHAN = 32
+
 class BfOfflineBlock(TransformBlock):
     def __init__(self, iring, nbeam, nbeams_per_batch, ntimestep, ra_array, dec_array, station=ovro,frame_size=1, *args, **kwargs):
         super(BfOfflineBlock, self).__init__(iring, *args, **kwargs)
@@ -115,29 +117,34 @@ class BfOfflineBlock(TransformBlock):
         we are dealing with, and construct an array for coefficients.
         """
         # Get the observation time from the tensor header
+ 
+        print("header after upchan:", iseq.header)
         self.tstart_unix, self.tstep_s = iseq.header['_tensor']['scales'][0]
         self.gulp_nframe = iseq.header['_tensor']['gulp_nframe']
-        sfreq, fstep_hz = iseq.header['_tensor']['scales'][2]
-        self.frequencies = sfreq + np.arange(iseq.header['nchan']) * fstep_hz
-
+        sfreq, fstep_hz = iseq.header['_tensor']['scales'][1]
+        fine_fstep_hz = iseq.header['_tensor']['scales'][4][1]
+        self.frequencies = sfreq + np.arange(iseq.header['system_nchan']) * fine_fstep_hz
+        self.nchan = iseq.header['nchan']
+        self.nstand = iseq.header['nstand']
+        self.npol = NPOL
 
         ohdr = deepcopy(iseq.header)
 
         # Create empty coefficient array
         self.coeffs = BFArray(
-            np.zeros([self.nbeams_per_batch, iseq.header['nchan'], iseq.header['nstand'], iseq.header['npol']], dtype=complex),
+            np.zeros([self.nbeams_per_batch, self.nchan * NUPCHAN, self.nstand * self.npol], dtype=complex),
             space='cuda_host')
         # Manipulate header. Dimensions will be different (beams, not stands)
         ohdr['_tensor'] = {
-            'dtype': 'ci' + str(ohdr['nbit']),
-            'shape': [-1, self.frame_size, ohdr['nchan'], self.nbeam, ohdr['npol']],
-            'labels': ['time', 'fine_time', 'freq', 'beam', 'pol'],
+            'dtype':  'cf32',   #'ci' + str(ohdr['nbit']),
+            'shape': [-1, self.nchan, NUPCHAN, self.nbeam],
+            'labels': ['time', 'freq', 'fine_freq', 'beam',],
             'scales': [(self.tstart_unix, self.tstep_s * self.frame_size),
-                       (0, self.tstep_s),
-                       (ohdr['sfreq'], fstep_hz),
+                       (sfreq, fstep_hz),
+                       (0, fine_fstep_hz),
                        None,
                        None],
-            'units': ['s', 's', 'Hz', None, None],
+            'units': ['s', 'HZ', '1/s', None, None],
             'gulp_nframe': self.gulp_nframe,
         }
 
@@ -152,9 +159,11 @@ class BfOfflineBlock(TransformBlock):
         odata = ospan.data #check that dimensions are correct
         # [in_nframe, self.frame_size, self.nchan, self.nbeam, self.npol]
         # if nbeam_per_batch remove slicing in odata
+        
 
+        print(self.tstart_unix, self.tstep_s, self.frame_size)
         # Calculate the observation time for the current gulp
-        gulp_start_time = self.tstart_unix + self.tstep_s * ispan.sequence
+        gulp_start_time = self.tstart_unix + self.tstep_s * self.frame_size
 
         for batch_start in range(0, self.nbeam, self.nbeams_per_batch):
             batch_end = min(batch_start + self.nbeams_per_batch, self.nbeam)
@@ -162,20 +171,26 @@ class BfOfflineBlock(TransformBlock):
             for i in range(in_nframe):
                 if self.nframe_read % self.ntimestep == 0:
                     observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe #check division by gulp_nframe
-                    batch_coefficients = self.compute_weights(observation_time, batch_start, batch_end)
-                    # Reshape to (nbeams_per_batch, nchan, nstand, npol)
-                    batch_coefficients = batch_coefficients.reshape(self.nbeams_per_batch, self.nchan, self.nstand,
-                                                                    self.npol)
-                    self.coeffs = batch_coefficients
+                    self.coeffs = self.compute_weights(observation_time, batch_start, batch_end)
+                    
+                    self.coeffs = self.coeffs.reshape(1, 96, 32, 704)
+                    self.coeffs = self.coeffs.transpose(1, 2, 3, 0)
+                    
+
+                    idata_reshaped = idata[i].reshape(96, 704, 32)
+                    idata_transposed = idata_reshaped.transpose(0, 2, 1)
+                    idata_expanded = np.expand_dims(idata_transposed, axis=-1)
+                    
 
 
-                    # Swap nchan and nbeams_per_batch
-                    self.coeffs = self.coeffs.transpose(1, 0, 2, 3)
+                    self.coeffs = self.coeffs.astype(np.complex64)
 
 
-                for j in range(self.frame_size):
-                    # Perform element-wise multiplication and then sum over the nstand axis?
-                    odata[i, j, :, batch_start:batch_end, :] = np.sum(self.coeffs * idata[i, j][:, np.newaxis, :, :], axis=2)
+                    idata_expanded_bf = BFArray(idata_expanded,space='cuda_host')
+                    
+                    
+                    odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_bf, axis=2)
+
 
                 self.nframe_read += 1
 
