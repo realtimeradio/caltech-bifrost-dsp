@@ -20,7 +20,7 @@ NPOL = 2
 NUPCHAN = 32
 
 class BfOfflineBlock(TransformBlock):
-    def __init__(self, iring, nbeam, nbeams_per_batch, ntimestep, ra_array, dec_array, station=ovro,frame_size=1, *args, **kwargs):
+    def __init__(self, iring, nbeam, nbeams_per_batch, ntimestep, ra_array, dec_array, cal_data, station=ovro, frame_size=1, *args, **kwargs):
         super(BfOfflineBlock, self).__init__(iring, *args, **kwargs)
         self.nbeam = nbeam # Number of beams to form
         self.nbeams_per_batch = nbeams_per_batch
@@ -32,6 +32,11 @@ class BfOfflineBlock(TransformBlock):
         self.frame_size = frame_size  # Frame size
         self.ra_array = ra_array  # Right Ascension array
         self.dec_array = dec_array  # Declination array
+
+        if cal_data:
+            self.cal_data = cal_data  
+        else:
+            print("Warning: Gain calibration data not available!")
 
         assert len(self.ra_array) == self.nbeam, "Mismatch in number of ra angles and beams"
         assert len(self.dec_array) == self.nbeam, "Mismatch in number of dec angles and beams"
@@ -116,9 +121,9 @@ class BfOfflineBlock(TransformBlock):
         At the start of a sequence, figure out how many stands / pols / chans
         we are dealing with, and construct an array for coefficients.
         """
-        # Get the observation time from the tensor header
  
-        print("header after upchan:", iseq.header)
+        #print("header after upchan:", iseq.header)
+        # Extract parameters to be used in the beamforming process from the header
         self.tstart_unix, self.tstep_s = iseq.header['_tensor']['scales'][0]
         self.gulp_nframe = iseq.header['_tensor']['gulp_nframe']
         sfreq, fstep_hz = iseq.header['_tensor']['scales'][1]
@@ -127,6 +132,12 @@ class BfOfflineBlock(TransformBlock):
         self.nchan = iseq.header['nchan']
         self.nstand = iseq.header['nstand']
         self.npol = NPOL
+        # Extract the relevant index for calibration data to apply before beamforming 
+        if hasattr(self, 'cal_data'):
+            try:
+                self.index = self.cal_data['frequencies'].index(self.frequencies[0])
+            except ValueError:
+                print(f"Warning: No calibration data available for frequency {self.frequencies[0]}!")
 
         ohdr = deepcopy(iseq.header)
 
@@ -136,7 +147,7 @@ class BfOfflineBlock(TransformBlock):
             space='cuda_host')
         # Manipulate header. Dimensions will be different (beams, not stands)
         ohdr['_tensor'] = {
-            'dtype':  'cf32',   #'ci' + str(ohdr['nbit']),
+            'dtype':  'cf32',  
             'shape': [-1, self.nchan, NUPCHAN, self.nbeam],
             'labels': ['time', 'freq', 'fine_freq', 'beam',],
             'scales': [(self.tstart_unix, self.tstep_s * self.frame_size),
@@ -157,9 +168,16 @@ class BfOfflineBlock(TransformBlock):
 
         idata = ispan.data
         odata = ospan.data #check that dimensions are correct
-        # [in_nframe, self.frame_size, self.nchan, self.nbeam, self.npol]
-        # if nbeam_per_batch remove slicing in odata
         
+        # Rearrange calibration data to match idata shape for broadcasting
+        calibration_data = self.cal_data['data'][self.index].transpose(1, 0, 2, 3)
+        calibration_data = calibration_data.reshape(1, self.nchan, self.nstand, self.npol, NUPCHAN)
+        
+        # Convert to BFArray 
+        calibration_data_bf = BFArray(calibration_data, space='cuda_host')
+        idata = BFArray(idata,space='cuda_host')
+        # Pre-compute multiplied data if multiplication remains constant for each frame
+        idata = idata * calibration_data_bf
 
         print(self.tstart_unix, self.tstep_s, self.frame_size)
         # Calculate the observation time for the current gulp
@@ -172,24 +190,20 @@ class BfOfflineBlock(TransformBlock):
                 if self.nframe_read % self.ntimestep == 0:
                     observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe #check division by gulp_nframe
                     self.coeffs = self.compute_weights(observation_time, batch_start, batch_end)
-                    
-                    self.coeffs = self.coeffs.reshape(1, 96, 32, 704)
+                    # Manipulate dimensions of coeffs and idata to produce beamforming results                    
+                    self.coeffs = self.coeffs.reshape(self.nbeams_per_batch, self.nchan, NUPCHAN, self.nstand * self.npol)
                     self.coeffs = self.coeffs.transpose(1, 2, 3, 0)
                     
 
-                    idata_reshaped = idata[i].reshape(96, 704, 32)
+                    idata_reshaped = idata[i].reshape(self.nchan, self.nstand * self.npol, NUPCHAN)
                     idata_transposed = idata_reshaped.transpose(0, 2, 1)
                     idata_expanded = np.expand_dims(idata_transposed, axis=-1)
-                    
-
 
                     self.coeffs = self.coeffs.astype(np.complex64)
-
-
-                    idata_expanded_bf = BFArray(idata_expanded,space='cuda_host')
+                                        
+                    idata_expanded_reshaped = idata_expanded.repeat(self.nbeams_per_batch, axis=-1) #if not done, broadcasting causes stride errors
                     
-                    
-                    odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_bf, axis=2)
+                    odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_reshaped, axis=2)
 
 
                 self.nframe_read += 1

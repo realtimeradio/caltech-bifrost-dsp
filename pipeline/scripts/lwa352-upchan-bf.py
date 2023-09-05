@@ -8,6 +8,7 @@ import argparse
 import threading
 import socket
 import datetime
+import pickle 
 
 __version__    = "1.0"
 __date__       = '$LastChangedDate: 2020-25-11$'
@@ -94,7 +95,16 @@ def build_pipeline(args):
 
     ra_array = list(map(float, args.ra_array.split(',')))
     dec_array = list(map(float, args.dec_array.split(',')))
-    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.nbeams_per_batch, args.ntimestep, ra_array, dec_array)
+    cal_data = None
+    if args.cal_file:
+        with open(args.cal_file, 'rb') as f:
+            cal_data = pickle.load(f)
+    else:
+        print("Warning: Gain calibration not set! Proceeding without it.")
+
+
+    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.nbeams_per_batch, args.ntimestep, ra_array, dec_array, cal_data)
+
 
     pipeline = bf.get_default_pipeline()
     pipeline.shutdown_on_signals()
@@ -119,6 +129,8 @@ def main(argv):
     parser.add_argument('--ntimestep', type=int, default=1024, help='Number of time samples between coefficient updates')
     parser.add_argument('--ra_array', type=str, default="10,20,30,40", help='Comma-separated values for RA array')
     parser.add_argument('--dec_array', type=str, default="10,20,30,40", help='Comma-separated values for DEC array')
+    parser.add_argument('--cal_file', type=str, default=None, help='Path to calibration file containing corresponding gains')
+
 
     args = parser.parse_args()
 
