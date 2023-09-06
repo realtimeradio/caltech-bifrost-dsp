@@ -37,12 +37,14 @@ class BfOfflineBlock(TransformBlock):
             self.cal_data = cal_data  
         else:
             print("Warning: Gain calibration data not available!")
-
+        
+        assert nbeam == nbeams_per_batch, "Number of batches and beams should be the same for correct usage for now"
         assert len(self.ra_array) == self.nbeam, "Mismatch in number of ra angles and beams"
         assert len(self.dec_array) == self.nbeam, "Mismatch in number of dec angles and beams"
 
         # Initially set uniform antenna weighting for a natural beam shape
         self.set_beam_weighting(lambda x: 1.0)
+        
 
     def set_beam_target(self, ra, dec, observation_time, verbose=True):
         """
@@ -165,9 +167,9 @@ class BfOfflineBlock(TransformBlock):
     def on_data(self, ispan, ospan):
         in_nframe = ispan.nframe # Number of frames to read
         out_nframe = in_nframe # Probably don't accumulate in this block
-
+        
         idata = ispan.data
-        odata = ospan.data #check that dimensions are correct
+        odata = ospan.data
         
         # Rearrange calibration data to match idata shape for broadcasting
         calibration_data = self.cal_data['data'][self.index].transpose(1, 0, 2, 3)
@@ -179,16 +181,16 @@ class BfOfflineBlock(TransformBlock):
         # Pre-compute multiplied data if multiplication remains constant for each frame
         idata = idata * calibration_data_bf
 
-        print(self.tstart_unix, self.tstep_s, self.frame_size)
         # Calculate the observation time for the current gulp
-        gulp_start_time = self.tstart_unix + self.tstep_s * self.frame_size
-
+        gulp_start_time = self.tstart_unix + self.tstep_s * self.nframe_read
+        #print(self.nframe_read)
         for batch_start in range(0, self.nbeam, self.nbeams_per_batch):
             batch_end = min(batch_start + self.nbeams_per_batch, self.nbeam)
-
+            
             for i in range(in_nframe):
                 if self.nframe_read % self.ntimestep == 0:
-                    observation_time = gulp_start_time + self.tstep_s * i / self.gulp_nframe #check division by gulp_nframe
+                    observation_time = gulp_start_time + self.tstep_s * i
+                    print("obs time", observation_time)
                     self.coeffs = self.compute_weights(observation_time, batch_start, batch_end)
                     # Manipulate dimensions of coeffs and idata to produce beamforming results                    
                     self.coeffs = self.coeffs.reshape(self.nbeams_per_batch, self.nchan, NUPCHAN, self.nstand * self.npol)
@@ -207,7 +209,5 @@ class BfOfflineBlock(TransformBlock):
 
 
                 self.nframe_read += 1
-
-
-
+                
         return out_nframe
