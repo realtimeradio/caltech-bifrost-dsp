@@ -46,6 +46,7 @@ def build_pipeline(args):
     from lwa352_pipeline.blocks.block_base import Block
     from lwa352_pipeline.blocks.trigger_source_block import TrigBufSourceBlock
     from lwa352_pipeline.blocks.beamform_offline_block import BfOfflineBlock
+    from lwa352_pipeline.blocks.beamform_offline_output_block import HDF5SaveBlock
 
     # Set the pipeline ID
     Block.set_id(args.pipelineid)
@@ -104,7 +105,7 @@ def build_pipeline(args):
 
 
     bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.nbeams_per_batch, args.ntimestep, ra_array, dec_array, cal_data)
-
+    output_block = HDF5SaveBlock(bf_data,"output")
 
     pipeline = bf.get_default_pipeline()
     pipeline.shutdown_on_signals()

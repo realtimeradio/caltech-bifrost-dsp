@@ -46,6 +46,8 @@ class BfOfflineBlock(TransformBlock):
         self.set_beam_weighting(lambda x: 1.0)
         
 
+
+
     def set_beam_target(self, ra, dec, observation_time, verbose=True):
         """
         Given a target's RA and DEC (degrees), and the time of observation, compute the
@@ -147,6 +149,10 @@ class BfOfflineBlock(TransformBlock):
         self.coeffs = BFArray(
             np.zeros([self.nbeams_per_batch, self.nchan * NUPCHAN, self.nstand * self.npol], dtype=complex),
             space='cuda_host')
+        
+        self.calibration_data = BFArray(self.cal_data['data'][self.index].transpose(1, 0, 2, 3).reshape(1, self.nchan, self.nstand, self.npol, NUPCHAN), space='cuda_host')
+
+
         # Manipulate header. Dimensions will be different (beams, not stands)
         ohdr['_tensor'] = {
             'dtype':  'cf32',  
@@ -169,21 +175,17 @@ class BfOfflineBlock(TransformBlock):
         out_nframe = in_nframe # Probably don't accumulate in this block
         
         idata = ispan.data
+        #idata shape (15, 96, 352, 2, 32)
         odata = ospan.data
         
-        # Rearrange calibration data to match idata shape for broadcasting
-        calibration_data = self.cal_data['data'][self.index].transpose(1, 0, 2, 3)
-        calibration_data = calibration_data.reshape(1, self.nchan, self.nstand, self.npol, NUPCHAN)
-        
         # Convert to BFArray 
-        calibration_data_bf = BFArray(calibration_data, space='cuda_host')
+        #calibration_data_bf = BFArray(calibration_data, space='cuda_host')
         idata = BFArray(idata,space='cuda_host')
         # Pre-compute multiplied data if multiplication remains constant for each frame
-        idata = idata * calibration_data_bf
-
+        idata = idata * self.calibration_data
         # Calculate the observation time for the current gulp
         gulp_start_time = self.tstart_unix + self.tstep_s * self.nframe_read
-        #print(self.nframe_read)
+        print(self.nframe_read)
         for batch_start in range(0, self.nbeam, self.nbeams_per_batch):
             batch_end = min(batch_start + self.nbeams_per_batch, self.nbeam)
             
@@ -195,18 +197,17 @@ class BfOfflineBlock(TransformBlock):
                     # Manipulate dimensions of coeffs and idata to produce beamforming results                    
                     self.coeffs = self.coeffs.reshape(self.nbeams_per_batch, self.nchan, NUPCHAN, self.nstand * self.npol)
                     self.coeffs = self.coeffs.transpose(1, 2, 3, 0)
-                    
-
-                    idata_reshaped = idata[i].reshape(self.nchan, self.nstand * self.npol, NUPCHAN)
-                    idata_transposed = idata_reshaped.transpose(0, 2, 1)
-                    idata_expanded = np.expand_dims(idata_transposed, axis=-1)
-
                     self.coeffs = self.coeffs.astype(np.complex64)
-                                        
-                    idata_expanded_reshaped = idata_expanded.repeat(self.nbeams_per_batch, axis=-1) #if not done, broadcasting causes stride errors
-                    
-                    odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_reshaped, axis=2)
 
+                idata_reshaped = idata[i].reshape(self.nchan, self.nstand * self.npol, NUPCHAN)
+                idata_transposed = idata_reshaped.transpose(0, 2, 1)
+                idata_expanded = np.expand_dims(idata_transposed, axis=-1)
+
+                    #self.coeffs = self.coeffs.astype(np.complex64)
+                                        
+                idata_expanded_reshaped = idata_expanded.repeat(self.nbeams_per_batch, axis=-1) #if not done, broadcasting causes stride errors
+
+                odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_reshaped, axis=2)
 
                 self.nframe_read += 1
                 
