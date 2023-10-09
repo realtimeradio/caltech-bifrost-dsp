@@ -7,6 +7,7 @@ speedOfLight = speedOfLight.to('m/ns').value
 
 from lwa_antpos.station import ovro
 from bifrost import ndarray as BFArray
+from bifrost import map as BFmap
 
 from astropy import units as u
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
@@ -20,12 +21,9 @@ NPOL = 2
 NUPCHAN = 32
 
 class BfOfflineBlock(TransformBlock):
-    def __init__(self, iring, nbeam, nbeams_per_batch, ntimestep, ra_array, dec_array, cal_data, station=ovro, frame_size=1, *args, **kwargs):
+    def __init__(self, iring, nbeam, ntimestep, ra_array, dec_array, cal_data, station=ovro, frame_size=1, *args, **kwargs):
         super(BfOfflineBlock, self).__init__(iring, *args, **kwargs)
         self.nbeam = nbeam # Number of beams to form
-        self.nbeams_per_batch = nbeams_per_batch
-        if nbeam % nbeams_per_batch != 0:
-            raise ValueError(f"Total number of beams ({nbeam}) must be divisible by number of beams per batch ({nbeams_per_batch})")
 
         self.ntimestep = ntimestep # Number of time samples between coefficient updates
         self.station = station # station
@@ -38,7 +36,6 @@ class BfOfflineBlock(TransformBlock):
         else:
             print("Warning: Gain calibration data not available!")
         
-        assert nbeam == nbeams_per_batch, "Number of batches and beams should be the same for correct usage for now"
         assert len(self.ra_array) == self.nbeam, "Mismatch in number of ra angles and beams"
         assert len(self.dec_array) == self.nbeam, "Mismatch in number of dec angles and beams"
 
@@ -84,15 +81,12 @@ class BfOfflineBlock(TransformBlock):
         self._weighting = np.array([fnc2(ant.enz) for ant in self.station.antennas])
         self._weighting = np.repeat(self._weighting, 2)
 
-    def compute_weights(self, observation_time, batch_start, batch_end):
-
-        batch_ra_array = self.ra_array[batch_start:batch_end]
-        batch_dec_array = self.dec_array[batch_start:batch_end]
+    def compute_weights(self, observation_time):
 
         weights_array = []
-        for beam in range(self.nbeams_per_batch):
-            ra = batch_ra_array[beam]
-            dec = batch_dec_array[beam]
+        for beam in range(self.nbeam):
+            ra = self.ra_array[beam]
+            dec = self.dec_array[beam]
 
             # Set beam target and get az and alt values
             az, alt = self.set_beam_target(ra, dec, observation_time)
@@ -126,7 +120,6 @@ class BfOfflineBlock(TransformBlock):
         we are dealing with, and construct an array for coefficients.
         """
  
-        #print("header after upchan:", iseq.header)
         # Extract parameters to be used in the beamforming process from the header
         self.tstart_unix, self.tstep_s = iseq.header['_tensor']['scales'][0]
         self.gulp_nframe = iseq.header['_tensor']['gulp_nframe']
@@ -145,13 +138,12 @@ class BfOfflineBlock(TransformBlock):
 
         ohdr = deepcopy(iseq.header)
 
-        # Create empty coefficient array
-        self.coeffs = BFArray(
-            np.zeros([self.nbeams_per_batch, self.nchan * NUPCHAN, self.nstand * self.npol], dtype=complex),
-            space='cuda_host')
-        
-        self.calibration_data = BFArray(self.cal_data['data'][self.index].transpose(1, 0, 2, 3).reshape(1, self.nchan, self.nstand, self.npol, NUPCHAN), space='cuda_host')
+    
 
+        # Reshape cal_data to introduce an additional axis for nbeam. 
+        # This ensures it's broadcast-compatible with idata 
+        cal_data_arr = np.array(self.cal_data['data'][self.index].transpose(1, 0, 2, 3).reshape(1, 1, self.nchan, self.nstand, self.npol, NUPCHAN))
+        self.calibration_data = BFArray(cal_data_arr, space='cuda')
 
         # Manipulate header. Dimensions will be different (beams, not stands)
         ohdr['_tensor'] = {
@@ -175,40 +167,56 @@ class BfOfflineBlock(TransformBlock):
         out_nframe = in_nframe # Probably don't accumulate in this block
         
         idata = ispan.data
-        #idata shape (15, 96, 352, 2, 32)
         odata = ospan.data
+
+        # Expand idata so that nbeam is formed simultaneously
+        idata = idata[:, np.newaxis, ...]
         
-        # Convert to BFArray 
-        #calibration_data_bf = BFArray(calibration_data, space='cuda_host')
-        idata = BFArray(idata,space='cuda_host')
-        # Pre-compute multiplied data if multiplication remains constant for each frame
-        idata = idata * self.calibration_data
-        # Calculate the observation time for the current gulp
+
+        #TODO repeat of idata for nbeam>1
+        #idata = idata.repeat(self.nbeam, axis=1)
+        idata = BFArray(idata,space='cuda')
+        # Apply calibration
+        BFmap("a = a * b", {'a': idata, 'b': self.calibration_data})
+        
         gulp_start_time = self.tstart_unix + self.tstep_s * self.nframe_read
         print(self.nframe_read)
-        for batch_start in range(0, self.nbeam, self.nbeams_per_batch):
-            batch_end = min(batch_start + self.nbeams_per_batch, self.nbeam)
-            
-            for i in range(in_nframe):
-                if self.nframe_read % self.ntimestep == 0:
-                    observation_time = gulp_start_time + self.tstep_s * i
-                    print("obs time", observation_time)
-                    self.coeffs = self.compute_weights(observation_time, batch_start, batch_end)
-                    # Manipulate dimensions of coeffs and idata to produce beamforming results                    
-                    self.coeffs = self.coeffs.reshape(self.nbeams_per_batch, self.nchan, NUPCHAN, self.nstand * self.npol)
-                    self.coeffs = self.coeffs.transpose(1, 2, 3, 0)
-                    self.coeffs = self.coeffs.astype(np.complex64)
 
-                idata_reshaped = idata[i].reshape(self.nchan, self.nstand * self.npol, NUPCHAN)
-                idata_transposed = idata_reshaped.transpose(0, 2, 1)
-                idata_expanded = np.expand_dims(idata_transposed, axis=-1)
-
-                    #self.coeffs = self.coeffs.astype(np.complex64)
-                                        
-                idata_expanded_reshaped = idata_expanded.repeat(self.nbeams_per_batch, axis=-1) #if not done, broadcasting causes stride errors
-
-                odata[i,:,:,batch_start:batch_end] = np.sum(self.coeffs * idata_expanded_reshaped, axis=2)
-
-                self.nframe_read += 1
+        if self.nframe_read % self.ntimestep == 0:
+            observation_time = gulp_start_time 
+            print("obs time", observation_time)
+            self.coeffs = self.compute_weights(observation_time)
+            # Manipulate dimensions of coeffs and idata to produce beamforming results
+            self.coeffs = self.coeffs.reshape(self.nbeam, self.nchan, NUPCHAN, self.nstand * self.npol)
+            self.coeffs = self.coeffs[np.newaxis,...]
+            self.coeffs = self.coeffs.repeat(in_nframe, axis=0)
+            self.coeffs = self.coeffs.astype(np.complex64)
+            self.coeffs = BFArray(self.coeffs, space='cuda')
+        
+        idata_reshaped = idata.reshape(in_nframe, self.nbeam, self.nchan, self.nstand * self.npol, NUPCHAN)
+        idata_transposed = idata_reshaped.transpose(0, 1, 2, 4, 3)
                 
+
+        BFmap("a = a * b", {'a': idata_transposed, 'b': self.coeffs})
+        
+
+        idata_transposed = BFArray(idata_transposed, space = 'cuda_host')
+
+        idata_transposed = idata_transposed.reshape(in_nframe * self.nbeam * self.nchan * NUPCHAN, self.nstand * self.npol)
+        # Create a matrix of ones to sum over stand*pol axis
+        ones_matrix = BFArray(np.ones((self.nstand * self.npol,1)), dtype=np.complex64, space='cuda_host')
+
+        # Initialize idata_summed with appropriate dimensions
+        idata_summed = BFArray(np.zeros((in_nframe * self.nbeam * self.nchan * NUPCHAN, 1)), dtype=np.complex64, space='cuda_host')
+        
+        # Use matrix multiplication to sum over the stand*npol axis
+        idata_summed = np.matmul(idata_transposed, ones_matrix)   # Should be  linalg.matmul(1, idata_transposed, ones_matrix, 0, idata_summed)
+        
+        odata[...] = idata_summed.reshape(in_nframe, self.nbeam, self.nchan, NUPCHAN).transpose(0,2,3,1)
+
+
+        self.nframe_read += in_nframe
+        
         return out_nframe
+
+

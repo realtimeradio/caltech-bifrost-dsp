@@ -104,7 +104,7 @@ def build_pipeline(args):
         print("Warning: Gain calibration not set! Proceeding without it.")
 
 
-    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.nbeams_per_batch, args.ntimestep, ra_array, dec_array, cal_data)
+    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.ntimestep, ra_array, dec_array, cal_data)
     output_block = HDF5SaveBlock(bf_data,"output")
 
     pipeline = bf.get_default_pipeline()
@@ -126,7 +126,7 @@ def main(argv):
     parser.add_argument('-q', '--quiet',      action='count', default=0, help='Decrease verbosity')
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     parser.add_argument('--nbeam', type=int, default=4, help='Number of beams to form')
-    parser.add_argument('--nbeams_per_batch', type=int, default=2, help='Number of beams per batch')
+    #parser.add_argument('--nbeams_per_batch', type=int, default=2, help='Number of beams per batch')
     parser.add_argument('--ntimestep', type=int, default=1024, help='Number of time samples between coefficient updates')
     parser.add_argument('--ra_array', type=str, default="10,20,30,40", help='Comma-separated values for RA array')
     parser.add_argument('--dec_array', type=str, default="10,20,30,40", help='Comma-separated values for DEC array')
