@@ -20,9 +20,9 @@ linalg = LinAlg()
 NPOL = 2
 NUPCHAN = 32
 
-class BfOfflineBlock(TransformBlock):
+class BfOfflineWeightsBlock(TransformBlock):
     def __init__(self, iring, nbeam, ntimestep, ra_array, dec_array, cal_data, station=ovro, frame_size=1, *args, **kwargs):
-        super(BfOfflineBlock, self).__init__(iring, *args, **kwargs)
+        super(BfOfflineWeightsBlock, self).__init__(iring, *args, **kwargs)
         self.nbeam = nbeam # Number of beams to form
 
         self.ntimestep = ntimestep # Number of time samples between coefficient updates
@@ -149,17 +149,20 @@ class BfOfflineBlock(TransformBlock):
         # Keep it on cpu since trasferring to cuda here changes values
         self.calibration_data = BFArray(cal_data_arr, space='cuda_host')
 
-        # Manipulate header. Dimensions will be different (beams, not stands)
+        # Manipulate header
+
         ohdr['_tensor'] = {
-            'dtype':  'cf32',  
-            'shape': [-1, self.nchan, NUPCHAN, self.nbeam],
-            'labels': ['time', 'freq', 'fine_freq', 'beam'],
+            'dtype':  'cf32',
+            'shape': [-1, self.nbeam, self.nchan, self.nstand, self.npol,  NUPCHAN],
+            'labels': ['time',' beam', 'freq', 'stand', 'pol',  'fine_freq'],
             'scales': [(self.tstart_unix, self.tstep_s * self.frame_size),
-                       (sfreq, fstep_hz),
-                       (0, fine_fstep_hz),
                        None,
-                       None], 
-            'units': ['s', 'HZ', '1/s', None, None], 
+                       (sfreq, fstep_hz),
+                       (None,1),
+                       (None,1),
+                       (0, fine_fstep_hz),
+                        ],
+            'units': ['s', None, 'Hz', None, None, '1/s',],
             'gulp_nframe': self.gulp_nframe,
         }
 
@@ -182,8 +185,8 @@ class BfOfflineBlock(TransformBlock):
         
         # Applying weights obtained from caltables
         idata = BFArray(idata,space='cuda')
-        self.calibration_data = BFArray(self.calibration_data, space='cuda')
-        BFmap("idata = idata * cal", {'idata': idata, 'cal': self.calibration_data})
+        #self.calibration_data = BFArray(self.calibration_data, space='cuda')
+        #BFmap("idata = idata * cal", {'idata': idata, 'cal': self.calibration_data})
         
         # Calculating the observation time for the data
         gulp_start_time = self.tstart_unix + self.tstep_s * self.nframe_read
@@ -195,45 +198,25 @@ class BfOfflineBlock(TransformBlock):
             print("obs time", observation_time)
             self.coeffs = self.compute_weights(observation_time)
             # Manipulate dimensions of coeffs and idata (below) to produce beamforming results
-            self.coeffs = self.coeffs.reshape(self.nbeam, self.nchan, NUPCHAN, self.nstand * self.npol)
+            #self.coeffs = self.coeffs.reshape(self.nbeam, self.nchan, NUPCHAN, self.nstand * self.npol)
+            self.coeffs = self.coeffs.reshape(self.nbeam, self.nchan, NUPCHAN, self.nstand , self.npol)
             self.coeffs = self.coeffs[np.newaxis,...]
             # Repeat geometric delay coeffs to match idata nframe
             self.coeffs = self.coeffs.repeat(in_nframe, axis=0)
             self.coeffs = self.coeffs.astype(np.complex64)
+            self.coeffs = self.coeffs.transpose(0,1,2,4,5,3)   
             
-            ####
-            #self.coeffs = BFArray(self.coeffs, space='cuda')
-            self.coeffs = BFArray(self.coeffs, space='cuda_host')
-            ####
 
-        idata = BFArray(idata, space='cuda_host')
-        idata_reshaped = idata.reshape(in_nframe, self.nbeam, self.nchan, self.nstand * self.npol, NUPCHAN)
-        # Change merged pol/stand and NUPCHAN
-        idata_transposed = idata_reshaped.transpose(0, 1, 2, 4, 3)
-        ####
-        #BFmap("a = a * b", {'a': idata_transposed, 'b': self.coeffs})
-        idata_transposed = idata_transposed * self.coeffs
-        ####
-        idata_transposed = idata_transposed.reshape(in_nframe * self.nbeam *  self.nchan * NUPCHAN, self.nstand * self.npol)
+
+        full_cal_data = self.calibration_data * self.coeffs
+
+        full_cal_data = BFArray(full_cal_data, space='cuda')
         
+        BFmap("a = a * b", {'a': idata, 'b': full_cal_data})
         
-        # Create a matrix of ones to sum over stand*pol axis
-        ones_matrix = BFArray(np.ones((self.nstand * self.npol,1)), dtype=np.complex64, space='cuda_host')
-        #ones_matrix = BFArray(np.ones((self.nstand * self.npol,1)), dtype=np.complex64, space='cuda')
-        #Initialize idata_summed with appropriate dimensions for linalg
-        #idata_summed = BFArray(np.zeros((in_nframe * self.nbeam * self.nchan * NUPCHAN, 1)), dtype=np.complex64, space='cuda')
-        ####
+        odata[...] = idata
 
-        #Use matrix multiplication to sum over the stand*npol axis
-        idata_summed = np.matmul(idata_transposed, ones_matrix)  
-        # Should be linalg.matmul(1, idata_transposed, ones_matrix, 0, idata_summed) when on gpu
-        ####
-
-        # Output data with the shape form ohdr ('shape': [-1, self.nchan, NUPCHAN, self.nbeam])
-        odata[...] = idata_summed.reshape(in_nframe, self.nbeam, self.nchan, NUPCHAN).transpose(0,2,3,1)
-    
         self.nframe_read += in_nframe
-        
 
 
         return out_nframe

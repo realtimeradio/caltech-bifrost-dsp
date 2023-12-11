@@ -45,8 +45,10 @@ def build_pipeline(args):
     # Blocks
     from lwa352_pipeline.blocks.block_base import Block
     from lwa352_pipeline.blocks.trigger_source_block import TrigBufSourceBlock
-    from lwa352_pipeline.blocks.beamform_offline_block import BfOfflineBlock
+    from lwa352_pipeline.blocks.beamform_offline_block import BfOfflineWeightsBlock
     from lwa352_pipeline.blocks.beamform_offline_output_block import HDF5SaveBlock
+    from lwa352_pipeline.blocks.beamform_offline_output_block import AccumHDF5SaveBlock
+
 
     # Set the pipeline ID
     Block.set_id(args.pipelineid)
@@ -93,6 +95,7 @@ def build_pipeline(args):
     gpu_raw_data = blocks.copy(raw_data, space='cuda')
     transposed_data = blocks.transpose(gpu_raw_data, ['time', 'freq', 'stand', 'pol', 'fine_time'])
     upchan_data = blocks.fft(transposed_data, axes='fine_time', axis_labels='fine_freq')
+    
 
     ra_array = list(map(float, args.ra_array.split(',')))
     dec_array = list(map(float, args.dec_array.split(',')))
@@ -103,9 +106,16 @@ def build_pipeline(args):
     else:
         print("Warning: Gain calibration not set! Proceeding without it.")
 
+    # Apply weights generated from caltables and geometric delay weights
+    bf_data = BfOfflineWeightsBlock(upchan_data, args.nbeam, args.ntimestep, ra_array, dec_array, cal_data)
+    # Reduce data over antenna and polarization axes
+    red_stand_data = blocks.reduce(bf_data, axis='stand', op = 'sum')
+    red_pol_stand_data = blocks.reduce(red_stand_data, axis='pol', op = 'sum')
+    
+    output_block = AccumHDF5SaveBlock(red_pol_stand_data,"output")
+    #output_block = HDF5SaveBlock(bf_data,"output")
 
-    bf_data = BfOfflineBlock(upchan_data, args.nbeam, args.ntimestep, ra_array, dec_array, cal_data)
-    output_block = HDF5SaveBlock(bf_data,"output")
+
 
     pipeline = bf.get_default_pipeline()
     pipeline.shutdown_on_signals()
