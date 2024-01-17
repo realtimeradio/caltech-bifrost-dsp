@@ -16,7 +16,7 @@ Group=ubuntu
 WorkingDirectory=/home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts
 EnvironmentFile=/home/ubuntu/condaEnv
 PIDFile=/var/run/lwa_xeng_etcd_service.pid
-ExecStart=/home/ubuntu/proj/lwa-shell/caltech-bifrost-dsp/pipeline-control/scripts/lwa352_start_xeng_etcd_service.py
+ExecStart=/home/ubuntu/anaconda3/envs/casa/bin/lwa352_start_xeng_etcd_service.py
 LimitMEMLOCK=infinity
 
 [Install]

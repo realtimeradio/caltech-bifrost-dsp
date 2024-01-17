@@ -104,6 +104,7 @@ def main(args):
     # historical bytes captured, keyed by PID
     capture_times = {} # store the last time we captured bytes received
     capture_bytes = {} # store the last number of bytes received captured
+    baseline_sel_cache = {} # Cache baseline selection indices so they can be published only on change
     while True:
         try:
             wait_time = max(0, last_poll + args.polltime - time.time())
@@ -136,12 +137,6 @@ def main(args):
                         v['gbps'] = gbps
                     except:
                         pass
-                # Special case to remove lots of baseline selection status traffic. TODO: how should we read this?
-                if block == "CorrSubsel":
-                    try:
-                        v['stats'].pop("baselines")
-                    except:
-                        pass
                 
                 ekey = '{keybase}/x/{hostbase}/pipeline/{pipeline_id}/{block}/{block_id}'.format(
                            keybase=args.keybase,
@@ -150,7 +145,19 @@ def main(args):
                            block=block,
                            block_id=block_id,
                        )
-                print(ekey)
+                # Baseline order map is relatively large.
+                # Check against the cache and publish to dedicated key only if changed
+                if block == "CorrSubsel":
+                    baselines = v['stats'].get('baselines', None)
+                    if baselines is None:
+                        pass
+                    else:
+                        v['stats'].pop('baselines')
+                        baselines_cache = baseline_sel_cache.get(ekey, None)
+                        # Update cache if this is the first read, or the value has changed
+                        if baselines_cache != baselines:
+                            baseline_sel_cache[ekey] = baselines
+                            ec.put(ekey + '/baselines', baselines)
                 ec.put(ekey, json.dumps(v))
             
         except KeyboardInterrupt:

@@ -72,18 +72,34 @@ class Lwa352CorrelatorControl():
         self.npipeline_per_host = npipeline_per_host
         self.log = log
         self.etcdhost = etcdhost
+        self.corr_interface = EtcdCorrControl(
+                                  etcdhost=etcdhost,
+                                  keyroot_cmd='/cmd/corr/x',
+                                  keyroot_mon='/mon/corr/x',
+                                  keyroot_resp='/resp/corr/x',
+                                  log=log,
+                              )
 
         self.pipelines = []
         for host in hosts:
             for pipeline_id in range(npipeline_per_host):
-                self.pipelines += [Lwa352PipelineControl(host=host,
-                                                            pipeline_id=pipeline_id,
-                                                            etcdhost=etcdhost,
-                                                            log=log,
-                                                        )]
+                try:
+                    pl = Lwa352PipelineControl(host=host,
+                                                pipeline_id=pipeline_id,
+                                                etcdhost=self.corr_interface,
+                                                log=log)
+                except RuntimeError:
+                    self.log.error('%s pipeline %d was unresponsive and will be ignored' % (host, pipeline_id))
+                    continue
+                self.pipelines += [pl]
         self.npipeline = len(self.pipelines)
+
+    def __del__(self):
+        for pl in self.pipelines:
+            del(pl)
+        self.corr_interface.close()
        
-    def start_pipelines(self, wait=True, timeout=60):
+    def start_pipelines(self, wait=True, timeout=60*3):
         """
         Start all pipelines, using the default configuration.
 
@@ -295,8 +311,8 @@ class Lwa352PipelineControl():
     :type pipeline_id: int
     
     :param etcdhost: The hostname of the system running the correlator's
-        etcd server
-    :type etcdhost: string
+        etcd server, or, a pre-instantiated EtcdCorrControl instance
+    :type etcdhost: string or EtcdCorrControl
 
     :param log: The logger to which this class should emit log messages.
         The default behaviour is to log to stdout
@@ -325,13 +341,18 @@ class Lwa352PipelineControl():
         self.host = host
         self.pipeline_id = pipeline_id
         self.log = log
-        self.corr_interface = EtcdCorrControl(
-                                  etcdhost=etcdhost,
-                                  keyroot_cmd='/cmd/corr/x',
-                                  keyroot_mon='/mon/corr/x',
-                                  keyroot_resp='/resp/corr/x',
-                                  log=log,
-                              )
+        self._corr_interface_from_parent = False
+        if isinstance(etcdhost, EtcdCorrControl):
+            self.corr_interface = etcdhost
+            self._corr_interface_from_parent = True
+        else:
+            self.corr_interface = EtcdCorrControl(
+                                      etcdhost=etcdhost,
+                                      keyroot_cmd='/cmd/corr/x',
+                                      keyroot_mon='/mon/corr/x',
+                                      keyroot_resp='/resp/corr/x',
+                                      log=log,
+                                  )
 
         args = [self.log, self.corr_interface, self.host, self.pipeline_id]
 
@@ -346,8 +367,13 @@ class Lwa352PipelineControl():
         self.beamform_output = BeamformOutputControl(*args)
         self.beamform_vlbi_output = BeamformVlbiOutputControl(*args)
         if not self.check_connection():
-            self.corr_interface.close()
+            if not self._corr_interface_from_parent:
+                self.corr_interface.close()
             raise RuntimeError("Connection failed. Consider restarting lwa-xeng-etcd.service daemon on host %s" % host)
+
+    def __del__(self):
+        if not self._corr_interface_from_parent:
+            self.corr_interface.close()
 
     def start_pipeline(self):
         """

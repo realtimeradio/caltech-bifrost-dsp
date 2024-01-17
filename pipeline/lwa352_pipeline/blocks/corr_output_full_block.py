@@ -416,7 +416,7 @@ class CorrOutputFull(Block):
         self.update_command_vals()
         # Set a random delay for outputting data from this pipeline
         # between 0 and 2 seconds
-        self.output_delay_ms = np.random.randint(0,2000) / 1000.
+        self.output_delay_ms = 0 #np.random.randint(0,2000) / 1000.
 
     def get_checkfile_corr(self, t):
         """

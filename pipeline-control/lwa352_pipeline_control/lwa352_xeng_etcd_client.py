@@ -17,7 +17,7 @@ NCHAN = 96
 IFACE = ['enp24s0', 'enp216s0', 'enp24s0', 'enp216s0']
 RXPORT = [10000, 10000, 20000, 20000]
 GPU = [0, 1, 0, 1]
-BUFGBYTES = [0, 0, 16, 16] # Only second pipeline per NUMA-node gets a buffer
+BUFGBYTES = [0, 0, 256, 256] # Only second pipeline per NUMA-node gets a buffer
 ETCDHOST = 'etcdv3service.sas.pvt'
 CORES = [[1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
          [11,12,13,14,14,14,14,14,14,14,14,14,14,14,14],

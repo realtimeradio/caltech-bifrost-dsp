@@ -92,6 +92,9 @@ class EtcdCorrControl():
                 log.error('Failed to connect to ETCD host %s' % self.etcdhost)
                 raise
 
+    def __del__(self):
+        self.ec.close()
+
     def _get_cmd_key(self, host, pipeline, block, inst_id):
         """
         Generate a block's command key from the block instance specification.
@@ -195,6 +198,33 @@ class EtcdCorrControl():
         """
         key = self._get_key(host, pipeline, block, inst_id)
         return self.keyroot_mon + key
+
+    def _get_special_key(self, host, pipeline, block, inst_id, keyname):
+        """
+        Generate the key for a block's "special" fields, which
+        is the monitor key from the block instance specification + "/keyname".
+
+        :param host: The hostname of the server running the DSP pipeline
+            to be commanded
+        :type host: string
+        :param pipeline: The index of the pipeline on this server to be
+            commanded
+        :type pipeline: int
+        :param block: The name of the processing block in this pipeline
+            to be commanded
+        :type block: string
+        :param inst_id: The instance ID of the block of this type to be
+            commanded
+        :type inst_id: int
+        :param keyname: The name of the special key
+        :type inst_id: str
+
+        :return: The key for the special field of this block
+        :rtype: string
+
+        """
+        key = self._get_key(host, pipeline, block, inst_id)
+        return self.keyroot_mon + key + '/' + keyname
 
     def send_command(self, host, pipeline=None, block=None, inst_id=None,
             cmd='update', timeout=10.0, **kwargs):
@@ -320,6 +350,39 @@ class EtcdCorrControl():
         except:
             self.log.exception("Failed to JSON-encode command")
             return
+
+    def read_special(self, host, pipeline, block, inst_id, keyname):
+        """
+        Read a special key value from a processing block.
+
+        :param host: The hostname of the server running the DSP pipeline
+            to be commanded
+        :type host: string
+        :param pipeline: The index of the pipeline on this server to be
+            commanded
+        :type pipeline: int
+        :param block: The name of the processing block in this pipeline
+            to be commanded
+        :type block: string
+        :param inst_id: The instance ID of the block of this type to be
+            commanded
+        :type inst_id: int
+        :param keyname: Name of key to read
+        :type keyname: str
+
+        :return: Key value
+
+        """
+        if self.simulated:
+            self.log.error("Can't read key in simulation mode")
+            return {}
+
+        key = self._get_special_key(host, pipeline, block, inst_id, keyname)
+        val, meta = self.ec.get(key)
+        if val is None:
+            self.log.warning("Etcd key %s returned no data" % key)
+            return None
+        return json.loads(val)
 
     def get_status(self, host, pipeline, block, inst_id, user_only=True):
         """

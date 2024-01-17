@@ -26,7 +26,7 @@ class CorrSubselControl(BlockControl):
 
         ``subsel = [ [[0,0], [0,0]], [[5,1], [6,0]], ... ]``
         """
-        subsel = np.array(subsel, dtype=np.int32)
+        subsel = np.array(subsel, dtype=int)
         assert subsel.shape == (self.nvis_out, 2, 2)
         return self._send_command(baselines=subsel.tolist())
 
@@ -35,9 +35,4 @@ class CorrSubselControl(BlockControl):
         Attempt to retrieve the currently loaded baseline selection array.
         This requires data to be flowing through the pipeline.
         """
-        stats = self.get_bifrost_status()['stats']
-        if not 'baselines' in stats:
-            return None
-        else:
-            baselines = json.loads(stats['baselines'])
-            return np.array(baselines, dtype=int)
+        return np.array(self.get_special_val('baselines'), dtype=int)
