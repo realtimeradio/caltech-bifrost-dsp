@@ -73,8 +73,6 @@ def build_pipeline(args):
     from lwa352_pipeline.blocks.beamform_vlbi_output_block import BeamformVlbiOutput
     from lwa352_pipeline.blocks.beamform_output_block import BeamformOutput
     from lwa352_pipeline.blocks.triggered_dump_block import TriggeredDump
-    from lwa352_pipeline.blocks.trigger_source_block import TriggerReplay
-
 
     if args.useetcd:
         import etcd3 as etcd
@@ -185,20 +183,7 @@ def build_pipeline(args):
     cores = CoreList(map(int, args.cores.split(',')))
     
     nfreqblocks = nchan // CHAN_PER_PACKET
-
-    if args.replay:
-        print('Using TriggerReplay...')
-        ops.append(TriggerReplay(log, oring=capture_ring, ntime_gulp=NETGSIZE * NET_NGULP * 16, core=cores.pop(0),
-                                 skip_write=args.nodata, target_throughput=args.target_throughput,
-                                 pipeline_id=args.pipelineid,
-                                 nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
-    elif args.fakesource:
-        print('Using dummy source...')
-        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP*16, core=cores.pop(0),
-                   skip_write=args.nodata, target_throughput=args.target_throughput,
-                   pipeline_id = args.pipelineid,
-                   nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
-    else:
+    if not args.fakesource:
         print("binding input to %s:%d" %(args.ip, args.port))
         iaddr = Address(args.ip, args.port)
         isock = UDPSocket()
@@ -210,7 +195,12 @@ def build_pipeline(args):
                            core=cores.pop(0), system_nchan=system_nchan,
                            pipeline_id = args.pipelineid,
                            utc_start=datetime.datetime.now(), ibverbs=args.ibverbs))
-
+    else:
+        print('Using dummy source...')
+        ops.append(DummySource(log, oring=capture_ring, ntime_gulp=NETGSIZE*NET_NGULP*16, core=cores.pop(0),
+                   skip_write=args.nodata, target_throughput=args.target_throughput,
+                   pipeline_id = args.pipelineid,
+                   nstand=nstand, nchan=nchan, npol=npol, testfile=args.testdatain))
 
     # Get the antenna to input map as understood by the data source
     # This could (should?) to passed down in the headers and calculated on the fly,
@@ -327,7 +317,6 @@ def main(argv):
     parser.add_argument('-v', '--verbose',    action='count', default=0, help='Increase verbosity')
     parser.add_argument('--nchan',            type=int, default=192,     help='Number of frequency channels in the pipeline')
     parser.add_argument('--fakesource',       action='store_true',       help='Use a dummy source for testing')
-    parser.add_argument('--replay',           action='store_true',       help='Use the TriggerReplay block instead of the default data source')
     parser.add_argument('--nodata',           action='store_true',       help='Don\'t generate data in the dummy source (faster)')
     parser.add_argument('--testdatain',       type=str, default=None,    help='Path to input test data file')
     parser.add_argument('--testdatacorr',     type=str, default=None,    help='Path to correlator output test data file')

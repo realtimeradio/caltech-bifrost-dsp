@@ -207,7 +207,7 @@ class CorrOutputPart(Block):
         | time_tag      | int64      | ADC sample     | Central sampling time since 1970-01-01      |
         |               |            | period         | 00:00:00 UTC.                               |
         +---------------+------------+----------------+---------------------------------------------+
-        | cor_navg      | int32      | TODO: subslots | Integration time.                           |
+        | cor_navg      | int16      | TODO: subslots | Integration time.                           |
         |               |            | doesn't work   |                                             |
         +---------------+------------+----------------+---------------------------------------------+
         | stand_i       | int16      |                | 1-indexed stand number of the unconjugated  |
@@ -224,7 +224,7 @@ class CorrOutputPart(Block):
         |               |            |                | 2]``. The first axis is frequency channel.  |
         |               |            |                | The second axis is the polarization of the  |
         |               |            |                | antenna at stand_i. The second axis is the  |
-        |               |            |                | polarization of the antenna at stand_j.     |
+        |               |            |                | polarization of the antenna at stand_j.|    |
         |               |            |                | The fourth axis is complexity, with index 0 |
         |               |            |                | the real part of the visibility, and index  |
         |               |            |                | 1 the imaginary part.                       |
@@ -233,8 +233,12 @@ class CorrOutputPart(Block):
     If ``use_cor_fmt=False``:
 
     Each packet from the correlator contains data from multiple channels for multiple
-    single-polarization baselines, with each comprising a 56 byte header followed by
-    a payload of signed 32-bit integers. The packet definition is as follows:
+    single-polarization baselines. There are two possible output formats depending on the
+    value of ``use_cor_fmt`` with which this block is instantiated.
+
+    If ``use_cor_fmt=False``, this block outputs a stream of UDP packets, with each comprising
+    a 56 byte header followed by a payload of signed 32-bit integers. The packet definition is
+    as follows:
 
     .. code:: C
     
