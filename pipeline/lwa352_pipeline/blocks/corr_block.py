@@ -464,7 +464,6 @@ class Corr(Block):
                     this_gulp_time += self.ntime_gulp
                 if oseq: oseq.end()
                 oseq = None
-                start = False
                             
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
