@@ -286,7 +286,12 @@ class Beamform(Block):
         cpu_affinity.set_core(self.core)
         self.acquire_control_lock()
         for event in watchresponse.events:
-            v = json.loads(event.value)
+            try:
+                v = json.loads(event.value)
+            except:
+                self.log.exception("BEAMFORM >> Failed to JSON-decode event %s" % str(event.value))
+                self._send_command_response("0", False, "JSON-decode failed!")
+                continue
             seq_id = v.get('id', None)
             if seq_id is None:
                 self._send_command_response("0", False, "Missing ID field")
