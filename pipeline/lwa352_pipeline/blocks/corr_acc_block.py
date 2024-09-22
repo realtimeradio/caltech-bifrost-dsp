@@ -201,6 +201,7 @@ class CorrAcc(Block):
         oseq = None
         ospan = None
         start = False
+        start_time = 0
         process_time = 0
         time_tag = 1
         self.update_stats({'state': 'starting'})
@@ -282,6 +283,8 @@ class CorrAcc(Block):
 
                     # If we're still waiting for a start, spin the wheels
                     if not start:
+                        if this_gulp_time > start_time:
+                            self.update_stats({'state': 'waiting_start_missed'})
                         self.update_stats({'state': 'waiting'})
                         this_gulp_time += upstream_acc_len
                         continue
