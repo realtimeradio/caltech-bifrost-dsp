@@ -185,6 +185,10 @@ class TriggeredDump(Block):
         this_time = 0
         filename = None
         ofile = None
+        started = False
+        file_num = 0
+        file_ndumped = 0
+        total_bytes = 0
         while not self.iring.writing_ended():
             # Check trigger every few ms
             time.sleep(0.05)
@@ -203,17 +207,32 @@ class TriggeredDump(Block):
                                    'state' : 'triggering'})
                 start = True
             if start:
-                # Once we make it out of here, go back to idle
-                start = False
-                file_num = 0
-                file_ndumped = 0
-                total_bytes = 0
+                # Don't go back to idle as soon as we start. If
+                # there is a break in the sequence we should keep writing
+                #start = False
+                #file_num = 0
+                #file_ndumped = 0
+                #total_bytes = 0
                 start_time = time.time()
+                #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
                 with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
-                    ihdr = json.loads(iseq.header.tostring())
+                    # Clean out some of the ring
+                    n_flushed = 0
                     for ispan in iseq.read(self.igulp_size):
-                        if ispan.size < self.igulp_size:
+                        if n_flushed < 16:
+                            n_flushed += 1
+                            if n_flushed == 16:
+                                ihdr = json.loads(iseq.header.tostring())
                             continue
+                        if ispan.size < self.igulp_size:
+                            self.log.warning("TRIGGERED DUMP >> got small gulp.")
+                            if started:
+                                self.log.error("TRIGGERED DUMP >> got small gulp after start.")
+                                break
+                            continue
+                        if not started:
+                            self.log.info("TRIGGERED DUMP >> opened at %d" % (self.igulp_size*16))
+                            started = True
                         this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
                         ihdr['seq'] = this_time
                         if ofile is None or file_ndumped >= ntime_per_file:
@@ -225,6 +244,9 @@ class TriggeredDump(Block):
                             if file_num == nfile:
                                 self.log.info("TRIGGERED DUMP >> File writing ended")
                                 self.update_stats({'status'       : 'complete'})
+                                start = False
+                                file_num = 0
+                                file_ndumped = 0
                                 break
                             # If we're here we need to open a new file
                             # Doing the writing from python with directIO -- yikes!
@@ -260,6 +282,9 @@ class TriggeredDump(Block):
                                                'status'       : 'stopped'})
                             os.close(ofile)
                             ofile = None
+                            start = False
+                            file_num = 0
+                            file_ndumped = 0
                             break
                         if self.command_vals['command'] == 'abort':
                             self.log.info("TRIGGERED DUMP >> Aborted")
@@ -267,6 +292,9 @@ class TriggeredDump(Block):
                                                'status'       : 'aborted'})
                             os.close(ofile)
                             ofile = None
+                            start = False
+                            file_num = 0
+                            file_ndumped = 0
                             break
                     # Try closing if a file is still around
                     if ofile is not None:
@@ -274,7 +302,12 @@ class TriggeredDump(Block):
                         self.update_stats({'status'       : 'stream end'})
                         os.close(ofile)
                         ofile = None
+                        start = False
+                        file_num = 0
+                        file_ndumped = 0
+                    started = False
                     stop_time = time.time()
                     elapsed = stop_time - start_time
                     gbytesps = total_bytes / 1e9 / elapsed
                     self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
+                    total_bytes = 0
