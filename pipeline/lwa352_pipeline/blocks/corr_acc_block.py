@@ -201,14 +201,14 @@ class CorrAcc(Block):
         oseq = None
         ospan = None
         start = False
+        start_time = 0
         process_time = 0
         time_tag = 1
         self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
+            self.update_pending = True
             for iseq in self.iring.read(guarantee=self.guarantee):
-                # Reload commands on each new sequence
-                self.update_pending = True
                 ihdr = json.loads(iseq.header.tostring())
                 ohdr = ihdr.copy()
                 this_gulp_time = ihdr['seq0']
@@ -216,6 +216,24 @@ class CorrAcc(Block):
                 ohdr['upstream_acc_len'] = upstream_acc_len
                 upstream_start_time = this_gulp_time
                 self.sequence_proclog.update(ohdr)
+                # If the correlator was running before and a new sequence came
+                # try to realign to an appropriate integration boundary and continue
+                if start:
+                    last_start_time = start_time
+                    # number of integrations missed
+                    missed_time = (this_gulp_time - last_start_time)
+                    missed_accs = missed_time // acc_len
+                    # New start time
+                    start_time = last_start_time + (missed_accs + 2)*acc_len
+                    # Don't start until we get to this time
+                    start = False
+                    self.log.info("CORRACC >> Recovering start time set to %d. Accumulating %d samples" % (start_time, acc_len))
+                    if acc_len % upstream_acc_len != 0:
+                        self.log.error("CORRACC >> Requested acc_len %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
+                    if acc_len != 0 and ((start_time - upstream_start_time) % upstream_acc_len != 0):
+                        self.log.error("CORRACC >> Requested start_time %d incompatible with upstream integration %d" % (acc_len, upstream_acc_len))
+                    ohdr['acc_len'] = acc_len
+                    ohdr['seq0'] = start_time
                 for ispan in iseq.read(self.igulp_size):
                     if ispan.size < self.igulp_size:
                         continue # skip last gulp
@@ -265,6 +283,8 @@ class CorrAcc(Block):
 
                     # If we're still waiting for a start, spin the wheels
                     if not start:
+                        if this_gulp_time > start_time:
+                            self.update_stats({'state': 'waiting_start_missed'})
                         self.update_stats({'state': 'waiting'})
                         this_gulp_time += upstream_acc_len
                         continue

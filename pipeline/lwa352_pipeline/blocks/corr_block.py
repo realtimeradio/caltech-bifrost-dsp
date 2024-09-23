@@ -344,18 +344,32 @@ class Corr(Block):
         self.update_stats({'state': 'starting'})
         with self.oring.begin_writing() as oring:
             prev_time = time.time()
+            # Don't start when code begins. But, don't necessarily stop on each new sequence
+            start = False
+            self.update_pending = True
             for iseq in self.iring.read(guarantee=self.guarantee):
                 self.log.info('CORR >> new input sequence!')
                 process_time = 0
                 oseq = None
                 ospan = None
-                start = False
-                # Reload commands on each new sequence
-                self.update_pending = True
-                self.log.debug("Correlating output")
                 ihdr = json.loads(iseq.header.tostring())
                 this_gulp_time = ihdr['seq0']
                 ohdr = ihdr.copy()
+                # If the correlator was running before and a new sequence came
+                # try to realign to an appropriate integration boundary and continue
+                if start:
+                    last_start_time = start_time
+                    # number of integrations missed
+                    missed_time = (this_gulp_time - last_start_time)
+                    missed_accs = missed_time // acc_len
+                    # New start time
+                    start_time = last_start_time + (missed_accs + 10)*acc_len
+                    # Don't start until we get to this time
+                    start = False
+                    self.log.info("CORR >> Recovering start time set to %d. Accumulating %d samples" % (start_time, acc_len))
+                    ohdr['acc_len'] = acc_len
+                    ohdr['seq0'] = start_time
+
                 # Uncomment if you want the baseline order to be computed on the fly
                 # self.update_baseline_indices(ihdr['ant_to_input'])
 
@@ -450,7 +464,6 @@ class Corr(Block):
                     this_gulp_time += self.ntime_gulp
                 if oseq: oseq.end()
                 oseq = None
-                start = False
                             
             # If upstream process stops producing, close things gracefully
             # TODO: why is this necessary? Get exceptions from ospan.__exit__ if not here
