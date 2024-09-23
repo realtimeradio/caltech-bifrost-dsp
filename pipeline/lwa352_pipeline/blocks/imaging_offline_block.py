@@ -10,13 +10,26 @@ class FrequencySelectBlock(TransformBlock):
     def on_sequence(self, iseq):
         ohdr = iseq.header.copy()
 
-        ohdr['system_nchan'] = self.end_freq_idx-self.start_freq_idx
-        ohdr['_tensor']['shape'][1]= self.end_freq_idx-self.start_freq_idx
-        # TODO: uUpdate the header to reflect the new frequency range if needed
+        # Calculate new number of channels
+        nchan_new = self.end_freq_idx - self.start_freq_idx
+        ohdr['system_nchan'] = nchan_new
+        ohdr['_tensor']['shape'][1] = nchan_new
 
+        # Original frequency scale
+        sfreq, fstep_hz = ohdr['_tensor']['scales'][1]
 
+        # Update starting frequency
+        new_sfreq = sfreq + self.start_freq_idx * fstep_hz
+        ohdr['_tensor']['scales'][1] = [new_sfreq, fstep_hz]
+
+        # Update 'sfreq' and 'bw_hz' in the header
+        ohdr['sfreq'] = new_sfreq
+        ohdr['bw_hz'] = nchan_new * fstep_hz
+
+        print('ohdr in freq seelct', ohdr)
         return ohdr
-
+    
+    
     def on_data(self, ispan, ospan):
         in_data = ispan.data.view(np.ndarray)
 
