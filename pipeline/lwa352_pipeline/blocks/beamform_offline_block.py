@@ -21,6 +21,31 @@ NPOL = 2
 NUPCHAN = 32
 
 class BfOfflineWeightsBlock(TransformBlock):
+    """
+    A TransformBlock designed for offline beamforming in the bifrost pipeline. It computes and 
+    applies beamforming weights based on the specified RA and Dec of target sources.
+    This block supports multiple beams, each with its own RA and DEC, and 
+    updates the beamforming weights based on the observation time and antenna calibration data.
+
+    Parameters:
+        iring: Input ring buffer from which data is read.
+        nbeam (int): Number of beams to form.
+        ntimestep (int): Number of time samples between coefficient updates.
+        ra_array (list): List of Right Ascension values for each beam, in degrees.
+        dec_array (list): List of Declination values for each beam, in degrees.
+        cal_data (dict): Calibration data necessary for beamforming obtained beforehand.
+        station: Station object representing antenna positions and other station-specific data.
+        frame_size (int): The size of each frame of data in number of samples.
+    
+    Attributes:
+        nbeam: The number of beams.
+        ntimestep: The timestep interval for updating beamforming weights.
+        station: The station configuration used for beamforming.
+        frame_size: The number of samples per frame.
+        ra_array: Array of RA values for beamforming targets.
+        dec_array: Array of DEC values for beamforming targets.
+        cal_data: Calibration data for antennas.
+    """
     def __init__(self, iring, nbeam, ntimestep, ra_array, dec_array, cal_data, station=ovro, frame_size=1, *args, **kwargs):
         super(BfOfflineWeightsBlock, self).__init__(iring, *args, **kwargs)
         self.nbeam = nbeam # Number of beams to form
@@ -170,6 +195,12 @@ class BfOfflineWeightsBlock(TransformBlock):
         return ohdr
 
     def on_data(self, ispan, ospan):
+        """
+        Processes each incoming data span by applying calibration data and beamforming weights.
+        
+        Parameters:
+            ispan: The input span from the bifrost pipeline, containing the data chunk to be processed.
+        """
         in_nframe = ispan.nframe # Number of frames to read
         out_nframe = in_nframe # Probably don't accumulate in this block
         
