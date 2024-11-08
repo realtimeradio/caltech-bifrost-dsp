@@ -36,5 +36,6 @@ for v in "$@"
 do
   cmd=`make_cmd $v`
   echo $cmd
-  $cmd &
+  ERRFILE=~/`hostname`.$v.stderr
+  $cmd 2> $ERRFILE &
 done
