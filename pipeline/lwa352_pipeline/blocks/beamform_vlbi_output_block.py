@@ -275,7 +275,7 @@ class BeamformVlbiOutput(Block):
                         copy_array(idata_cpu, ddata)
                     except NameError:
                         idata_cpu = ddata.copy(space='cuda_host')
-                    idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
+                    idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*nbeampol))
                     burst_bits = self._npacket_burst * nchan * self.nbeam_send * self.npol // npol * 2 * 32 
                     try:
                         toff = 0
