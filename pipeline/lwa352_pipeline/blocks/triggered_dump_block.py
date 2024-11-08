@@ -293,7 +293,6 @@ class TriggeredDump(Block):
                                                       'gbps': 8*bytes_rpted / process_time / 1e9})
                             bytes_rpted = 0
                             acquire_time = 0
-                            reserve_time = 0
                             process_time = 0
                             
                         # If no new commands, loop again
