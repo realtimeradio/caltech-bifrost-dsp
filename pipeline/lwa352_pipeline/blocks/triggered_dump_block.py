@@ -173,22 +173,12 @@ class TriggeredDump(Block):
         self.bind_proclog.update({'ncore': 1, 
                                   'core0': cpu_affinity.get_core(),})
 
-        # Create a 4kB-aligned 1M buffer to store header data.
-        # Needs to be 512-byte aligned to work with O_DIRECT writing.
-        # Luckily mmap aligns to memory page size
-        hinfo = mmap.mmap(-1, HEADER_SIZE)
         start = False # Should we start?
         last_trigger_time = None
         dump_path = self.command_vals['dump_path']
         ntime_per_file = 0
         nfile = 1
-        this_time = 0
         filename = None
-        ofile = None
-        started = False
-        file_num = 0
-        file_ndumped = 0
-        total_bytes = 0
         while not self.iring.writing_ended():
             # Check trigger every few ms
             time.sleep(0.05)
@@ -205,138 +195,140 @@ class TriggeredDump(Block):
                 filename = os.path.join(dump_path, "lwa-dump-%.2f.tbf" % last_trigger_time)
                 self.update_stats({'last_trigger_time' : last_trigger_time,
                                    'state' : 'triggering'})
-                start = True
-            if start:
-                # Don't go back to idle as soon as we start. If
-                # there is a break in the sequence we should keep writing
-                #start = False
-                #file_num = 0
-                #file_ndumped = 0
-                #total_bytes = 0
-                start_time = time.time()
-                #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
-                with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
-                    # Clean out some of the ring
-                    prev_time = time.time()
-                    n_flushed = 0
-                    bytes_rpted = 0
-                    acquire_time = 0
-                    process_time = 0
-                    for ispan in iseq.read(self.igulp_size):
-                        if n_flushed < 16:
-                            n_flushed += 1
-                            if n_flushed == 16:
-                                ihdr = json.loads(iseq.header.tostring())
-                            continue
-                        if ispan.size < self.igulp_size:
-                            self.log.warning("TRIGGERED DUMP >> got small gulp.")
-                            if started:
-                                self.log.error("TRIGGERED DUMP >> got small gulp after start.")
-                                break
-                            continue
-                        curr_time = time.time()
-                        acquire_time += curr_time - prev_time
-                        prev_time = curr_time
-                        
-                        if not started:
-                            self.log.info("TRIGGERED DUMP >> opened at %d" % (self.igulp_size*16))
-                            started = True
-                        this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
-                        ihdr['seq'] = this_time
-                        if ofile is None or file_ndumped >= ntime_per_file:
-                            if file_ndumped >= ntime_per_file:
-                                # Close file and increment file number
-                                os.close(ofile)
-                                ofile = None
-                                file_num += 1
-                            if file_num == nfile:
-                                self.log.info("TRIGGERED DUMP >> File writing ended")
-                                self.update_stats({'status'       : 'complete'})
-                                start = False
-                                file_num = 0
-                                file_ndumped = 0
-                                break
-                            # If we're here we need to open a new file
-                            # Doing the writing from python with directIO -- yikes!
-                            # We can only write to such a file with 512-byte aligned
-                            # access. Bifrost should guarantee this if it was compiled with
-                            # such an option
-                            self.update_stats({'status' : 'writing'})
-                            self.log.info("TRIGGERED DUMP >> Opening %s" % (filename + '.%d' % file_num))
-                            self.log.info("Start seq is %d" % this_time)
-                            file_ndumped = 0
-                            ofile = os.open(
-                                        filename + '.%d' % file_num,
-                                        os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
-                                    )
-                            header = json.dumps(ihdr).encode()
-                            hsize = len(header)
-                            hinfo.seek(0)
-                            hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
-                            os.write(ofile, hinfo)
-                            
-                        # Write the data
-                        os.write(ofile, ispan.data)
-                        file_ndumped += self.ntime_gulp
-                        total_bytes += self.igulp_size
-                        bytes_rpted += self.igulp_size
-                        self.update_stats({'bytes_dumped'  : total_bytes,
-                                           'files_created' : file_num+1})
-                        
-                        curr_time = time.time()
-                        process_time += curr_time - prev_time
-                        prev_time = curr_time
-                        if bytes_rpted > 1e9:
-                            self.perf_proclog.update({'acquire_time': acquire_time, 
-                                                      'reserve_time': -1, 
-                                                      'process_time': process_time,
-                                                      'gbps': 8*bytes_rpted / process_time / 1e9})
-                            bytes_rpted = 0
-                            acquire_time = 0
-                            process_time = 0
-                            
-                        # If no new commands, loop again
-                        if not self.update_pending:
-                            continue
-                        self.update_command_vals()
-                        if self.command_vals['command'] == 'stop':
-                            self.log.info("TRIGGERED DUMP >> Stopped")
-                            self.update_stats({'last_command' : 'stop',
-                                               'status'       : 'stopped'})
-                            os.close(ofile)
-                            ofile = None
-                            start = False
-                            file_num = 0
-                            file_ndumped = 0
-                            break
-                        if self.command_vals['command'] == 'abort':
-                            self.log.info("TRIGGERED DUMP >> Aborted")
-                            self.update_stats({'last_command' : 'abort',
-                                               'status'       : 'aborted'})
-                            os.close(ofile)
-                            ofile = None
-                            start = False
-                            file_num = 0
-                            file_ndumped = 0
-                            break
-                    # Try closing if a file is still around
-                    if ofile is not None:
-                        self.log.info("TRIGGERED DUMP >> Stopped unexpectedly")
-                        self.update_stats({'status'       : 'stream end'})
+                
+                try:
+                    self.dump(filename, ntime_per_file, nfile)
+                except Exception as e:
+                    self.log.error("TRIGGERED DUMP EXCEPTION >> %s", str(e))
+
+    def dump(self, filename, ntime_per_file, nfile):
+        # Create a 4kB-aligned 1M buffer to store header data.
+        # Needs to be 512-byte aligned to work with O_DIRECT writing.
+        # Luckily mmap aligns to memory page size
+        hinfo = mmap.mmap(-1, HEADER_SIZE)
+        this_time = 0
+        ofile = None
+        started = False
+        file_num = 0
+        file_ndumped = 0
+        total_bytes = 0
+        
+        # Don't go back to idle as soon as we start. If
+        # there is a break in the sequence we should keep writing
+        #start = False
+        #file_num = 0
+        #file_ndumped = 0
+        #total_bytes = 0
+        start_time = time.time()
+        #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
+        with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
+            # Clean out some of the ring
+            prev_time = time.time()
+            n_flushed = 0
+            bytes_rpted = 0
+            acquire_time = 0
+            process_time = 0
+            for ispan in iseq.read(self.igulp_size):
+                if n_flushed < 16:
+                    n_flushed += 1
+                    if n_flushed == 16:
+                        ihdr = json.loads(iseq.header.tostring())
+                    continue
+                if ispan.size < self.igulp_size:
+                    self.log.warning("TRIGGERED DUMP >> got small gulp.")
+                    if started:
+                        self.log.error("TRIGGERED DUMP >> got small gulp after start.")
+                        break
+                    continue
+                curr_time = time.time()
+                acquire_time += curr_time - prev_time
+                prev_time = curr_time
+                
+                if not started:
+                    self.log.info("TRIGGERED DUMP >> opened at %d" % (self.igulp_size*16))
+                    started = True
+                this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
+                ihdr['seq'] = this_time
+                if ofile is None or file_ndumped >= ntime_per_file:
+                    if file_ndumped >= ntime_per_file:
+                        # Close file and increment file number
                         os.close(ofile)
                         ofile = None
-                        start = False
-                        file_num = 0
-                        file_ndumped = 0
-                        
+                        file_num += 1
+                    if file_num == nfile:
+                        self.log.info("TRIGGERED DUMP >> File writing ended")
+                        self.update_stats({'status'       : 'complete'})
+                        break
+                    # If we're here we need to open a new file
+                    # Doing the writing from python with directIO -- yikes!
+                    # We can only write to such a file with 512-byte aligned
+                    # access. Bifrost should guarantee this if it was compiled with
+                    # such an option
+                    self.update_stats({'status' : 'writing'})
+                    self.log.info("TRIGGERED DUMP >> Opening %s" % (filename + '.%d' % file_num))
+                    self.log.info("Start seq is %d" % this_time)
+                    file_ndumped = 0
+                    ofile = os.open(
+                                filename + '.%d' % file_num,
+                                os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
+                            )
+                    header = json.dumps(ihdr).encode()
+                    hsize = len(header)
+                    hinfo.seek(0)
+                    hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
+                    os.write(ofile, hinfo)
+                    
+                # Write the data
+                os.write(ofile, ispan.data)
+                file_ndumped += self.ntime_gulp
+                total_bytes += self.igulp_size
+                bytes_rpted += self.igulp_size
+                self.update_stats({'bytes_dumped'  : total_bytes,
+                                   'files_created' : file_num+1})
+                
+                curr_time = time.time()
+                process_time += curr_time - prev_time
+                prev_time = curr_time
+                if bytes_rpted > 1e9:
                     self.perf_proclog.update({'acquire_time': acquire_time, 
                                               'reserve_time': -1, 
                                               'process_time': process_time,
                                               'gbps': 8*bytes_rpted / process_time / 1e9})
+                    bytes_rpted = 0
+                    acquire_time = 0
+                    process_time = 0
                     
-                    started = False
-                    stop_time = time.time()
-                    elapsed = stop_time - start_time
-                    gbytesps = total_bytes / 1e9 / elapsed
-                    self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
-                    total_bytes = 0
+                # If no new commands, loop again
+                if not self.update_pending:
+                    continue
+                self.update_command_vals()
+                if self.command_vals['command'] == 'stop':
+                    self.log.info("TRIGGERED DUMP >> Stopped")
+                    self.update_stats({'last_command' : 'stop',
+                                       'status'       : 'stopped'})
+                    os.close(ofile)
+                    ofile = None
+                    break
+                if self.command_vals['command'] == 'abort':
+                    self.log.info("TRIGGERED DUMP >> Aborted")
+                    self.update_stats({'last_command' : 'abort',
+                                       'status'       : 'aborted'})
+                    os.close(ofile)
+                    ofile = None
+                    break
+                    
+            # Try closing if a file is still around
+            if ofile is not None:
+                self.log.info("TRIGGERED DUMP >> Stopped unexpectedly")
+                self.update_stats({'status'       : 'stream end'})
+                os.close(ofile)
+                
+            self.perf_proclog.update({'acquire_time': acquire_time, 
+                                      'reserve_time': -1, 
+                                      'process_time': process_time,
+                                      'gbps': 8*bytes_rpted / process_time / 1e9})
+            
+            stop_time = time.time()
+            elapsed = stop_time - start_time
+            gbytesps = total_bytes / 1e9 / elapsed
+            self.log.info("TRIGGERED DUMP >> Complete (Wrote %.2f GBytes in %.2f s (%.2f GB/s)" % (total_bytes/1e9, elapsed, gbytesps))
