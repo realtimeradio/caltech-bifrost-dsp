@@ -217,7 +217,11 @@ class TriggeredDump(Block):
                 #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
                 with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
                     # Clean out some of the ring
+                    prev_time = time.time()
                     n_flushed = 0
+                    bytes_rpted = 0
+                    acquire_time = 0
+                    process_time = 0
                     for ispan in iseq.read(self.igulp_size):
                         if n_flushed < 16:
                             n_flushed += 1
@@ -230,6 +234,10 @@ class TriggeredDump(Block):
                                 self.log.error("TRIGGERED DUMP >> got small gulp after start.")
                                 break
                             continue
+                        curr_time = time.time()
+                        acquire_time += curr_time - prev_time
+                        prev_time = curr_time
+                        
                         if not started:
                             self.log.info("TRIGGERED DUMP >> opened at %d" % (self.igulp_size*16))
                             started = True
@@ -266,12 +274,28 @@ class TriggeredDump(Block):
                             hinfo.seek(0)
                             hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
                             os.write(ofile, hinfo)
+                            
                         # Write the data
                         os.write(ofile, ispan.data)
                         file_ndumped += self.ntime_gulp
                         total_bytes += self.igulp_size
+                        bytes_rpted += self.igulp_size
                         self.update_stats({'bytes_dumped'  : total_bytes,
                                            'files_created' : file_num+1})
+                        
+                        curr_time = time.time()
+                        process_time += curr_time - prev_time
+                        prev_time = curr_time
+                        if bytes_rpted > 1e9:
+                            self.perf_proclog.update({'acquire_time': acquire_time, 
+                                                      'reserve_time': -1, 
+                                                      'process_time': process_time,
+                                                      'gbps': 8*bytes_rpted / process_time / 1e9})
+                            bytes_rpted = 0
+                            acquire_time = 0
+                            reserve_time = 0
+                            process_time = 0
+                            
                         # If no new commands, loop again
                         if not self.update_pending:
                             continue
@@ -305,6 +329,12 @@ class TriggeredDump(Block):
                         start = False
                         file_num = 0
                         file_ndumped = 0
+                        
+                    self.perf_proclog.update({'acquire_time': acquire_time, 
+                                              'reserve_time': -1, 
+                                              'process_time': process_time,
+                                              'gbps': 8*bytes_rpted / process_time / 1e9})
+                    
                     started = False
                     stop_time = time.time()
                     elapsed = stop_time - start_time
