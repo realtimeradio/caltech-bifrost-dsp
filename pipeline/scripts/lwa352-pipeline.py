@@ -145,7 +145,7 @@ def build_pipeline(args):
     log.info("Global index: %i", pipeline_idx)
     
     if not args.nogpu:
-        capture_ring = Ring(name="capture", space='system')
+        capture_ring = Ring(name="capture", space='cuda_host')
         gpu_input_ring = Ring(name="gpu-input", space='cuda')
         bf_output_ring = Ring(name="bf-output", space='cuda')
         bf_power_output_ring = Ring(name="bf-pow-output", space='cuda_host')
@@ -219,14 +219,9 @@ def build_pipeline(args):
                           etcd_client=etcd_client))
 
     if not args.nogpu:
-        if args.bufgbytes > 0:
-            ops.append(Copy(log, iring=trigger_capture_ring, oring=gpu_input_ring, ntime_gulp=GPU_NGULP*GSIZE,
-                              nbyte_per_time=nchan*npol*nstand,
-                              core=cores.pop(0), guarantee=True, gpu=args.gpu))
-        else:
-            ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=NETGSIZE,
-                              nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
-                              core=cores.pop(0), guarantee=True, gpu=args.gpu))
+        ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=NETGSIZE,
+                          nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
+                          core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nocorr or args.nogpu):
         ops.append(Corr(log, iring=gpu_input_ring, oring=corr_output_ring, ntime_gulp=GSIZE,
