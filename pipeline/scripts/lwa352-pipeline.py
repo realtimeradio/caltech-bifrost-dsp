@@ -157,7 +157,7 @@ def build_pipeline(args):
         capture_ring = Ring(name="capture", space='system')
 
     if args.bufgbytes > 0:
-        trigger_capture_ring = Ring(name="trigger_capture", space='cuda_host')
+        trigger_capture_ring = Ring(name="trigger_capture", space='system')
     
     # TODO:  Figure out what to do with this resize
     #GSIZE = 480#1200
