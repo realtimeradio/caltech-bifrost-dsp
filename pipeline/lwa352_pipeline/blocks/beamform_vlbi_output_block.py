@@ -7,7 +7,7 @@ from bifrost.linalg import LinAlg
 from bifrost import map as BFMap
 from bifrost.ndarray import copy_array
 from bifrost.device import stream_synchronize, set_device as BFSetGPU
-from bifrost.transpose import transpose as Transpose
+#from bifrost.transpose import transpose as Transpose
 from bifrost.address import Address
 from bifrost.udp_socket import UDPSocket
 from bifrost.packet_writer import HeaderInfo, DiskWriter, UDPTransmit
@@ -265,6 +265,7 @@ class BeamformVlbiOutput(Block):
                 prev_time = curr_time
                 if self.command_vals['dest_ip'] != '0.0.0.0':
                     start_time = time.time()
+                    """
                     idata = ispan.data.view('cf32').reshape([nchan, nbeamset, nbeampol, self.ntime_gulp])
                     # Tranpose to dual-pol beam x time x chan x pol
                     try:
@@ -279,6 +280,12 @@ class BeamformVlbiOutput(Block):
                     except NameError:
                         idata_cpu = ddata.copy(space='cuda_host')
                     idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*nbeampol)
+                    """
+                    idata = ispan.data.view('cf32').reshape([nchan, nbeam, self.ntime_gulp])
+                    # Downselect beams and copy to CPU
+                    # Transpose to time x chan x beam order
+                    idata_cpu = idata[:,0:(self.npol // npol) * self.nbeam_send,:].copy(space='system').transpose([2,0,1]).copy(space='system')
+                    idata_cpu_r = idata_cpu.reshape(self.ntime_gulp, 1, nchan*self.nbeam_send*(self.npol // npol))
                     burst_bits = self._npacket_burst * nchan * self.nbeam_send * self.npol // npol * 2 * 32 
                     try:
                         toff = 0
