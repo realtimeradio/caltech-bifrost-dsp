@@ -319,6 +319,9 @@ class BeamformOutput(Block):
         for iseq in self.iring.read(guarantee=self.guarantee):
             # Update control each sequence
             ihdr = json.loads(iseq.header.tostring())
+            
+            self.sequence_proclog.update(ihdr)
+            
             this_gulp_time = ihdr['seq0']
             upstream_acc_len = ihdr['acc_len']
             assert self.nchan == ihdr['nchan']

@@ -216,6 +216,9 @@ class BeamformVlbiOutput(Block):
         for iseq in self.iring.read(guarantee=self.guarantee):
             self.update_pending = True
             ihdr = json.loads(iseq.header.tostring())
+            
+            self.sequence_proclog.update(ihdr)
+            
             this_gulp_time = ihdr['seq0']
             nchan = ihdr['nchan']
             nbeam = ihdr['nbeam']
