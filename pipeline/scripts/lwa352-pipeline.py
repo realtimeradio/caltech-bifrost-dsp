@@ -336,8 +336,17 @@ def main(argv):
     parser.add_argument('--target_throughput', type=float, default='1000.0',  help='Target throughput when using --fakesource')
     args = parser.parse_args()
 
+    eh = None
+    if args.logfile is not None:
+        errfile = args.logfile+'.stderr'
+        eh = open(errfile, 'a', buffering=1)
+        sys.stderr.write = eh.write
+        sys.stderr.write(f"Starting error logging for PID {os.getpid()} at {datetime.datetime.utcnow()}\n")
+
     build_pipeline(args)
-    
+
+    if eh is not None:
+        eh.close()
 
 if __name__ == '__main__':
     import sys
