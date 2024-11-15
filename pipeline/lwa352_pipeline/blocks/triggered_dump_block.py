@@ -21,6 +21,7 @@ LWA352_EPOCH     = datetime.datetime(1970, 1, 1)
 LWA352_FS        = 196.0e6
 LWA352_CLOCK     = 196.0e6
 LWA352_NCHAN     = 4096
+LWA352_CHAN_BW   = LWA352_CLOCK / (2*LWA352_NCHAN)
 
 def get_time_tag(dt=datetime.datetime.utcnow(), seq_offset=0):
     timestamp = int((dt - LWA352_EPOCH).total_seconds())
