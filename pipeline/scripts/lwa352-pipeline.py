@@ -220,7 +220,7 @@ def build_pipeline(args):
 
     if not args.nogpu:
         ops.append(Copy(log, iring=capture_ring, oring=gpu_input_ring, ntime_gulp=NETGSIZE,
-                          nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
+                          nbyte_per_time=nchan*npol*nstand, buffer_multiplier=NET_NGULP,
                           core=cores.pop(0), guarantee=True, gpu=args.gpu))
 
     if not (args.nocorr or args.nogpu):
