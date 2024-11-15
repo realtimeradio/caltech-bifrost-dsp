@@ -11,10 +11,25 @@ import numpy as np
 import os
 import mmap
 import struct
+import datetime
 
 from .block_base import Block
 
 HEADER_SIZE = 1024*1024
+
+LWA352_EPOCH     = datetime.datetime(1970, 1, 1)
+LWA352_FS        = 196.0e6
+LWA352_CLOCK     = 196.0e6
+LWA352_NCHAN     = 4096
+
+def get_time_tag(dt=datetime.datetime.utcnow(), seq_offset=0):
+    timestamp = int((dt - LWA352_EPOCH).total_seconds())
+    time_tag  = timestamp*int(LWA352_FS) + seq_offset*(int(LWA352_FS)//int(LWA352_CHAN_BW))
+    return time_tag
+def seq_to_time_tag(seq):
+    return seq*(int(LWA352_FS)//int(LWA352_CHAN_BW))
+def time_tag_to_seq_float(time_tag):
+    return time_tag*LWA352_CHAN_BW/LWA352_FS
 
 class TriggeredDump(Block):
     """
@@ -213,6 +228,15 @@ class TriggeredDump(Block):
         file_ndumped = 0
         total_bytes = 0
         
+        # Come up with a time to dump
+        time_offset    = -90.0      # I get that 256 GB is about 170 s so -90 s should be ok
+        time_offset_s  = int(time_offset)
+        time_offset_us = int(round((time_offset-time_offset_s)*1e6))
+        time_offset    = datetime.timedelta(seconds=time_offset_s, microseconds=time_offset_us)
+        
+        utc_now = datetime.datetime.utcnow()
+        dump_time_tag = get_time_tag(utc_now + time_offset)
+        
         # Don't go back to idle as soon as we start. If
         # there is a break in the sequence we should keep writing
         #start = False
@@ -221,19 +245,22 @@ class TriggeredDump(Block):
         #total_bytes = 0
         start_time = time.time()
         #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
-        with self.iring.open_earliest_sequence(guarantee=self.guarantee) as iseq:
+        with self.iring.open_sequence_at(dump_time_tag, guarantee=True) as iseq:
+            time_tag0 = iseq.time_tag
+            ihdr = json.loads(iseq.header.tostring())
+            
+            self.sequence_proclog.update(ihdr)
+            
+            frame_nbyte = self.nbyte_per_time
+            dump_seq_offset  = int(time_tag_to_seq_float(dump_time_tag - time_tag0))
+            dump_byte_offset = dump_seq_offset * frame_nbyte
+            
             # Clean out some of the ring
             prev_time = time.time()
-            n_flushed = 0
             bytes_rpted = 0
             acquire_time = 0
             process_time = 0
-            for ispan in iseq.read(self.igulp_size):
-                if n_flushed < 16:
-                    n_flushed += 1
-                    if n_flushed == 16:
-                        ihdr = json.loads(iseq.header.tostring())
-                    continue
+            for ispan in iseq.read(self.igulp_size, begin=dump_byte_offset):
                 if ispan.size < self.igulp_size:
                     self.log.warning("TRIGGERED DUMP >> got small gulp.")
                     if started:
@@ -245,9 +272,9 @@ class TriggeredDump(Block):
                 prev_time = curr_time
                 
                 if not started:
-                    self.log.info("TRIGGERED DUMP >> opened at %d" % (self.igulp_size*16))
+                    self.log.info("TRIGGERED DUMP >> opened at %d", dump_byte_offset)
                     started = True
-                this_time = ihdr['seq0'] + ispan.offset / self.nbyte_per_time
+                this_time = ihdr['seq0'] + ispan.offset // frame_nbyte
                 ihdr['seq'] = this_time
                 if ofile is None or file_ndumped >= ntime_per_file:
                     if file_ndumped >= ntime_per_file:
