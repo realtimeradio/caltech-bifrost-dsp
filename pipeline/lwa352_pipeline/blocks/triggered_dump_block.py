@@ -232,7 +232,7 @@ class TriggeredDump(Block):
         total_bytes = 0
         
         # Come up with a time to dump
-        time_offset    = -90.0      # I get that 256 GB is about 170 s so -90 s should be ok
+        time_offset    = -120.0      # I get that 256 GB is about 170 s so -120 s should be ok
         time_offset_s  = int(time_offset)
         time_offset_us = int(round((time_offset-time_offset_s)*1e6))
         time_offset    = datetime.timedelta(seconds=time_offset_s, microseconds=time_offset_us)
