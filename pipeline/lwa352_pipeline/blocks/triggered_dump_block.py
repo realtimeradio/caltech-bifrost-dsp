@@ -32,6 +32,8 @@ def seq_to_time_tag(seq):
 def time_tag_to_seq_float(time_tag):
     return time_tag*LWA352_CHAN_BW/LWA352_FS
 
+LWA352_DISK_NOOP = False
+
 class TriggeredDump(Block):
     """
     **Functionality**
@@ -238,7 +240,9 @@ class TriggeredDump(Block):
         utc_now = datetime.datetime.utcnow()
         dump_time_tag = get_time_tag(utc_now + time_offset)
         self.log.warning("TRIGGERED DUMP >> requesting at time tag %i", dump_time_tag)
-        
+        if LWA352_DISK_NOOP:
+            self.log.warning("TRIGGERED DUMP >> not writing to disk for this event")
+            
         # Don't go back to idle as soon as we start. If
         # there is a break in the sequence we should keep writing
         #start = False
@@ -258,7 +262,7 @@ class TriggeredDump(Block):
             dump_byte_offset = dump_seq_offset * frame_nbyte
             self.log.warning("TRIGGERED DUMP >> opened at %i", time_tag0)
             self.log.warning("TRIGGERED_DUMP >> offsetting by %i sequences", dump_seq_offset)
-            self.log.warning("TRIGGERED DUMP >> offsettting by %i bytes", dump_byte_offset)
+            self.log.warning("TRIGGERED DUMP >> offsetting by %i bytes", dump_byte_offset)
             
             # Clean out some of the ring
             prev_time = time.time()
@@ -284,7 +288,8 @@ class TriggeredDump(Block):
                 if ofile is None or file_ndumped >= ntime_per_file:
                     if file_ndumped >= ntime_per_file:
                         # Close file and increment file number
-                        os.close(ofile)
+                        if not LWA352_DISK_NOOP:
+                            os.close(ofile)
                         ofile = None
                         file_num += 1
                     if file_num == nfile:
@@ -300,18 +305,21 @@ class TriggeredDump(Block):
                     self.log.info("TRIGGERED DUMP >> Opening %s" % (filename + '.%d' % file_num))
                     self.log.info("Start seq is %d" % this_time)
                     file_ndumped = 0
-                    ofile = os.open(
-                                filename + '.%d' % file_num,
-                                os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
-                            )
+                    if not LWA352_DISK_NOOP:
+                        ofile = os.open(
+                                    filename + '.%d' % file_num,
+                                    os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
+                                )
                     header = json.dumps(ihdr).encode()
                     hsize = len(header)
                     hinfo.seek(0)
                     hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
-                    os.write(ofile, hinfo)
-                    
+                    if not LWA352_DISK_NOOP:
+                        os.write(ofile, hinfo)
+                        
                 # Write the data
-                os.write(ofile, ispan.data)
+                if not LWA352_DISK_NOOP:
+                    os.write(ofile, ispan.data)
                 file_ndumped += self.ntime_gulp
                 total_bytes += self.igulp_size
                 bytes_rpted += self.igulp_size
@@ -338,14 +346,16 @@ class TriggeredDump(Block):
                     self.log.info("TRIGGERED DUMP >> Stopped")
                     self.update_stats({'last_command' : 'stop',
                                        'status'       : 'stopped'})
-                    os.close(ofile)
+                    if not LWA352_DISK_NOOP:
+                        os.close(ofile)
                     ofile = None
                     break
                 if self.command_vals['command'] == 'abort':
                     self.log.info("TRIGGERED DUMP >> Aborted")
                     self.update_stats({'last_command' : 'abort',
                                        'status'       : 'aborted'})
-                    os.close(ofile)
+                    if not LWA352_DISK_NOOP:
+                        os.close(ofile)
                     ofile = None
                     break
                     
@@ -353,8 +363,9 @@ class TriggeredDump(Block):
             if ofile is not None:
                 self.log.info("TRIGGERED DUMP >> Stopped unexpectedly")
                 self.update_stats({'status'       : 'stream end'})
-                os.close(ofile)
-                
+                if not LWA352_DISK_NOOP:
+                    os.close(ofile)
+                    
             self.perf_proclog.update({'acquire_time': acquire_time, 
                                       'reserve_time': -1, 
                                       'process_time': process_time,
