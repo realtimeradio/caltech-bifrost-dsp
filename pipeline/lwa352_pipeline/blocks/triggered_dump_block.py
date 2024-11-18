@@ -252,8 +252,8 @@ class TriggeredDump(Block):
         start_time = time.time()
         #with self.iring.open_sequence_at(self.igulp_size*16, guarantee=self.guarantee) as iseq:
         with self.iring.open_sequence_at(dump_time_tag, guarantee=True) as iseq:
-            time_tag0 = iseq.time_tag
             ihdr = json.loads(iseq.header.tostring())
+            time_tag0 = ihdr['seq0'] * 2*LWA352_NCHAN
             
             self.sequence_proclog.update(ihdr)
             
