@@ -237,6 +237,7 @@ class TriggeredDump(Block):
         
         utc_now = datetime.datetime.utcnow()
         dump_time_tag = get_time_tag(utc_now + time_offset)
+        self.log.warning("TRIGGERED DUMP >> requesting at time tag %i", dump_time_tag)
         
         # Don't go back to idle as soon as we start. If
         # there is a break in the sequence we should keep writing
@@ -255,6 +256,9 @@ class TriggeredDump(Block):
             frame_nbyte = self.nbyte_per_time
             dump_seq_offset  = int(time_tag_to_seq_float(dump_time_tag - time_tag0))
             dump_byte_offset = dump_seq_offset * frame_nbyte
+            self.log.warning("TRIGGERED DUMP >> opened at %i", time_tag0)
+            self.log.warning("TRIGGERED_DUMP >> offsetting by %i sequences", dump_seq_offset)
+            self.log.warning("TRIGGERED DUMP >> offsettting by %i bytes", dump_byte_offset)
             
             # Clean out some of the ring
             prev_time = time.time()
