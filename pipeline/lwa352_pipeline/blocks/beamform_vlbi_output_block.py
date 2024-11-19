@@ -201,7 +201,7 @@ class BeamformVlbiOutput(Block):
         self.dest_port = self.command_vals['dest_port']
         self.ntime_gulp = ntime_gulp
         self._npacket_burst = 32 # Number of packets to burst between throttle sleep calls
-        self._max_bps = 0.6 * 1e9
+        self._max_bps = 0.4 * 1e9
         self.pipeline_idx = pipeline_idx
         self.nbeam_send = 1
         self.npol = 2 # If the upstream beamformer provides single pol data, we interpret pairs of beams as dual-pol
