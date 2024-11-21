@@ -346,15 +346,10 @@ class TriggeredDump(Block):
                                               'process_time': process_time,
                                               'gbps': 8*bytes_rpted / process_time / 1e9})
                                               
-                    dt = acquire_time + process_time
                     bytes_rpted = 0
                     acquire_time = 0
                     process_time = 0
                     
-                    delay = (bytes_rpted / 2e9) - dt
-                    if delay > 0:
-                        time.sleep(delay)
-                        
                 # If no new commands, loop again
                 if not self.update_pending:
                     continue
