@@ -310,6 +310,8 @@ class TriggeredDump(Block):
                                     filename + '.%d' % file_num,
                                     os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
                                 )
+                    else:
+                        ofile = 1
                     header = json.dumps(ihdr).encode()
                     hsize = len(header)
                     hinfo.seek(0)
