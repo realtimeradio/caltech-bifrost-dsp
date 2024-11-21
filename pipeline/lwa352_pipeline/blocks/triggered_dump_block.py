@@ -36,7 +36,11 @@ LWA352_DISK_NOOP = False
 
 class DummyFileHandle:
     def __init__(self, fileno):
-        self.fileno = fileno
+        self._fileno = fileno
+        
+    def fileno(self):
+        return self._fileno
+
 
 class TriggeredDump(Block):
     """
