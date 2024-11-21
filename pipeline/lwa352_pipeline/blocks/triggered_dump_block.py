@@ -351,7 +351,7 @@ class TriggeredDump(Block):
                     acquire_time = 0
                     process_time = 0
                     
-                    delay = (bytes_rpted / 2000) - dt
+                    delay = (bytes_rpted / 2e9) - dt
                     if delay > 0:
                         time.sleep(delay)
                         
