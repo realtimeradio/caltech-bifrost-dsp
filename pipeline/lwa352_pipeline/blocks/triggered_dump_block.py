@@ -34,6 +34,10 @@ def time_tag_to_seq_float(time_tag):
 
 LWA352_DISK_NOOP = False
 
+class DummyFileHandle:
+    def __init__(self, fileno):
+        self.fileno = fileno
+
 class TriggeredDump(Block):
     """
     **Functionality**
@@ -321,7 +325,8 @@ class TriggeredDump(Block):
                     hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
                     if not LWA352_DISK_NOOP:
                         os.write(ofile, hinfo)
-                        udt = DiskWriter('generic_%d' % frame_nbyte, ofile, core=self.core)
+                        dfh = DummyFileHandle(ofile)
+                        udt = DiskWriter('generic_%d' % frame_nbyte, dfh, core=self.core)
                         
                 # Write the data
                 if not LWA352_DISK_NOOP:
