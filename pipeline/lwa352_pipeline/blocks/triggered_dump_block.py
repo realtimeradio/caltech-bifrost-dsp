@@ -334,7 +334,7 @@ class TriggeredDump(Block):
                         
                 # Write the data
                 if not LWA352_DISK_NOOP:
-                    idata = ispan.data.reshape(self.ntime_gulp, frame_nbyte)
+                    idata = ispan.data.reshape(self.ntime_gulp, 1, frame_nbyte)
                     #os.write(ofile, ispan.data)
                     udt.send(desc, 1, 1, 1, 1, idata)
                 file_ndumped += self.ntime_gulp
