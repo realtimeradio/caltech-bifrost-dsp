@@ -32,7 +32,7 @@ def seq_to_time_tag(seq):
 def time_tag_to_seq_float(time_tag):
     return time_tag*LWA352_CHAN_BW/LWA352_FS
 
-LWA352_DISK_NOOP = True
+LWA352_DISK_NOOP = False
 
 class TriggeredDump(Block):
     """
