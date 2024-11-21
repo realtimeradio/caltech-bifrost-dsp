@@ -316,7 +316,7 @@ class TriggeredDump(Block):
                                     os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
                                 )
                         try:
-                            fallocate.fallocate(ofile, 0, ntime_per_file*self.igulp_size)
+                            fallocate.fallocate(ofile, 0, ntime_per_file*frame_nbyte)
                         except Exception as e:
                             self.log.warning("TRIGGERED DUMP >> cannot fallocate - %s", str(e))
                     else:
