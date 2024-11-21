@@ -13,6 +13,11 @@ import mmap
 import struct
 import datetime
 
+try:
+    import fallocate
+except ImportError:
+    pass
+
 from .block_base import Block
 
 HEADER_SIZE = 1024*1024
@@ -310,6 +315,10 @@ class TriggeredDump(Block):
                                     filename + '.%d' % file_num,
                                     os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT | os.O_SYNC,
                                 )
+                        try:
+                            fallocate.fallocate(ofile, 0, ntime_per_file*self.igulp_size)
+                        except Exception as e:
+                            self.log.warning("TRIGGERED DUMP >> cannot fallocate - %s", str(e))
                     else:
                         ofile = 1
                     header = json.dumps(ihdr).encode()
