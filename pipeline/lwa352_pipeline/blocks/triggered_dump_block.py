@@ -321,7 +321,7 @@ class TriggeredDump(Block):
                     hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
                     if not LWA352_DISK_NOOP:
                         os.write(ofile, hinfo)
-                        udt = DiskWriter('generic_%d' % frame_nbyte, fd, core=self.core)
+                        udt = DiskWriter('generic_%d' % frame_nbyte, ofile, core=self.core)
                         
                 # Write the data
                 if not LWA352_DISK_NOOP:
