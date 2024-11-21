@@ -231,6 +231,8 @@ class TriggeredDump(Block):
         file_ndumped = 0
         total_bytes = 0
         
+        desc = HeaderInfo()
+        
         # Come up with a time to dump
         time_offset    = -120.0      # I get that 256 GB is about 170 s so -120 s should be ok
         time_offset_s  = int(time_offset)
@@ -289,6 +291,7 @@ class TriggeredDump(Block):
                     if file_ndumped >= ntime_per_file:
                         # Close file and increment file number
                         if not LWA352_DISK_NOOP:
+                            del udt
                             os.close(ofile)
                         ofile = None
                         file_num += 1
@@ -318,10 +321,13 @@ class TriggeredDump(Block):
                     hinfo.write(struct.pack('<2I', hsize, HEADER_SIZE) + json.dumps(ihdr).encode())
                     if not LWA352_DISK_NOOP:
                         os.write(ofile, hinfo)
+                        udt = DiskWriter('generic_%d' % frame_nbyte, fd, core=self.core)
                         
                 # Write the data
                 if not LWA352_DISK_NOOP:
-                    os.write(ofile, ispan.data)
+                    idata = ispan.data.reshape(self.ntime_gulp, frame_nbyte)
+                    #os.write(ofile, ispan.data)
+                    udt.send(desc, 1, 1, 1, 1, idata)
                 file_ndumped += self.ntime_gulp
                 total_bytes += self.igulp_size
                 bytes_rpted += self.igulp_size
@@ -350,6 +356,7 @@ class TriggeredDump(Block):
                     self.update_stats({'last_command' : 'stop',
                                        'status'       : 'stopped'})
                     if not LWA352_DISK_NOOP:
+                        del udt
                         os.close(ofile)
                     ofile = None
                     break
@@ -358,6 +365,7 @@ class TriggeredDump(Block):
                     self.update_stats({'last_command' : 'abort',
                                        'status'       : 'aborted'})
                     if not LWA352_DISK_NOOP:
+                        del udt
                         os.close(ofile)
                     ofile = None
                     break
@@ -367,6 +375,7 @@ class TriggeredDump(Block):
                 self.log.info("TRIGGERED DUMP >> Stopped unexpectedly")
                 self.update_stats({'status'       : 'stream end'})
                 if not LWA352_DISK_NOOP:
+                    del udt
                     os.close(ofile)
                     
             self.perf_proclog.update({'acquire_time': acquire_time, 
