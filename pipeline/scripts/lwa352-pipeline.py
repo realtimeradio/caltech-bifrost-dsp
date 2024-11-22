@@ -213,7 +213,7 @@ def build_pipeline(args):
                           nbyte_per_time=nchan*npol*nstand, buffer_multiplier=GPU_NGULP*NET_NGULP,
                           core=cores.pop(0), guarantee=True, gpu=-1, buf_size_gbytes=args.bufgbytes))
 
-        ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=GPU_NGULP*GSIZE,
+        ops.append(TriggeredDump(log, iring=trigger_capture_ring, ntime_gulp=2*GPU_NGULP*GSIZE,
                           nbyte_per_time=nchan*npol*nstand,
                           core=cores.pop(0), guarantee=True,
                           etcd_client=etcd_client))
