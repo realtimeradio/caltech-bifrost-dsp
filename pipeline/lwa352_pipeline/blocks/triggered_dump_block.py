@@ -346,7 +346,7 @@ class TriggeredDump(Block):
                 curr_time = time.time()
                 process_time += curr_time - prev_time
                 prev_time = curr_time
-                if bytes_rpted > 1e9:
+                if bytes_rpted > 4e9:
                     self.perf_proclog.update({'acquire_time': acquire_time, 
                                               'reserve_time': -1, 
                                               'process_time': process_time,
