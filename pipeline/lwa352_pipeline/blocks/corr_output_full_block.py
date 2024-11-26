@@ -508,7 +508,7 @@ class CorrOutputFull(Block):
         start_time = time.time()
         block_start = time.time()
         source_number = 0
-        n_packet_burst = 50
+        n_packet_burst = 16
         for i in range(self.nstand):
             # `data` should be in order stand1 x stand0 x chan x pol1 x pol0 x complexity
             # copy a single baseline of data
